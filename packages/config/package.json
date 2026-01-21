@@ -1,0 +1,16 @@
+{
+  "name": "@openlance/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./eslint/base": "./eslint/base.js",
+    "./typescript/base": "./typescript/base.json"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.21.0",
+    "@typescript-eslint/parser": "^8.21.0",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1"
+  }
+}

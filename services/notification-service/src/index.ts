@@ -1,0 +1,29 @@
+import { createServiceLogger } from '@openlance/logger'
+import { connectMongoDB } from '@openlance/mongodb'
+import { SERVICES } from '@openlance/shared'
+import { Elysia } from 'elysia'
+
+import { healthRoutes } from './routes/health'
+import { notificationRoutes } from './routes/notifications'
+
+const logger = createServiceLogger(SERVICES.NOTIFICATION)
+const port = process.env.NOTIFICATION_SERVICE_PORT || 3003
+
+// Connect to MongoDB
+connectMongoDB().catch((err) => {
+  logger.error({ error: err }, 'Failed to connect to MongoDB')
+})
+
+const app = new Elysia()
+  .use(healthRoutes)
+  .use(notificationRoutes)
+  .onError(({ code, error, set }) => {
+    logger.error({ code, error: error.message }, 'Request error')
+    set.status = 500
+    return { success: false, error: 'Internal server error' }
+  })
+  .listen(port)
+
+logger.info(`🚀 Notification service running at http://localhost:${port}`)
+
+export type App = typeof app
