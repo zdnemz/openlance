@@ -18,6 +18,9 @@
     "db:generate": "dotenv -e .env -- npm run -w @openlance/database db:generate",
     "db:push": "dotenv -e .env -- npm run -w @openlance/database db:push",
     "db:studio": "dotenv -e .env -- npm run -w @openlance/database db:studio",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
     "clean": "turbo clean && rm -rf node_modules",
     "prepare": "husky"
   },
