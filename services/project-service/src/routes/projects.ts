@@ -1,24 +1,36 @@
-import type { ApiResponse } from '@openlance/shared'
+import { R, success } from '@openlance/shared'
 import { Elysia } from 'elysia'
 
 export const projectRoutes = new Elysia({ prefix: '/projects' })
-  .get('/', (): ApiResponse => {
+  .get('/', ({ set }) => {
     // TODO: Implement list projects
-    return { success: true, data: [], message: 'List projects endpoint' }
+    set.status = R.ok().status
+    return success([], 'Projects retrieved successfully')
   })
-  .get('/:id', ({ params }): ApiResponse => {
+  .get('/:id', ({ params, set }) => {
     // TODO: Implement get project by ID
-    return { success: true, data: { id: params.id }, message: 'Get project endpoint' }
+    const project = null // Placeholder
+
+    if (!project) {
+      set.status = R.notFound().status
+      return R.notFound('Project').body
+    }
+
+    set.status = R.ok().status
+    return success({ id: params.id }, 'Project retrieved successfully')
   })
-  .post('/', (): ApiResponse => {
+  .post('/', ({ set }) => {
     // TODO: Implement create project
-    return { success: true, message: 'Create project endpoint' }
+    set.status = R.created().status
+    return R.created({ id: 'new-project-id' }, 'Project created successfully').body
   })
-  .put('/:id', ({ params }): ApiResponse => {
+  .put('/:id', ({ params, set }) => {
     // TODO: Implement update project
-    return { success: true, data: { id: params.id }, message: 'Update project endpoint' }
+    set.status = R.ok().status
+    return success({ id: params.id }, 'Project updated successfully')
   })
-  .delete('/:id', ({ params }): ApiResponse => {
+  .delete('/:id', ({ params, set }) => {
     // TODO: Implement delete project
-    return { success: true, data: { id: params.id }, message: 'Delete project endpoint' }
+    set.status = R.ok().status
+    return success({ id: params.id }, 'Project deleted successfully')
   })

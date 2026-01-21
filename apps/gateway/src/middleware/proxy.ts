@@ -1,5 +1,5 @@
 import { createServiceLogger } from '@openlance/logger'
-import { SERVICES } from '@openlance/shared'
+import { R, SERVICES } from '@openlance/shared'
 import { Elysia } from 'elysia'
 
 const logger = createServiceLogger(SERVICES.GATEWAY)
@@ -40,11 +40,11 @@ async function proxyRequest(
     })
 
     return response
-  } catch (error) {
-    logger.error({ service, path, error }, 'Proxy request failed')
-    return new Response(
-      JSON.stringify({ success: false, error: 'Service unavailable' }),
-      { status: 503, headers: { 'Content-Type': 'application/json' } }
-    )
+  } catch (err) {
+    logger.error({ service, path, error: err }, 'Proxy request failed')
+    return new Response(JSON.stringify(R.serviceUnavailable().body), {
+      status: R.serviceUnavailable().status,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

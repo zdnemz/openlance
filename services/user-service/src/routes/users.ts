@@ -1,24 +1,36 @@
-import type { ApiResponse } from '@openlance/shared'
+import { R, success } from '@openlance/shared'
 import { Elysia } from 'elysia'
 
 export const userRoutes = new Elysia({ prefix: '/users' })
-  .get('/', (): ApiResponse => {
+  .get('/', ({ set }) => {
     // TODO: Implement list users
-    return { success: true, data: [], message: 'List users endpoint' }
+    set.status = R.ok().status
+    return success([], 'Users retrieved successfully')
   })
-  .get('/:id', ({ params }): ApiResponse => {
+  .get('/:id', ({ params, set }) => {
     // TODO: Implement get user by ID
-    return { success: true, data: { id: params.id }, message: 'Get user endpoint' }
+    const user = null // Placeholder
+
+    if (!user) {
+      set.status = R.notFound().status
+      return R.notFound('User').body
+    }
+
+    set.status = R.ok().status
+    return success({ id: params.id }, 'User retrieved successfully')
   })
-  .post('/', (): ApiResponse => {
+  .post('/', ({ set }) => {
     // TODO: Implement create user
-    return { success: true, message: 'Create user endpoint' }
+    set.status = R.created().status
+    return R.created({ id: 'new-user-id' }, 'User created successfully').body
   })
-  .put('/:id', ({ params }): ApiResponse => {
+  .put('/:id', ({ params, set }) => {
     // TODO: Implement update user
-    return { success: true, data: { id: params.id }, message: 'Update user endpoint' }
+    set.status = R.ok().status
+    return success({ id: params.id }, 'User updated successfully')
   })
-  .delete('/:id', ({ params }): ApiResponse => {
+  .delete('/:id', ({ params, set }) => {
     // TODO: Implement delete user
-    return { success: true, data: { id: params.id }, message: 'Delete user endpoint' }
+    set.status = R.ok().status
+    return success({ id: params.id }, 'User deleted successfully')
   })

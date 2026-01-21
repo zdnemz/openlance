@@ -1,24 +1,36 @@
-import type { ApiResponse } from '@openlance/shared'
+import { R, success } from '@openlance/shared'
 import { Elysia } from 'elysia'
 
 export const notificationRoutes = new Elysia({ prefix: '/notifications' })
-  .get('/', (): ApiResponse => {
+  .get('/', ({ set }) => {
     // TODO: Implement list notifications
-    return { success: true, data: [], message: 'List notifications endpoint' }
+    set.status = R.ok().status
+    return success([], 'Notifications retrieved successfully')
   })
-  .get('/:id', ({ params }): ApiResponse => {
+  .get('/:id', ({ params, set }) => {
     // TODO: Implement get notification by ID
-    return { success: true, data: { id: params.id }, message: 'Get notification endpoint' }
+    const notification = null // Placeholder
+
+    if (!notification) {
+      set.status = R.notFound().status
+      return R.notFound('Notification').body
+    }
+
+    set.status = R.ok().status
+    return success({ id: params.id }, 'Notification retrieved successfully')
   })
-  .post('/', (): ApiResponse => {
+  .post('/', ({ set }) => {
     // TODO: Implement create notification
-    return { success: true, message: 'Create notification endpoint' }
+    set.status = R.created().status
+    return R.created({ id: 'new-notification-id' }, 'Notification created successfully').body
   })
-  .patch('/:id/read', ({ params }): ApiResponse => {
+  .patch('/:id/read', ({ params, set }) => {
     // TODO: Implement mark notification as read
-    return { success: true, data: { id: params.id }, message: 'Mark as read endpoint' }
+    set.status = R.ok().status
+    return success({ id: params.id, read: true }, 'Notification marked as read')
   })
-  .delete('/:id', ({ params }): ApiResponse => {
+  .delete('/:id', ({ params, set }) => {
     // TODO: Implement delete notification
-    return { success: true, data: { id: params.id }, message: 'Delete notification endpoint' }
+    set.status = R.ok().status
+    return success({ id: params.id }, 'Notification deleted successfully')
   })
