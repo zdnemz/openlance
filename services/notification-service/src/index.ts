@@ -14,11 +14,12 @@ connectMongoDB().catch((err) => {
   logger.error({ error: err }, 'Failed to connect to MongoDB')
 })
 
-const app = new Elysia()
+export const app = new Elysia()
   .use(healthRoutes)
   .use(notificationRoutes)
   .onError(({ code, error, set }) => {
-    logger.error({ code, error: error.message }, 'Request error')
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error({ code, error: errorMessage }, 'Request error')
     set.status = 500
     return { success: false, error: 'Internal server error' }
   })

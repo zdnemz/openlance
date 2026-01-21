@@ -9,12 +9,13 @@ import { proxyMiddleware } from './middleware/proxy'
 const logger = createServiceLogger(SERVICES.GATEWAY)
 const port = process.env.GATEWAY_PORT || 3000
 
-const app = new Elysia()
+export const app = new Elysia()
   .use(cors())
   .use(healthRoutes)
   .use(proxyMiddleware)
   .onError(({ code, error, set }) => {
-    logger.error({ code, error: error.message }, 'Request error')
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error({ code, error: errorMessage }, 'Request error')
 
     if (code === 'NOT_FOUND') {
       set.status = HTTP_STATUS.NOT_FOUND

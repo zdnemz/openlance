@@ -8,11 +8,12 @@ import { userRoutes } from './routes/users'
 const logger = createServiceLogger(SERVICES.USER)
 const port = process.env.USER_SERVICE_PORT || 3001
 
-const app = new Elysia()
+export const app = new Elysia()
   .use(healthRoutes)
   .use(userRoutes)
   .onError(({ code, error, set }) => {
-    logger.error({ code, error: error.message }, 'Request error')
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error({ code, error: errorMessage }, 'Request error')
     set.status = 500
     return { success: false, error: 'Internal server error' }
   })

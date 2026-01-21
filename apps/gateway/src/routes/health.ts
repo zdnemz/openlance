@@ -1,5 +1,5 @@
 import { createServiceLogger } from '@openlance/logger'
-import { success, error } from '@openlance/shared'
+import { success } from '@openlance/shared'
 import type { ServiceHealth } from '@openlance/shared'
 import { SERVICES } from '@openlance/shared'
 import { Elysia } from 'elysia'
@@ -14,7 +14,7 @@ const serviceUrls: Record<string, string> = {
   [SERVICES.NOTIFICATION]: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3003',
 }
 
-interface AggregatedHealth {
+export interface AggregatedHealth {
   gateway: ServiceHealth
   services: Record<string, ServiceHealth | { status: 'unhealthy'; error: string }>
   allHealthy: boolean
@@ -29,8 +29,8 @@ async function checkServiceHealth(
     if (!response.ok) {
       return { status: 'unhealthy', error: `HTTP ${response.status}` }
     }
-    const data = await response.json()
-    return data.data as ServiceHealth
+    const data = (await response.json()) as { data: ServiceHealth }
+    return data.data
   } catch (err) {
     logger.warn({ service, url, error: err }, 'Service health check failed')
     return { status: 'unhealthy', error: err instanceof Error ? err.message : 'Unknown error' }
@@ -65,10 +65,11 @@ export const healthRoutes = new Elysia({ prefix: '/health' })
 
     if (!allHealthy) {
       set.status = 503
-      return (
-        (error('Some services are unhealthy').data = aggregated),
-        { success: false, data: aggregated, message: 'Some services are unhealthy' }
-      )
+      return {
+        success: false,
+        data: aggregated,
+        message: 'Some services are unhealthy',
+      }
     }
 
     return success(aggregated, 'All services are healthy')
