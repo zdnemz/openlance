@@ -4,11 +4,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": ["*"]
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": ["*"]
     },
     "lint": {
       "dependsOn": ["^build"],
@@ -17,6 +19,21 @@
     "lint:fix": {
       "dependsOn": ["^build"],
       "outputs": []
+    },
+    "db:push": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["DATABASE_URL"]
+    },
+    "db:generate": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["DATABASE_URL"]
+    },
+    "db:studio": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["DATABASE_URL"]
     },
     "type-check": {
       "dependsOn": ["^build"],
