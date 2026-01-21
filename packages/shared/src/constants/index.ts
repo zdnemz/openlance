@@ -19,6 +19,7 @@ export const SERVICES = {
   USER: 'user-service',
   PROJECT: 'project-service',
   NOTIFICATION: 'notification-service',
+  AUTH: 'auth-service',
 } as const
 
 // Default pagination
