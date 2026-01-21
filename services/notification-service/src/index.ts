@@ -1,3 +1,4 @@
+import swagger from '@elysiajs/swagger'
 import { createServiceLogger } from '@openlance/logger'
 import { connectMongoDB } from '@openlance/mongodb'
 import { SERVICES } from '@openlance/shared'
@@ -15,6 +16,13 @@ connectMongoDB().catch((err) => {
 })
 
 export const app = new Elysia()
+  .use(
+    swagger({
+      documentation: {
+        info: { title: 'Notification Service API', version: '1.0.0' },
+      },
+    })
+  )
   .use(healthRoutes)
   .use(notificationRoutes)
   .onError(({ code, error, set }) => {

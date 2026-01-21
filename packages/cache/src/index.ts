@@ -1,7 +1,6 @@
 import Redis from 'ioredis'
 
 declare global {
-  // eslint-disable-next-line no-var
   var redisClient: Redis | undefined
 }
 
@@ -88,4 +87,5 @@ export async function getCacheOrSet<T>(
 }
 
 export { Redis }
+export * from './keys'
 export default redis

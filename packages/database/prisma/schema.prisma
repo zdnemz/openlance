@@ -1,98 +1,807 @@
 // Prisma Schema for OpenLance
+// Database Architecture: Polyglot persistence with PostgreSQL as source of truth
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["auth", "user_profile", "project", "contract", "payment", "review"]
 }
 
-// User model
-model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  role      Role     @default(FREELANCER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ============================================================================
+// AUTH SCHEMA - Authentication, OAuth, Sessions
+// ============================================================================
 
-  profile  Profile?
-  projects Project[]  @relation("ProjectOwner")
-  contracts Contract[]
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  emailVerified Boolean       @default(false) @map("email_verified")
+  passwordHash  String?       @map("password_hash")
+  role          UserRole      @default(FREELANCER)
+  status        AccountStatus @default(PENDING_VERIFICATION)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  lastLoginAt   DateTime?     @map("last_login_at")
+  deletedAt     DateTime?     @map("deleted_at")
+
+  // Relations
+  profile             Profile?
+  oauthAccounts       OAuthAccount[]
+  passwordResets      PasswordReset[]
+  ownedProjects       Project[]       @relation("ProjectOwner")
+  proposals           Proposal[]
+  clientContracts     Contract[]      @relation("ClientContracts")
+  freelancerContracts Contract[]      @relation("FreelancerContracts")
+  payoutAccounts      PayoutAccount[]
+  transactions        Transaction[]
+  payouts             Payout[]
+  givenReviews        Review[]        @relation("ReviewsGiven")
+  receivedReviews     Review[]        @relation("ReviewsReceived")
+  initiatedDisputes   Dispute[]       @relation("DisputeInitiator")
+  resolvedDisputes    Dispute[]       @relation("DisputeResolver")
+  userStats           UserStats?
+  skills              UserSkill[]
+  verifications       Verification[]
 
   @@map("users")
+  @@schema("auth")
 }
 
+model OAuthAccount {
+  id                    String        @id @default(uuid())
+  userId                String        @map("user_id")
+  provider              OAuthProvider
+  providerUserId        String        @map("provider_user_id")
+  accessTokenEncrypted  Bytes?        @map("access_token_encrypted")
+  refreshTokenEncrypted Bytes?        @map("refresh_token_encrypted")
+  tokenExpiresAt        DateTime?     @map("token_expires_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@map("oauth_accounts")
+  @@schema("auth")
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
+  @@schema("auth")
+}
+
+enum UserRole {
+  ADMIN
+  CLIENT
+  FREELANCER
+
+  @@schema("auth")
+}
+
+enum AccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  BANNED
+
+  @@schema("auth")
+}
+
+enum OAuthProvider {
+  GOOGLE
+  GITHUB
+  LINKEDIN
+
+  @@schema("auth")
+}
+
+// ============================================================================
+// USER PROFILE SCHEMA - Profiles, Skills, Verification
+// ============================================================================
+
 model Profile {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  firstName String?
-  lastName  String?
-  avatar    String?
-  bio       String?
-  skills    String[]
-  hourlyRate Float?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                   String             @id @default(uuid())
+  userId               String             @unique @map("user_id")
+  displayName          String             @map("display_name")
+  firstName            String?            @map("first_name")
+  lastName             String?            @map("last_name")
+  avatarUrl            String?            @map("avatar_url")
+  bio                  String?
+  headline             String?
+  locationCountry      String?            @map("location_country") @db.Char(2)
+  locationCity         String?            @map("location_city")
+  timezone             String             @default("Asia/Jakarta")
+  languagePrimary      String             @default("id") @map("language_primary") @db.Char(2)
+  hourlyRateCents      Int?               @map("hourly_rate_cents")
+  currency             String             @default("IDR") @db.Char(3)
+  availability         AvailabilityStatus @default(AVAILABLE)
+  profileCompletionPct Int                @default(0) @map("profile_completion_pct") @db.SmallInt
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profiles")
+  @@schema("user_profile")
 }
 
-// Project model
+model SkillCategory {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  slug   String  @unique
+  skills Skill[]
+
+  @@map("skill_categories")
+  @@schema("user_profile")
+}
+
+model Skill {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  slug       String   @unique
+  categoryId String?  @map("category_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  category      SkillCategory? @relation(fields: [categoryId], references: [id])
+  userSkills    UserSkill[]
+  projectSkills ProjectSkill[]
+
+  @@map("skills")
+  @@schema("user_profile")
+}
+
+model UserSkill {
+  userId          String @map("user_id")
+  skillId         String @map("skill_id")
+  yearsExperience Int?   @map("years_experience") @db.SmallInt
+  endorsedCount   Int    @default(0) @map("endorsed_count")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+  @@map("user_skills")
+  @@schema("user_profile")
+}
+
+model Verification {
+  id                   String             @id @default(uuid())
+  userId               String             @map("user_id")
+  type                 VerificationType
+  status               VerificationStatus @default(PENDING)
+  documentUrlEncrypted Bytes?             @map("document_url_encrypted")
+  verifiedAt           DateTime?          @map("verified_at")
+  expiresAt            DateTime?          @map("expires_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("verifications")
+  @@schema("user_profile")
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BUSY
+  AWAY
+  INVISIBLE
+
+  @@schema("user_profile")
+}
+
+enum VerificationType {
+  IDENTITY
+  PHONE
+  BANK_ACCOUNT
+  PORTFOLIO
+
+  @@schema("user_profile")
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+
+  @@schema("user_profile")
+}
+
+// ============================================================================
+// PROJECT SCHEMA - Jobs, Proposals, Categories
+// ============================================================================
+
+model Category {
+  id        String  @id @default(uuid())
+  name      String
+  slug      String  @unique
+  parentId  String? @map("parent_id")
+  icon      String?
+  sortOrder Int     @default(0) @map("sort_order")
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  projects Project[]
+
+  @@map("categories")
+  @@schema("project")
+}
+
 model Project {
-  id          String        @id @default(uuid())
-  title       String
-  description String
-  budget      Float?
-  status      ProjectStatus @default(OPEN)
-  ownerId     String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String            @id @default(uuid())
+  clientId         String            @map("client_id")
+  title            String
+  slug             String            @unique
+  description      String
+  categoryId       String?           @map("category_id")
+  budgetType       BudgetType        @map("budget_type")
+  budgetMinCents   BigInt?           @map("budget_min_cents")
+  budgetMaxCents   BigInt?           @map("budget_max_cents")
+  budgetFixedCents BigInt?           @map("budget_fixed_cents")
+  currency         String            @default("IDR") @db.Char(3)
+  durationDays     Int?              @map("duration_days")
+  experienceLevel  ExperienceLevel?  @map("experience_level")
+  status           ProjectStatus     @default(DRAFT)
+  visibility       ProjectVisibility @default(PUBLIC)
+  proposalCount    Int               @default(0) @map("proposal_count")
+  viewCount        Int               @default(0) @map("view_count")
+  publishedAt      DateTime?         @map("published_at")
+  expiresAt        DateTime?         @map("expires_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
 
-  owner     User       @relation("ProjectOwner", fields: [ownerId], references: [id])
-  contracts Contract[]
+  client      User                @relation("ProjectOwner", fields: [clientId], references: [id])
+  category    Category?           @relation(fields: [categoryId], references: [id])
+  skills      ProjectSkill[]
+  proposals   Proposal[]
+  contracts   Contract[]
+  attachments ProjectAttachment[]
 
+  @@index([clientId])
+  @@index([status])
+  @@index([categoryId])
   @@map("projects")
+  @@schema("project")
 }
 
-// Contract model
-model Contract {
-  id           String         @id @default(uuid())
-  projectId    String
-  freelancerId String
-  amount       Float
-  status       ContractStatus @default(PENDING)
-  startDate    DateTime?
-  endDate      DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+model ProjectSkill {
+  projectId String @map("project_id")
+  skillId   String @map("skill_id")
 
-  project    Project @relation(fields: [projectId], references: [id])
-  freelancer User    @relation(fields: [freelancerId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@map("contracts")
+  @@id([projectId, skillId])
+  @@map("project_skills")
+  @@schema("project")
 }
 
-enum Role {
-  ADMIN
-  CLIENT
-  FREELANCER
+model Proposal {
+  id                    String         @id @default(uuid())
+  projectId             String         @map("project_id")
+  freelancerId          String         @map("freelancer_id")
+  coverLetter           String         @map("cover_letter")
+  bidAmountCents        BigInt         @map("bid_amount_cents")
+  currency              String         @default("IDR") @db.Char(3)
+  estimatedDurationDays Int?           @map("estimated_duration_days")
+  status                ProposalStatus @default(PENDING)
+  submittedAt           DateTime       @default(now()) @map("submitted_at")
+  reviewedAt            DateTime?      @map("reviewed_at")
+
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  freelancer  User                 @relation(fields: [freelancerId], references: [id])
+  contracts   Contract[]
+  attachments ProposalAttachment[]
+
+  @@unique([projectId, freelancerId])
+  @@index([freelancerId])
+  @@index([status])
+  @@map("proposals")
+  @@schema("project")
+}
+
+model ProjectAttachment {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  fileName      String   @map("file_name")
+  fileUrl       String   @map("file_url")
+  fileSizeBytes BigInt?  @map("file_size_bytes")
+  mimeType      String?  @map("mime_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_attachments")
+  @@schema("project")
+}
+
+model ProposalAttachment {
+  id            String   @id @default(uuid())
+  proposalId    String   @map("proposal_id")
+  fileName      String   @map("file_name")
+  fileUrl       String   @map("file_url")
+  fileSizeBytes BigInt?  @map("file_size_bytes")
+  mimeType      String?  @map("mime_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@map("proposal_attachments")
+  @@schema("project")
+}
+
+enum BudgetType {
+  HOURLY
+  FIXED
+  NEGOTIABLE
+
+  @@schema("project")
+}
+
+enum ExperienceLevel {
+  ENTRY
+  INTERMEDIATE
+  EXPERT
+
+  @@schema("project")
 }
 
 enum ProjectStatus {
+  DRAFT
   OPEN
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  EXPIRED
+
+  @@schema("project")
+}
+
+enum ProjectVisibility {
+  PUBLIC
+  PRIVATE
+  INVITE_ONLY
+
+  @@schema("project")
+}
+
+enum ProposalStatus {
+  PENDING
+  SHORTLISTED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+
+  @@schema("project")
+}
+
+// ============================================================================
+// CONTRACT SCHEMA - Agreements, Milestones, Deliverables
+// ============================================================================
+
+model Contract {
+  id                   String         @id @default(uuid())
+  contractNumber       String         @unique @map("contract_number")
+  projectId            String         @map("project_id")
+  proposalId           String?        @map("proposal_id")
+  clientId             String         @map("client_id")
+  freelancerId         String         @map("freelancer_id")
+  title                String
+  description          String?
+  contractType         ContractType   @map("contract_type")
+  totalAmountCents     BigInt         @map("total_amount_cents")
+  currency             String         @default("IDR") @db.Char(3)
+  platformFeePct       Decimal        @default(10.00) @map("platform_fee_pct") @db.Decimal(5, 2)
+  status               ContractStatus @default(PENDING)
+  startDate            DateTime?      @map("start_date") @db.Date
+  endDate              DateTime?      @map("end_date") @db.Date
+  signedByClientAt     DateTime?      @map("signed_by_client_at")
+  signedByFreelancerAt DateTime?      @map("signed_by_freelancer_at")
+  completedAt          DateTime?      @map("completed_at")
+  cancelledAt          DateTime?      @map("cancelled_at")
+  cancellationReason   String?        @map("cancellation_reason")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  project       Project        @relation(fields: [projectId], references: [id])
+  proposal      Proposal?      @relation(fields: [proposalId], references: [id])
+  client        User           @relation("ClientContracts", fields: [clientId], references: [id])
+  freelancer    User           @relation("FreelancerContracts", fields: [freelancerId], references: [id])
+  milestones    Milestone[]
+  timeLogs      TimeLog[]
+  escrowAccount EscrowAccount?
+  reviews       Review[]
+  disputes      Dispute[]
+
+  @@index([clientId])
+  @@index([freelancerId])
+  @@index([projectId])
+  @@index([status])
+  @@map("contracts")
+  @@schema("contract")
+}
+
+model Milestone {
+  id              String          @id @default(uuid())
+  contractId      String          @map("contract_id")
+  title           String
+  description     String?
+  amountCents     BigInt          @map("amount_cents")
+  currency        String          @default("IDR") @db.Char(3)
+  dueDate         DateTime?       @map("due_date") @db.Date
+  sortOrder       Int             @default(0) @map("sort_order")
+  status          MilestoneStatus @default(PENDING)
+  submittedAt     DateTime?       @map("submitted_at")
+  approvedAt      DateTime?       @map("approved_at")
+  rejectedAt      DateTime?       @map("rejected_at")
+  rejectionReason String?         @map("rejection_reason")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  contract     Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  deliverables Deliverable[]
+
+  @@index([contractId])
+  @@map("milestones")
+  @@schema("contract")
+}
+
+model Deliverable {
+  id            String   @id @default(uuid())
+  milestoneId   String   @map("milestone_id")
+  fileName      String   @map("file_name")
+  fileUrl       String   @map("file_url")
+  fileSizeBytes BigInt?  @map("file_size_bytes")
+  description   String?
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@map("deliverables")
+  @@schema("contract")
+}
+
+model TimeLog {
+  id            String   @id @default(uuid())
+  contractId    String   @map("contract_id")
+  startTime     DateTime @map("start_time")
+  endTime       DateTime @map("end_time")
+  description   String?
+  screenshotUrl String?  @map("screenshot_url")
+  approved      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@map("time_logs")
+  @@schema("contract")
+}
+
+enum ContractType {
+  FIXED
+  HOURLY
+  MILESTONE
+
+  @@schema("contract")
 }
 
 enum ContractStatus {
   PENDING
+  AWAITING_SIGNATURES
   ACTIVE
+  PAUSED
   COMPLETED
   CANCELLED
+  DISPUTED
+
+  @@schema("contract")
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  REVISION_REQUESTED
+  APPROVED
+  PAID
+
+  @@schema("contract")
+}
+
+// ============================================================================
+// PAYMENT SCHEMA - Escrow, Transactions, Payouts
+// ============================================================================
+
+model EscrowAccount {
+  id                 String       @id @default(uuid())
+  contractId         String       @unique @map("contract_id")
+  totalFundedCents   BigInt       @default(0) @map("total_funded_cents")
+  totalReleasedCents BigInt       @default(0) @map("total_released_cents")
+  totalRefundedCents BigInt       @default(0) @map("total_refunded_cents")
+  currency           String       @default("IDR") @db.Char(3)
+  status             EscrowStatus @default(UNFUNDED)
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  contract     Contract      @relation(fields: [contractId], references: [id])
+  transactions Transaction[]
+
+  @@map("escrow_accounts")
+  @@schema("payment")
+}
+
+model Transaction {
+  id                    String            @id @default(uuid())
+  transactionRef        String            @unique @map("transaction_ref")
+  escrowId              String?           @map("escrow_id")
+  userId                String            @map("user_id")
+  type                  TransactionType
+  amountCents           BigInt            @map("amount_cents")
+  feeCents              BigInt            @default(0) @map("fee_cents")
+  currency              String            @default("IDR") @db.Char(3)
+  status                TransactionStatus @default(PENDING)
+  paymentMethod         PaymentMethod?    @map("payment_method")
+  paymentProvider       PaymentProvider?  @map("payment_provider")
+  providerTransactionId String?           @map("provider_transaction_id")
+  providerResponse      Json?             @map("provider_response")
+  metadata              Json?
+  createdAt             DateTime          @default(now()) @map("created_at")
+  completedAt           DateTime?         @map("completed_at")
+  failedAt              DateTime?         @map("failed_at")
+  failureReason         String?           @map("failure_reason")
+
+  escrow EscrowAccount? @relation(fields: [escrowId], references: [id])
+  user   User           @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([escrowId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("transactions")
+  @@schema("payment")
+}
+
+model PayoutAccount {
+  id                     String    @id @default(uuid())
+  userId                 String    @map("user_id")
+  bankCode               String    @map("bank_code")
+  bankName               String    @map("bank_name")
+  accountNumberEncrypted Bytes     @map("account_number_encrypted")
+  accountHolderName      String    @map("account_holder_name")
+  isPrimary              Boolean   @default(false) @map("is_primary")
+  isVerified             Boolean   @default(false) @map("is_verified")
+  verifiedAt             DateTime? @map("verified_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+
+  user    User     @relation(fields: [userId], references: [id])
+  payouts Payout[]
+
+  @@map("payout_accounts")
+  @@schema("payment")
+}
+
+model Payout {
+  id              String       @id @default(uuid())
+  payoutRef       String       @unique @map("payout_ref")
+  userId          String       @map("user_id")
+  payoutAccountId String       @map("payout_account_id")
+  amountCents     BigInt       @map("amount_cents")
+  feeCents        BigInt       @default(0) @map("fee_cents")
+  currency        String       @default("IDR") @db.Char(3)
+  status          PayoutStatus @default(PENDING)
+  scheduledAt     DateTime?    @map("scheduled_at")
+  processedAt     DateTime?    @map("processed_at")
+  completedAt     DateTime?    @map("completed_at")
+  failedAt        DateTime?    @map("failed_at")
+  failureReason   String?      @map("failure_reason")
+  providerBatchId String?      @map("provider_batch_id")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  user          User          @relation(fields: [userId], references: [id])
+  payoutAccount PayoutAccount @relation(fields: [payoutAccountId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("payouts")
+  @@schema("payment")
+}
+
+model ExchangeRate {
+  id             String   @id @default(uuid())
+  baseCurrency   String   @map("base_currency") @db.Char(3)
+  targetCurrency String   @map("target_currency") @db.Char(3)
+  rate           Decimal  @db.Decimal(20, 10)
+  source         String   @default("xe.com")
+  effectiveAt    DateTime @map("effective_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([baseCurrency, targetCurrency, effectiveAt])
+  @@map("exchange_rates")
+  @@schema("payment")
+}
+
+enum EscrowStatus {
+  UNFUNDED
+  PARTIALLY_FUNDED
+  FUNDED
+  RELEASING
+  RELEASED
+  REFUNDED
+
+  @@schema("payment")
+}
+
+enum TransactionType {
+  ESCROW_DEPOSIT
+  ESCROW_RELEASE
+  ESCROW_REFUND
+  PAYOUT
+  PLATFORM_FEE
+  TOP_UP
+  WITHDRAWAL
+
+  @@schema("payment")
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+
+  @@schema("payment")
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  VA
+  EWALLET
+  QRIS
+  CREDIT_CARD
+
+  @@schema("payment")
+}
+
+enum PaymentProvider {
+  MIDTRANS
+  XENDIT
+  STRIPE
+
+  @@schema("payment")
+}
+
+enum PayoutStatus {
+  PENDING
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@schema("payment")
+}
+
+// ============================================================================
+// REVIEW SCHEMA - Ratings, Feedback, Disputes
+// ============================================================================
+
+model Review {
+  id                    String     @id @default(uuid())
+  contractId            String     @map("contract_id")
+  reviewerId            String     @map("reviewer_id")
+  revieweeId            String     @map("reviewee_id")
+  type                  ReviewType
+  overallRating         Int        @map("overall_rating") @db.SmallInt
+  communicationRating   Int?       @map("communication_rating") @db.SmallInt
+  qualityRating         Int?       @map("quality_rating") @db.SmallInt
+  timelinessRating      Int?       @map("timeliness_rating") @db.SmallInt
+  professionalismRating Int?       @map("professionalism_rating") @db.SmallInt
+  comment               String?
+  isPublic              Boolean    @default(true) @map("is_public")
+  response              String?
+  respondedAt           DateTime?  @map("responded_at")
+  createdAt             DateTime   @default(now()) @map("created_at")
+
+  contract Contract @relation(fields: [contractId], references: [id])
+  reviewer User     @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewee User     @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+
+  @@unique([contractId, reviewerId])
+  @@index([revieweeId])
+  @@map("reviews")
+  @@schema("review")
+}
+
+model Dispute {
+  id              String             @id @default(uuid())
+  disputeRef      String             @unique @map("dispute_ref")
+  contractId      String             @map("contract_id")
+  initiatedBy     String             @map("initiated_by")
+  reason          DisputeReason
+  description     String
+  evidenceUrls    String[]           @map("evidence_urls")
+  status          DisputeStatus      @default(OPEN)
+  resolution      DisputeResolution?
+  resolutionNotes String?            @map("resolution_notes")
+  resolvedBy      String?            @map("resolved_by")
+  resolvedAt      DateTime?          @map("resolved_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  contract  Contract @relation(fields: [contractId], references: [id])
+  initiator User     @relation("DisputeInitiator", fields: [initiatedBy], references: [id])
+  resolver  User?    @relation("DisputeResolver", fields: [resolvedBy], references: [id])
+
+  @@index([contractId])
+  @@index([status])
+  @@map("disputes")
+  @@schema("review")
+}
+
+model UserStats {
+  userId             String   @id @map("user_id")
+  totalReviews       Int      @default(0) @map("total_reviews")
+  averageRating      Decimal  @default(0) @map("average_rating") @db.Decimal(3, 2)
+  totalEarningsCents BigInt   @default(0) @map("total_earnings_cents")
+  totalSpentCents    BigInt   @default(0) @map("total_spent_cents")
+  contractsCompleted Int      @default(0) @map("contracts_completed")
+  contractsCancelled Int      @default(0) @map("contracts_cancelled")
+  onTimeDeliveryPct  Decimal  @default(100) @map("on_time_delivery_pct") @db.Decimal(5, 2)
+  repeatHireRatePct  Decimal  @default(0) @map("repeat_hire_rate_pct") @db.Decimal(5, 2)
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("user_stats")
+  @@schema("review")
+}
+
+enum ReviewType {
+  CLIENT_TO_FREELANCER
+  FREELANCER_TO_CLIENT
+
+  @@schema("review")
+}
+
+enum DisputeReason {
+  WORK_NOT_DELIVERED
+  QUALITY_ISSUES
+  SCOPE_DISAGREEMENT
+  PAYMENT_ISSUE
+  COMMUNICATION_BREAKDOWN
+  OTHER
+
+  @@schema("review")
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  PENDING_EVIDENCE
+  RESOLVED
+  ESCALATED
+
+  @@schema("review")
+}
+
+enum DisputeResolution {
+  FAVOR_CLIENT
+  FAVOR_FREELANCER
+  PARTIAL_REFUND
+  MUTUAL_AGREEMENT
+  CANCELLED
+
+  @@schema("review")
 }

@@ -12,6 +12,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@elysiajs/swagger": "^1.3.1",
     "@openlance/cache": "*",
     "@openlance/logger": "*",
     "@openlance/mongodb": "*",

@@ -1,3 +1,4 @@
+import swagger from '@elysiajs/swagger'
 import { createServiceLogger } from '@openlance/logger'
 import { SERVICES } from '@openlance/shared'
 import { Elysia } from 'elysia'
@@ -9,6 +10,13 @@ const logger = createServiceLogger(SERVICES.USER)
 const port = process.env.USER_SERVICE_PORT || 3001
 
 export const app = new Elysia()
+  .use(
+    swagger({
+      documentation: {
+        info: { title: 'User Service API', version: '1.0.0' },
+      },
+    })
+  )
   .use(healthRoutes)
   .use(userRoutes)
   .onError(({ code, error, set }) => {

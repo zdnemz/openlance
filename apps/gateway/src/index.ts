@@ -1,4 +1,5 @@
 import cors from '@elysiajs/cors'
+import swagger from '@elysiajs/swagger'
 import { createServiceLogger } from '@openlance/logger'
 import { HTTP_STATUS, SERVICES } from '@openlance/shared'
 import { Elysia } from 'elysia'
@@ -10,6 +11,13 @@ const logger = createServiceLogger(SERVICES.GATEWAY)
 const port = process.env.GATEWAY_PORT || 3000
 
 export const app = new Elysia()
+  .use(
+    swagger({
+      documentation: {
+        info: { title: 'Gateway API', version: '1.0.0' },
+      },
+    })
+  )
   .use(cors())
   .use(healthRoutes)
   .use(proxyMiddleware)
