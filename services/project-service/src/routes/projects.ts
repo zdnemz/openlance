@@ -1,7 +1,7 @@
 import { R, success } from '@openlance/shared'
 import { Elysia } from 'elysia'
 
-export const projectRoutes = new Elysia({ prefix: '/projects' })
+export const projectRoutes = new Elysia()
   .get('/', ({ set }) => {
     // TODO: Implement list projects
     set.status = R.ok().status

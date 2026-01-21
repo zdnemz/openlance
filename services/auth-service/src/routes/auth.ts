@@ -2,7 +2,7 @@ import { Elysia, t } from 'elysia'
 import { AuthController } from '../controllers/auth'
 import { jwt } from '@elysiajs/jwt'
 
-export const authRoutes = new Elysia({ prefix: '/auth' })
+export const authRoutes = new Elysia()
     .use(
         jwt({
             name: 'jwt',

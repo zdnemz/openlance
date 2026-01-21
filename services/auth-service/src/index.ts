@@ -5,7 +5,7 @@ import { SERVICES } from '@openlance/shared'
 import { authRoutes } from './routes/auth'
 
 const logger = createServiceLogger(SERVICES.AUTH)
-const port = process.env.AUTH_SERVICE_PORT || 3002
+const port = process.env.AUTH_SERVICE_PORT || 3004
 
 export const app = new Elysia()
   .use(

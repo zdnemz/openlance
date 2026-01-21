@@ -1,7 +1,7 @@
 import { R, success } from '@openlance/shared'
 import { Elysia } from 'elysia'
 
-export const notificationRoutes = new Elysia({ prefix: '/notifications' })
+export const notificationRoutes = new Elysia()
   .get('/', ({ set }) => {
     // TODO: Implement list notifications
     set.status = R.ok().status

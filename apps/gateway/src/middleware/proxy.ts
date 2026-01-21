@@ -9,6 +9,7 @@ const serviceUrls: Record<string, string> = {
   users: process.env.USER_SERVICE_URL || 'http://localhost:3001',
   projects: process.env.PROJECT_SERVICE_URL || 'http://localhost:3002',
   notifications: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3003',
+  auth: process.env.AUTH_SERVICE_URL || 'http://localhost:3004',
 }
 
 export const proxyMiddleware = new Elysia({ prefix: '/api' })
@@ -20,6 +21,9 @@ export const proxyMiddleware = new Elysia({ prefix: '/api' })
   })
   .all('/notifications/*', async ({ request, params }) => {
     return proxyRequest(request, 'notifications', params['*'])
+  })
+  .all('/auth/*', async ({ request, params }) => {
+    return proxyRequest(request, 'auth', params['*'])
   })
 
 async function proxyRequest(
