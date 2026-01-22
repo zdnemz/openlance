@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Elysia, t } from 'elysia'
 import { AuthController } from '../controllers/auth'
 import { jwt } from '@elysiajs/jwt'

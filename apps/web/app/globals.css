@@ -1,26 +1,84 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-outfit);
 
-@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  /* Glass Effects */
+  --backdrop-blur-xs: 2px;
+  --backdrop-blur-sm: 4px;
+  --backdrop-blur-md: 8px;
+  --backdrop-blur-lg: 12px;
+  --backdrop-blur-xl: 16px;
+  --backdrop-blur-2xl: 24px;
+  --backdrop-blur-3xl: 40px;
 }
 
-@media (prefers-color-scheme: dark) {
+@layer utilities {
+  .glass {
+    background-color: var(--card);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+
+  .glass-card {
+    background-color: var(--card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    border-radius: 1rem;
+  }
+
+  .glass-nav {
+    background-color: var(--background);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Neon Glows */
+  .glow-text {
+    text-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  }
+
+  .glow-box {
+    box-shadow: 0 0 40px -10px rgba(139, 92, 246, 0.3);
+  }
+}
+
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #020617; /* slate-950 */
+    --background-rgb: 2, 6, 23;
+    --foreground: #f8fafc; /* slate-50 */
+
+    /* Accent Colors */
+    --primary: #8b5cf6; /* violet-500 */
+    --secondary: #22d3ee; /* cyan-400 */
+
+    --card: rgba(255, 255, 255, 0.05);
+    --border: rgba(255, 255, 255, 0.1);
   }
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), sans-serif;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Selection Color */
+::selection {
+  background-color: var(--primary);
+  color: white;
 }

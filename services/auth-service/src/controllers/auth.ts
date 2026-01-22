@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { User } from '@openlance/database';
 import { prisma as db } from '@openlance/database'
-import { validate } from '@openlance/shared'
+import { omit, validate } from '@openlance/shared'
 import { RegisterDTO, LoginDTO, ResetPasswordDTO, ForgotPasswordDTO, ChangePasswordDTO, VerifyEmailDTO } from '../schemas'
 import { createServiceLogger } from '@openlance/logger'
 import { SERVICES } from '@openlance/shared'
@@ -12,8 +14,8 @@ import { EnableTwoFactorDTO } from '../schemas'
 
 const logger = createServiceLogger(SERVICES.AUTH)
 
-const sanitizeUser = (user: any) => {
-    const { passwordHash, ...safeUser } = user
+const sanitizeUser = <T extends Partial<User>>(user: T) => {
+    const safeUser = omit(user, ['passwordHash', 'twoFactorSecret'])
     return safeUser
 }
 
@@ -87,6 +89,8 @@ export class AuthController {
             where: { id: user.id },
             include: { profile: true }
         })
+
+        if (!fullUser) throw new Error('User not found')
 
         return { success: true, user: sanitizeUser(fullUser) }
     }
