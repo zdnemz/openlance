@@ -70,7 +70,7 @@ export function Features() {
                     {features.map((feature, i) => (
                         <GlassCard
                             key={feature.title}
-                            className={`group relative flex flex-col justify-between p-8 ${feature.className}`}
+                            className={`group relative flex flex-col justify-between p-6 md:p-8 ${feature.className}`}
                             hoverEffect
                             glow
                             initial={{ opacity: 0, scale: 0.95 }}

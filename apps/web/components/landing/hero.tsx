@@ -54,9 +54,9 @@ function Scene() {
 
 export function Hero() {
     return (
-        <section className="relative h-[110vh] w-full mt-[-80px] overflow-hidden flex items-center justify-center">
-            {/* 3D Background */}
-            <div className="absolute inset-0 bg-slate-950">
+        <section className="relative min-h-[110vh] w-full overflow-hidden flex items-center justify-center">
+            {/* 3D Background - pointer-events-none to ensure scroll works on mobile */}
+            <div className="absolute inset-0 bg-slate-950 pointer-events-none">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.1),transparent_70%)]" />
                 <Canvas camera={{ position: [0, 0, 10], fov: 45 }}>
                     <Scene />
@@ -64,7 +64,7 @@ export function Hero() {
             </div>
 
             {/* Content */}
-            <div className="relative w-full max-w-7xl px-4 sm:px-6 lg:px-8 z-10 flex flex-col items-center text-center">
+            <div className="relative w-full max-w-7xl px-4 sm:px-6 lg:px-8 z-10 flex flex-col items-center text-center pt-20 sm:pt-0">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -79,10 +79,10 @@ export function Hero() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-                    className="text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-8"
+                    className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white mb-6 sm:mb-8"
                 >
                     <span className="block">Hire the World&apos;s</span>
-                    <span className="block bg-gradient-to-r from-violet-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent pb-4">
+                    <span className="block bg-gradient-to-r from-violet-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent pb-2 sm:pb-4">
                         Top Technologists
                     </span>
                 </motion.h1>
@@ -91,7 +91,7 @@ export function Hero() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-                    className="mx-auto max-w-2xl text-lg sm:text-xl text-slate-400 mb-10 leading-relaxed"
+                    className="mx-auto max-w-2xl text-base sm:text-xl text-slate-400 mb-8 sm:mb-10 leading-relaxed px-4 sm:px-0"
                 >
                     The premium marketplace for elite software engineers, designers, and product managers.
                     Verified talent, secure escrow payments, and zero hiring friction.
@@ -101,12 +101,12 @@ export function Hero() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-                    className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto"
+                    className="flex flex-col w-full sm:w-auto sm:flex-row gap-4 px-4 sm:px-0"
                 >
-                    <Button size="lg" className="rounded-full shadow-violet-500/25 px-8">
+                    <Button size="lg" className="w-full sm:w-auto rounded-full shadow-violet-500/25 px-8">
                         Hire Talent
                     </Button>
-                    <Button size="lg" variant="glass" className="rounded-full px-8">
+                    <Button size="lg" variant="glass" className="w-full sm:w-auto rounded-full px-8">
                         Find Work
                     </Button>
                 </motion.div>
@@ -116,7 +116,7 @@ export function Hero() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 1, delay: 1 }}
-                    className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-16 border-t border-white/5 pt-10"
+                    className="mt-12 md:mt-20 grid grid-cols-2 lg:grid-cols-4 gap-6 md:gap-12 border-t border-white/5 pt-8 md:pt-10 w-full"
                 >
                     {[
                         { label: "Total Volume", value: "$2M+" },
@@ -124,19 +124,19 @@ export function Hero() {
                         { label: "Freelancers", value: "1.2k" },
                         { label: "Avg. Rate", value: "$45/hr" },
                     ].map((stat, i) => (
-                        <div key={i} className="flex flex-col">
-                            <span className="text-2xl font-bold text-white">{stat.value}</span>
-                            <span className="text-sm text-slate-500">{stat.label}</span>
+                        <div key={i} className="flex flex-col items-center justify-center p-2 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/5">
+                            <span className="text-xl sm:text-2xl font-bold text-white mb-1">{stat.value}</span>
+                            <span className="text-xs sm:text-sm text-slate-500">{stat.label}</span>
                         </div>
                     ))}
                 </motion.div>
             </div>
 
-            {/* Scroll indicator */}
+            {/* Scroll indicator - Hidden on very small screens to save space */}
             <motion.div
                 animate={{ y: [0, 10, 0] }}
                 transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute bottom-10 left-1/2 -translate-x-1/2 text-slate-500"
+                className="hidden sm:block absolute bottom-10 left-1/2 -translate-x-1/2 text-slate-500"
             >
                 <div className="h-14 w-8 rounded-full border-2 border-white/10 flex justify-center p-2">
                     <div className="h-2 w-1 bg-cyan-400 rounded-full" />
