@@ -5,7 +5,8 @@
   "type": "module",
   "description": "EscrowLance backend — Hono API + Supabase-compatible Postgres + Redis. Backend-first implementation of the EscrowLance PRD (milestone escrow marketplace).",
   "scripts": {
-    "dev": "bun --hot src/server.ts",
+    "dev": "bash scripts/dev-real.sh",
+    "dev:api-only": "bun --hot src/server.ts",
     "start": "bun src/server.ts",
     "worker": "bun --hot src/workers/index.ts",
     "typecheck": "tsc --noEmit",

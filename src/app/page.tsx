@@ -1,411 +1,457 @@
-'use client'
+"use client";
 
 /**
- * EscrowLance — Backend Console.
- *
- * The product frontend arrives in a later build phase; this page is the live
- * window into the backend-first deliverable (Hono API on :3030): health,
- * adapter modes, seeded demo project, the on-chain ledger mirror, arbiter
- * trust scores, and the API surface. All requests go through the gateway
- * using relative paths + XTransformPort (sandbox rule).
+ * Landing — cinematic scrolltelling (MOTION budget spent here), asymmetric
+ * split hero, sticky-stack how-it-works, trust section, kinetic marquee.
+ * The app interior stays calm; this page is allowed to move.
  */
-import { useCallback, useEffect, useState } from 'react'
-import {
-  Activity, ArrowUpRight, Blocks, Boxes, Coins, Database, FileText, Gauge, HardDrive,
-  Layers, Link2, MessageSquare, Radio, ServerCog, ShieldCheck, Star, Users, Wallet, Zap,
-} from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import Link from "next/link";
+import { motion, useScroll, useTransform, type Variants } from "framer-motion";
+import { useRef, memo, useEffect, useState } from "react";
+import { Logo } from "@/components/app-shell";
+import { WalletButton } from "@/components/wallet/wallet-button";
+import { StatusDot } from "@/components/design";
+import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
+import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
+import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
+import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
+import { FilePlus } from "@phosphor-icons/react/dist/csr/FilePlus";
 
-const API_PORT = 3030
-/** Gateway path (works through the preview proxy) + direct local fallback. */
-const GW = (path: string) => `/${path}${path.includes('?') ? '&' : '?'}XTransformPort=${API_PORT}`
-const DIRECT = (path: string) => `http://localhost:${API_PORT}/${path.replace(/^\//, '')}`
+/* ── motion vocabulary ──────────────────────────────────────────────────── */
 
-async function fetchApi(path: string): Promise<Response> {
-  try {
-    const viaGateway = await fetch(GW(path), { cache: 'no-store' })
-    if (viaGateway.ok) return viaGateway
-  } catch {
-    // gateway not in the path (direct localhost access) — fall through
-  }
-  return fetch(DIRECT(path), { cache: 'no-store' })
-}
+const spring = { type: "spring", stiffness: 100, damping: 20 } as const;
 
-// ── Types (mirror the API's /overview response) ────────────────────────────
-interface Overview {
-  service: string
-  config: {
-    chainMode: string; chainId: number; feeBps: number; dbDriver: string
-    storageDriver: string; queueMode: string
-    contracts: { escrow: string; arbiterRegistry: string }
-  }
-  counts: { users: number; jobs: number; projects: number; proposals: number; messages: number; reviews: number; ledgerEvents: number }
-  milestoneHistogram: Record<string, number>
-  arbiters: { address: string; registered: boolean; sbtTokenId: number | null; trustScore: number; resolutions: number; resolutionsWithinSla: number; resolutionsLate: number }[]
-  latestLedger: { id: number; eventType: string; blockNumber: number; blockTime: string; txHash: string; payload: Record<string, unknown> }[]
-  demoProject: {
-    id: string; status: string; createdAt: string
-    client: { displayName: string | null; walletAddress: string } | null
-    freelancer: { displayName: string | null; walletAddress: string } | null
-    milestones: { id: string; position: number; title: string; amountWei: string; chainStatus: string; softStatus: string | null; settlementTxHash: string | null }[]
-  } | null
-}
+const rise: Variants = {
+  hidden: { opacity: 0, y: 26 },
+  show: (i: number = 0) => ({ opacity: 1, y: 0, transition: { ...spring, delay: i * 0.08 } }),
+};
 
-const ETH = (wei: string) => {
-  try { return (Number(BigInt(wei)) / 1e18).toFixed(2) } catch { return '0' }
-}
-const short = (s: string, n = 10) => s ? `${s.slice(0, n)}…${s.slice(-4)}` : ''
-const shortAddr = (a: string) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : ''
+/* ── hero visual: the living escrow card ───────────────────────────────── */
 
-const CHAIN_STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  pending_funding: { label: 'Pending funding', className: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/25' },
-  funded: { label: 'Funded', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25' },
-  submitted: { label: 'Submitted', className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400 border-teal-500/25' },
-  released: { label: 'Released', className: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-600/30' },
-  disputed: { label: 'Disputed', className: 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/25' },
-  resolved_release: { label: 'Resolved · release', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25' },
-  resolved_refund: { label: 'Resolved · refund', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25' },
-  resolved_split: { label: 'Resolved · split', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25' },
-  cancelled: { label: 'Cancelled', className: 'bg-zinc-500/15 text-zinc-500 dark:text-zinc-400 border-zinc-500/25' },
-}
+const FLOW = [
+  { state: "Funded", color: "#fbbf24", line: "Mara locks 0.24 ETH", sub: "escrow contract holds it — nobody can move it" },
+  { state: "Submitted", color: "#38bdf8", line: "Dario submits on-chain", sub: "delivery proof lands with the milestone" },
+  { state: "Released", color: "#34d399", line: "0.234 ETH paid out", sub: "approved → instant release, 2.5% fee accounted" },
+] as const;
 
-const EVENT_ICON: Record<string, typeof Coins> = {
-  MilestoneFunded: Coins, MilestoneReleased: Zap, MilestoneSubmitted: FileText,
-  MilestoneSplit: Layers, MilestoneRefunded: ArrowUpRight, MilestoneCancelled: ArrowUpRight,
-  DisputeOpened: ShieldCheck, DisputeResolved: ShieldCheck, FeeWithdrawn: Coins,
-  ArbiterRegistered: Star, ArbiterDeregistered: Star, TrustScoreUpdated: Star,
-}
-
-function StatusPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${ok
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-      : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400'}`}>
-      <span className={`size-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`} aria-hidden />
-      {label}
-    </span>
-  )
-}
-
-function StatCard({ icon: Icon, label, value, sub }: { icon: typeof Users; label: string; value: string | number; sub?: string }) {
-  return (
-    <Card className="gap-2 p-4">
-      <div className="flex items-center justify-between text-muted-foreground">
-        <span className="text-xs font-medium tracking-wide uppercase">{label}</span>
-        <Icon className="size-4" aria-hidden />
-      </div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      {sub ? <div className="text-xs text-muted-foreground">{sub}</div> : null}
-    </Card>
-  )
-}
-
-const API_GROUPS: { title: string; icon: typeof ServerCog; rows: [string, string][] }[] = [
-  { title: 'Auth & identity (SIWE)', icon: Wallet, rows: [
-    ['POST /auth/nonce', 'single-use nonce (KV, TTL)'],
-    ['POST /auth/verify', 'EIP-4361 verify → Supabase-compatible JWT'],
-    ['GET /auth/me', 'profile + on-chain-derived stats'],
-  ] },
-  { title: 'Marketplace (F1–F2)', icon: Blocks, rows: [
-    ['POST /jobs', 'milestone template sum validated server-side'],
-    ['POST /jobs/:id/proposals', 'one per freelancer, own breakdown'],
-    ['POST /proposals/:id/accept', 'bridge event → project + milestones'],
-  ] },
-  { title: 'Collaboration (F6–F8)', icon: MessageSquare, rows: [
-    ['POST /projects/:id/messages', 'append-only evidence log + realtime'],
-    ['POST /projects/:id/attachments', 'signed upload, 25MB + MIME allowlist'],
-    ['POST …/milestones/:mid/submissions', 'off-chain record + on-chain flip'],
-  ] },
-  { title: 'Money & trust (F4–F14)', icon: ShieldCheck, rows: [
-    ['GET /projects/:id/milestones', 'mirror + fund tx hints (ref bytes32)'],
-    ['POST /milestones/:id/reviews', 'settlement re-verified via RPC'],
-    ['POST …/disputes → /disputes/:id/arbiter-proposal', '48h mutual agreement window'],
-    ['GET /ledger · GET /arbiters', 'event-sourced cache + SBT scores'],
-  ] },
-  { title: 'Platform (F9)', icon: Radio, rows: [
-    ['POST /webhooks', 'HMAC-signed, 5-attempt backoff'],
-    ['POST /admin/reconcile', 'mirror-vs-chain drift report'],
-    ['/dev/chain/*', 'mock chain (drives the real indexer; dev only)'],
-  ] },
-]
-
-export default function BackendConsole() {
-  const [data, setData] = useState<Overview | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loaded, setLoaded] = useState(false)
-
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetchApi('overview')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setData((await res.json()).data as Overview)
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'unreachable')
-    } finally {
-      setLoaded(true)
-    }
-  }, [])
-
+const EscrowCard = memo(function EscrowCard() {
+  const [step, setStep] = useState(0);
   useEffect(() => {
-    refresh()
-    const id = setInterval(refresh, 10_000)
-    return () => clearInterval(id)
-  }, [refresh])
-
-  const online = !error && !!data
+    const t = setInterval(() => setStep((s) => (s + 1) % FLOW.length), 2600);
+    return () => clearInterval(t);
+  }, []);
+  const current = FLOW[step]!;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-8">
-        {/* ── Header ── */}
-        <header className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3 justify-between">
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-xl bg-emerald-600/15 border border-emerald-600/25 grid place-items-center">
-                <ShieldCheck className="size-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight">EscrowLance · Backend Console</h1>
-                <p className="text-sm text-muted-foreground">Milestone escrow marketplace — backend-first build (Hono · Supabase-compatible Postgres · Redis · viem)</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusPill ok={online} label={online ? 'API :3030 online' : 'API offline'} />
-              {data ? (
-                <>
-                  <Badge variant="outline" className="font-mono">chain {data.config.chainMode}</Badge>
-                  <Badge variant="outline" className="font-mono">fee {data.config.feeBps / 100}%</Badge>
-                </>
-              ) : null}
-            </div>
+    <div className="glass-raised relative w-full max-w-md rounded-3xl p-6">
+      <div className="flex items-center justify-between">
+        <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">milestone 1 · threat model</span>
+        <motion.span
+          key={current.state}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={spring}
+          className="flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+          style={{ color: current.color, borderColor: `color-mix(in oklab, ${current.color} 34%, transparent)`, background: `color-mix(in oklab, ${current.color} 9%, transparent)` }}
+        >
+          <StatusDot color={current.color} pulse />
+          {current.state}
+        </motion.span>
+      </div>
+
+      <div className="mt-5 flex items-baseline justify-between">
+        <div>
+          <div className="text-sm text-dim">value under escrow</div>
+          <div className="num mt-1 text-4xl font-medium tracking-tight">
+            {step === 2 ? "0.234" : "0.240"}
+            <span className="ml-1.5 text-base text-faint">ETH</span>
           </div>
-
-          {data ? (
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><Database className="size-3.5" aria-hidden />{data.config.dbDriver === 'pglite' ? 'embedded Postgres (PGlite)' : 'external Postgres'}</span>
-              <Separator orientation="vertical" className="h-3.5" />
-              <span className="inline-flex items-center gap-1.5"><Zap className="size-3.5" aria-hidden />queue: {data.config.queueMode}</span>
-              <Separator orientation="vertical" className="h-3.5" />
-              <span className="inline-flex items-center gap-1.5"><HardDrive className="size-3.5" aria-hidden />storage: {data.config.storageDriver}</span>
-              <Separator orientation="vertical" className="h-3.5" />
-              <span className="inline-flex items-center gap-1.5"><Link2 className="size-3.5" aria-hidden />chainId {data.config.chainId}</span>
-              <Separator orientation="vertical" className="h-3.5" />
-              <span className="inline-flex items-center gap-1.5 font-mono">{short(data.config.contracts.escrow, 12)}</span>
-            </div>
-          ) : null}
-
-          {loaded && error ? (
-            <Card className="border-rose-500/30 bg-rose-500/5">
-              <CardContent className="p-4 text-sm text-rose-700 dark:text-rose-400">
-                Backend unreachable ({error}). Start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">cd mini-services/api && bun run dev</code>, then this console refreshes automatically.
-              </CardContent>
-            </Card>
-          ) : null}
-        </header>
-
-        {/* ── Stats ── */}
-        <section aria-label="Platform statistics" className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          {data ? (
-            <>
-              <StatCard icon={Users} label="Users" value={data.counts.users} sub="wallet identities" />
-              <StatCard icon={Blocks} label="Jobs" value={data.counts.jobs} />
-              <StatCard icon={Boxes} label="Projects" value={data.counts.projects} />
-              <StatCard icon={FileText} label="Proposals" value={data.counts.proposals} />
-              <StatCard icon={MessageSquare} label="Messages" value={data.counts.messages} />
-              <StatCard icon={Star} label="Reviews" value={data.counts.reviews} sub="settlement-bound" />
-              <StatCard icon={Activity} label="Ledger events" value={data.counts.ledgerEvents} sub="from chain events" />
-            </>
-          ) : (
-            Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
-          )}
-        </section>
-
-        <div className="grid lg:grid-cols-5 gap-6">
-          {/* ── Demo project ── */}
-          <section aria-label="Demo project" className="lg:col-span-3 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Gauge className="size-4 text-emerald-600" aria-hidden />Demo project</CardTitle>
-                <CardDescription>
-                  {data?.demoProject
-                    ? <>Client <strong>{data.demoProject.client?.displayName ?? shortAddr(data.demoProject.client?.walletAddress ?? '')}</strong> × freelancer <strong>{data.demoProject.freelancer?.displayName ?? shortAddr(data.demoProject.freelancer?.walletAddress ?? '')}</strong> — status <Badge variant="secondary" className="ml-1">{data.demoProject.status}</Badge></>
-                    : 'The seeded project and its milestone state machine.'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {data?.demoProject ? (
-                  <ol className="space-y-3">
-                    {data.demoProject.milestones.map((m) => {
-                      const st = CHAIN_STATUS_STYLES[m.chainStatus] ?? { label: m.chainStatus, className: 'bg-muted text-muted-foreground border-border' }
-                      return (
-                        <li key={m.id} className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="grid place-items-center size-6 rounded-md bg-muted text-xs font-semibold">{m.position}</span>
-                              <span className="font-medium truncate">{m.title}</span>
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {ETH(m.amountWei)} ETH{m.settlementTxHash ? <> · settled <span className="font-mono">{short(m.settlementTxHash, 8)}</span></> : null}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {m.softStatus === 'changes_requested' ? <Badge variant="outline">changes requested</Badge> : null}
-                            <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${st.className}`}>{st.label}</span>
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ol>
-                ) : (
-                  <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* ── Ledger ── */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Activity className="size-4 text-emerald-600" aria-hidden />On-chain ledger <span className="text-muted-foreground font-normal text-sm">(event-sourced cache)</span></CardTitle>
-                <CardDescription>Every money movement, derived from chain events. Each row links to the explorer tx.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {data ? (
-                  <div className="max-h-96 overflow-y-auto rounded-md border">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
-                        <TableRow>
-                          <TableHead className="w-8" aria-label="icon" />
-                          <TableHead>Event</TableHead>
-                          <TableHead className="text-right">Block</TableHead>
-                          <TableHead className="hidden sm:table-cell">Tx</TableHead>
-                          <TableHead className="hidden md:table-cell text-right">When</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.latestLedger.length === 0 ? (
-                          <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No chain events yet — fund a milestone via /dev/chain.</TableCell></TableRow>
-                        ) : data.latestLedger.map((e) => {
-                          const Icon = EVENT_ICON[e.eventType] ?? Activity
-                          return (
-                            <TableRow key={e.id}>
-                              <TableCell><Icon className="size-3.5 text-muted-foreground" aria-hidden /></TableCell>
-                              <TableCell className="font-medium font-mono text-xs">{e.eventType}</TableCell>
-                              <TableCell className="text-right tabular-nums text-muted-foreground">{e.blockNumber.toLocaleString()}</TableCell>
-                              <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">{short(e.txHash, 10)}</TableCell>
-                              <TableCell className="hidden md:table-cell text-right text-xs text-muted-foreground">{new Date(e.blockTime).toLocaleTimeString()}</TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <Skeleton className="h-64 rounded-md" />
-                )}
-              </CardContent>
-            </Card>
-          </section>
-
-          {/* ── Sidebar: arbiters + histogram ── */}
-          <section aria-label="Trust layer" className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-emerald-600" aria-hidden />Arbiter registry <span className="text-muted-foreground font-normal text-sm">(SBT)</span></CardTitle>
-                <CardDescription>ERC-5194 soulbound trust: +1 per resolution within SLA, −2 late. Pure function of history.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {data ? (
-                  data.arbiters.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">No arbiters registered yet.</p>
-                  ) : (
-                    <ul className="space-y-3">
-                      {data.arbiters.map((a) => (
-                        <li key={a.address} className="flex items-center justify-between gap-2 rounded-lg border p-3">
-                          <div className="min-w-0">
-                            <div className="font-mono text-xs truncate">{shortAddr(a.address)}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              SBT #{a.sbtTokenId ?? '—'} · {a.resolutions} resolution{a.resolutions === 1 ? '' : 's'}
-                              {a.resolutionsLate > 0 ? <span className="text-rose-600 dark:text-rose-400"> · {a.resolutionsLate} late</span> : null}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end">
-                            <span className="text-lg font-semibold tabular-nums leading-none">{a.trustScore}</span>
-                            <span className={`text-[10px] ${a.registered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{a.registered ? 'active' : 'deregistered'}</span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )
-                ) : <Skeleton className="h-32 rounded-lg" />}
-              </CardContent>
-            </Card>
-
-            {data ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Milestone states</CardTitle>
-                  <CardDescription>Histogram across all project milestones.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {Object.entries(data.milestoneHistogram).map(([k, v]) => {
-                    const st = CHAIN_STATUS_STYLES[k] ?? { label: k, className: 'bg-muted text-muted-foreground border-border' }
-                    const max = Math.max(...Object.values(data.milestoneHistogram), 1)
-                    return (
-                      <div key={k} className="flex items-center gap-3 text-xs">
-                        <span className="w-32 shrink-0 text-muted-foreground">{st.label}</span>
-                        <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-600/70" style={{ width: `${(v / max) * 100}%` }} />
-                        </div>
-                        <span className="w-6 text-right tabular-nums font-medium">{v}</span>
-                      </div>
-                    )
-                  })}
-                  {Object.keys(data.milestoneHistogram).length === 0 ? <p className="text-sm text-muted-foreground">No milestones yet.</p> : null}
-                </CardContent>
-              </Card>
-            ) : null}
-          </section>
         </div>
+        <div className="num text-right text-[11px] leading-relaxed text-faint">
+          fee 2.5% · on release
+          <br />
+          Base-native settlement
+        </div>
+      </div>
 
-        {/* ── API reference ── */}
-        <section aria-label="API reference">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base"><ServerCog className="size-4 text-emerald-600" aria-hidden />API surface <span className="text-muted-foreground font-normal text-sm">— what the frontend will build against</span></CardTitle>
-              <CardDescription>
-                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">mini-services/api/requests.http</code>. Golden path E2E: <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">bun scripts/smoke.ts</code>.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {API_GROUPS.map((g) => (
-                <div key={g.title} className="space-y-2">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold"><g.icon className="size-4 text-emerald-600" aria-hidden />{g.title}</h3>
-                  <ul className="space-y-2">
-                    {g.rows.map(([route, desc]) => (
-                      <li key={route} className="text-xs leading-relaxed">
-                        <code className="font-mono bg-muted px-1.5 py-0.5 rounded">{route}</code>
-                        <span className="text-muted-foreground"> — {desc}</span>
-                      </li>
-                    ))}
-                  </ul>
+      <div className="mt-6 space-y-1.5 rounded-2xl border border-line bg-white/[0.02] p-4">
+        {FLOW.map((f, i) => (
+          <motion.div
+            key={f.state}
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+            animate={{
+              background: i === step ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0)",
+              opacity: i <= step ? 1 : 0.38,
+            }}
+            transition={spring}
+          >
+            <span
+              className="grid h-5 w-5 shrink-0 place-items-center rounded-full border"
+              style={{ borderColor: `color-mix(in oklab, ${f.color} 42%, transparent)` }}
+            >
+              {i < step ? (
+                <CheckCircle weight="fill" className="h-3.5 w-3.5" style={{ color: f.color }} />
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: i === step ? f.color : "rgba(255,255,255,0.2)" }} />
+              )}
+            </span>
+            <span className="min-w-0">
+              <span className={`block text-[13px] ${i === step ? "text-foreground" : "text-dim"}`}>{f.line}</span>
+              <span className="block truncate text-[11px] text-faint">{f.sub}</span>
+            </span>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="num mt-4 flex items-center justify-between text-[10px] text-faint">
+        <span>tx 0x7f3a…c21e</span>
+        <span>escrowlance · anvil</span>
+      </div>
+    </div>
+  );
+});
+
+/* ── page ──────────────────────────────────────────────────────────────── */
+
+export default function LandingPage() {
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
+  const cardY = useTransform(scrollYProgress, [0, 1], [0, 120]);
+  const cardOpacity = useTransform(scrollYProgress, [0, 0.85], [1, 0]);
+  const glowY = useTransform(scrollYProgress, [0, 1], [0, -80]);
+
+  return (
+    <div className="relative min-h-[100dvh] w-full overflow-x-clip">
+      {/* nav */}
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-line/60 bg-ink/70 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-5 md:px-8">
+          <Link href="/" aria-label="EscrowLance home">
+            <Logo />
+          </Link>
+          <nav className="hidden items-center gap-8 text-[13.5px] text-dim md:flex">
+            <a href="#how" className="transition-colors hover:text-foreground">How escrow works</a>
+            <a href="#trust" className="transition-colors hover:text-foreground">Arbiters</a>
+            <Link href="/arbiters" className="transition-colors hover:text-foreground">Trust registry</Link>
+          </nav>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/jobs"
+              className="hidden items-center gap-1.5 text-[13.5px] text-dim transition-colors hover:text-foreground sm:flex"
+            >
+              Explore jobs <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+            <WalletButton />
+          </div>
+        </div>
+      </header>
+
+      {/* ── hero: asymmetric split ─────────────────────────────────────── */}
+      <section ref={heroRef} className="relative mx-auto min-h-[100dvh] max-w-[1400px] px-5 pb-24 pt-32 md:px-8 md:pt-36">
+        <motion.div style={{ y: glowY }} aria-hidden className="pointer-events-none absolute -top-20 right-[8%] h-[480px] w-[480px] rounded-full bg-rose-accent/[0.07] blur-[130px]" />
+        <div className="grid items-center gap-14 lg:grid-cols-[1.08fr_0.92fr]">
+          <div className="max-w-2xl">
+            <motion.div variants={rise} initial="hidden" animate="show" custom={0} className="flex items-center gap-2.5">
+              <span className="flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11px] text-dim">
+                <StatusDot color="#34d399" pulse /> anvil devnet · Base-native by design
+              </span>
+            </motion.div>
+
+            <motion.h1
+              variants={rise}
+              initial="hidden"
+              animate="show"
+              custom={1}
+              className="mt-7 text-[42px] font-semibold leading-[1.02] tracking-tighter text-balance md:text-[64px]"
+            >
+              Freelance work,
+              <br />
+              paid the way code pays:
+              <br />
+              <span className="text-dim">by proof.</span>
+            </motion.h1>
+
+            <motion.p variants={rise} initial="hidden" animate="show" custom={2} className="mt-7 max-w-[58ch] text-[15.5px] leading-relaxed text-dim">
+              Every milestone locks its value in a smart-contract escrow before the work starts. The freelancer
+              submits on-chain. The client approves. The contract pays — no invoicing, no chasing, no
+              &ldquo;the check is in the mail.&rdquo; Disagreements go to staked arbiters, not silence.
+            </motion.p>
+
+            <motion.div variants={rise} initial="hidden" animate="show" custom={3} className="mt-9 flex flex-wrap items-center gap-3.5">
+              <Link
+                href="/jobs"
+                className="group inline-flex items-center gap-2 rounded-full bg-rose-accent px-6 py-3.5 text-sm font-medium text-white transition-all hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
+              >
+                Explore the marketplace
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" weight="bold" />
+              </Link>
+              <Link
+                href="/jobs/new"
+                className="inline-flex items-center gap-2 rounded-full border border-line-strong bg-white/[0.03] px-6 py-3.5 text-sm font-medium text-foreground transition-all hover:bg-white/[0.06] active:translate-y-px active:scale-[0.985]"
+              >
+                <FilePlus className="h-4 w-4" /> Post a job
+              </Link>
+            </motion.div>
+
+            <motion.dl variants={rise} initial="hidden" animate="show" custom={4} className="mt-12 grid max-w-lg grid-cols-3 gap-6">
+              {[
+                ["2.5%", "fee on released value — nothing else"],
+                ["72h", "arbiter SLA, enforced by slashing"],
+                ["48h", "window to agree on an arbiter"],
+              ].map(([num, label]) => (
+                <div key={label}>
+                  <dt className="num text-2xl font-medium tracking-tight">{num}</dt>
+                  <dd className="mt-1 text-[11.5px] leading-snug text-faint">{label}</dd>
                 </div>
               ))}
-            </CardContent>
-          </Card>
-        </section>
-      </main>
+            </motion.dl>
+          </div>
 
-      <footer className="mt-auto border-t bg-muted/30">
-        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
-          <span>EscrowLance — portfolio build, testnet only. On-chain = money + commitments + trust; off-chain = content + velocity.</span>
-          <span className="font-mono">mini-services/api · Hono :3030</span>
+          <motion.div style={{ y: cardY, opacity: cardOpacity }} className="flex justify-center lg:justify-end">
+            <div className="relative">
+              <motion.div initial={{ opacity: 0, y: 40, rotate: 2 }} animate={{ opacity: 1, y: 0, rotate: 0 }} transition={{ ...spring, delay: 0.25 }}>
+                <EscrowCard />
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.1 }}
+                className="glass absolute -bottom-7 -left-7 hidden items-center gap-2.5 rounded-2xl px-4 py-3 md:flex"
+              >
+                <LockKeyOpen className="h-4 w-4 text-state-funded" weight="bold" />
+                <span className="text-xs text-dim">nonReentrant · CEI · balance ≥ Σ unsettled</span>
+              </motion.div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── kinetic marquee ───────────────────────────────────────────── */}
+      <section aria-label="on-chain activity" className="hairline-t border-b border-line py-5">
+        <div className="relative flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)]">
+          <div className="marquee-track flex shrink-0 items-center gap-10 pr-10">
+            {[...marioItems, ...marioItems].map((item, i) => (
+              <span key={i} className="flex shrink-0 items-center gap-3 text-[12.5px] text-faint">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.color }} />
+                <span className="num">{item.label}</span>
+                <span className="text-dim">{item.text}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── how it works: sticky scroll stack ──────────────────────────── */}
+      <section id="how" className="mx-auto max-w-[1400px] px-5 py-28 md:px-8">
+        <div className="grid gap-16 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="lg:sticky lg:top-28 lg:self-start">
+            <SectionHead
+              kicker="the escrow loop"
+              title="Five moves. All of them on-chain."
+              body="The marketplace lives off-chain where content belongs. Money never does — every state change below is a contract call you can verify, not a database row you have to trust."
+            />
+            <Link href="/jobs" className="group mt-8 inline-flex items-center gap-2 text-sm text-rose-bright">
+              Watch it live on real jobs <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" weight="bold" />
+            </Link>
+          </div>
+          <div className="space-y-5">
+            {steps.map((step, i) => (
+              <div key={step.title} className="lg:sticky" style={{ top: `${112 + i * 18}px` }}>
+                <div className="glass-raised flex gap-6 rounded-3xl p-7 md:p-8">
+                  <span className="num mt-1 text-[13px] text-rose-bright">{String(i + 1).padStart(2, "0")}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3">
+                      <step.icon weight="bold" className="h-5 w-5 text-rose-bright" />
+                      <h3 className="text-[19px] font-medium tracking-tight">{step.title}</h3>
+                    </div>
+                    <p className="mt-2.5 max-w-[62ch] text-sm leading-relaxed text-dim">{step.body}</p>
+                    <div className="num mt-4 inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.02] px-3 py-1.5 text-[11px] text-faint">
+                      {step.chip}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── trust: arbiters ───────────────────────────────────────────── */}
+      <section id="trust" className="relative border-t border-line py-28">
+        <div className="mx-auto grid max-w-[1400px] items-center gap-16 px-5 md:px-8 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="order-2 lg:order-1">
+            <SectionHead
+              kicker="the trust layer"
+              title="Disputes end in hours, with people who stake their name."
+              body="Both parties nominate an arbiter; a match starts the 72-hour SLA clock. Resolutions within SLA raise the arbiter's on-chain trust score; overdue ones slash it. The badge is soulbound — ERC-5194 — so the score can't be bought, sold, or reset."
+            />
+            <div className="mt-9 grid grid-cols-3 gap-5">
+              {[
+                ["+1", "trust per resolution inside SLA"],
+                ["−2", "slashed when the clock runs out"],
+                ["SBT", "soulbound badge, non-transferable"],
+              ].map(([n, l]) => (
+                <div key={l} className="rounded-2xl border border-line bg-white/[0.02] p-5">
+                  <div className="num text-[26px] font-medium tracking-tight">{n}</div>
+                  <div className="mt-1.5 text-[11.5px] leading-snug text-faint">{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <ArbiterCardVisual className="order-1 lg:order-2" />
+        </div>
+      </section>
+
+      {/* ── closing CTA ───────────────────────────────────────────────── */}
+      <section className="border-t border-line py-28">
+        <div className="mx-auto max-w-[1400px] px-5 md:px-8">
+          <div className="grid gap-10 lg:grid-cols-[1.4fr_0.6fr] lg:items-end">
+            <h2 className="max-w-[20ch] text-[38px] font-semibold leading-[1.05] tracking-tighter text-balance md:text-[54px]">
+              Stop invoicing.
+              <br />
+              <span className="text-dim">Start escrowing.</span>
+            </h2>
+            <div className="flex flex-col gap-3.5 lg:items-end">
+              <Link
+                href="/jobs/new"
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-rose-accent px-7 py-4 text-sm font-medium text-white transition-all hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
+              >
+                Post your first job
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" weight="bold" />
+              </Link>
+              <span className="text-xs text-faint">anvil devnet — no real funds, real contracts</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── footer ────────────────────────────────────────────────────── */}
+      <footer className="border-t border-line py-10">
+        <div className="mx-auto flex max-w-[1400px] flex-col gap-6 px-5 md:flex-row md:items-center md:justify-between md:px-8">
+          <div className="flex items-center gap-4">
+            <Logo size="sm" />
+            <span className="text-xs text-faint">milestone escrow for freelance work</span>
+          </div>
+          <div className="num flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-faint">
+            <Link href="/jobs" className="hover:text-dim">jobs</Link>
+            <Link href="/arbiters" className="hover:text-dim">arbiters</Link>
+            <Link href="/console" className="hover:text-dim">backend console</Link>
+            <span>Escrow.sol · ArbiterRegistry.sol · 97%+ branch coverage</span>
+          </div>
         </div>
       </footer>
     </div>
-  )
+  );
 }
+
+/* ── section head ─────────────────────────────────────────────────────── */
+
+function SectionHead({ kicker, title, body }: { kicker: string; title: string; body: string }) {
+  return (
+    <div>
+      <div className="num text-[11px] uppercase tracking-[0.2em] text-rose-bright">{kicker}</div>
+      <h2 className="mt-4 max-w-[26ch] text-[30px] font-semibold leading-[1.08] tracking-tighter text-balance md:text-[40px]">{title}</h2>
+      <p className="mt-5 max-w-[62ch] text-[14.5px] leading-relaxed text-dim">{body}</p>
+    </div>
+  );
+}
+
+/* ── arbiter card visual ──────────────────────────────────────────────── */
+
+function ArbiterCardVisual({ className }: { className?: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={spring}
+      className={className}
+    >
+      <div className="glass-raised rounded-3xl p-7">
+        <div className="flex items-center justify-between">
+          <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">arbiter registry · erc-5194</span>
+          <span className="flex items-center gap-2 rounded-full border border-state-disputed/30 bg-state-disputed/10 px-2.5 py-1 text-[11px] text-state-disputed">
+            <StatusDot color="#fb923c" pulse /> 72h SLA live
+          </span>
+        </div>
+        <div className="mt-6 flex items-center gap-4">
+          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-teal-500/70 to-emerald-700/50 ring-1 ring-white/15" aria-hidden />
+          <div>
+            <div className="text-lg font-medium tracking-tight">Ingrid Salm</div>
+            <div className="num text-[11px] text-faint">security researcher · 40+ peer reviews</div>
+          </div>
+          <div className="ml-auto text-right">
+            <div className="num text-3xl font-medium tracking-tight text-state-released">12</div>
+            <div className="text-[10px] uppercase tracking-wider text-faint">trust</div>
+          </div>
+        </div>
+        <div className="mt-6 space-y-2.5">
+          {[
+            ["resolved · split", "#5eead4", "1h 48m inside SLA", "+1"],
+            ["resolved · release", "#34d399", "3h 02m inside SLA", "+1"],
+            ["resolved · refund", "#d4d4d8", "61h 20m inside SLA", "+1"],
+          ].map(([label, color, time, delta]) => (
+            <div key={label} className="flex items-center justify-between rounded-xl border border-line bg-white/[0.02] px-4 py-3">
+              <span className="flex items-center gap-2.5 text-[12.5px] text-dim">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+                {label}
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="num text-[11px] text-faint">{time}</span>
+                <span className="num rounded-full bg-state-released/10 px-2 py-0.5 text-[11px] text-state-released">{delta}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="num mt-5 text-[10px] text-faint">badge #7 · soulbound — transfer() reverts by design</div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── data ─────────────────────────────────────────────────────────────── */
+
+const marioItems = [
+  { label: "0xf39F…2266", text: "funded milestone 1 · 0.240 ETH", color: "#fbbf24" },
+  { label: "0x7099…79C8", text: "submitted threat model for review", color: "#38bdf8" },
+  { label: "escrow", text: "released 0.234 ETH to freelancer · fee 0.006", color: "#34d399" },
+  { label: "0x9965…0a4D", text: "resolved dispute · split 50/50", color: "#5eead4" },
+  { label: "registry", text: "arbiter trust +1 · inside SLA", color: "#f43f5e" },
+  { label: "0x3C44…93BC", text: "accepted proposal · 3 milestones", color: "#a1a1aa" },
+];
+
+const steps = [
+  {
+    title: "Post the work, broken into milestones",
+    body: "A job carries its own milestone template — titles, scope, amounts. The API validates the sum against the budget range server-side; the template becomes the contract's blueprint when the work is awarded.",
+    icon: FilePlus,
+    chip: "POST /jobs · milestone sum validated",
+  },
+  {
+    title: "Award it — the bridge event",
+    body: "Accepting a proposal creates the project and its milestones in one transaction, locks the job, and auto-rejects the losing bids. Half-awarded jobs are structurally impossible.",
+    icon: HandCoins,
+    chip: "project + milestones born atomically",
+  },
+  {
+    title: "Fund the milestone — value locks",
+    body: "The client's wallet calls fund() with the amount and a reference. From this second the money belongs to the contract: it can only move by approve, cancel, or arbitration. Both parties can see it, neither can touch it.",
+    icon: LockKeyOpen,
+    chip: "fund(bytes32 ref, address freelancer)",
+  },
+  {
+    title: "Ship, then submit on-chain",
+    body: "Delivery notes and files land off-chain; the state flip that matters is the freelancer's submit() transaction. The indexer mirrors it within seconds and the client's review window opens.",
+    icon: CheckCircle,
+    chip: "submit(uint256 milestoneId)",
+  },
+  {
+    title: "Approve — or open the arbiter path",
+    body: "approve() releases the escrowed value instantly, minus the 2.5% fee. Can't agree? Either side locks the milestone into dispute and both nominate an arbiter; the contract enforces the rest.",
+    icon: Gavel,
+    chip: "approve · openDispute · nominateArbiter",
+  },
+] as const;
+
+void Scales;
