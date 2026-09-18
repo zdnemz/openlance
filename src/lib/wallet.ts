@@ -130,7 +130,8 @@ export const useWallet = create<WalletState>()(
         const accounts = (await window.ethereum.request({ method: "eth_requestAccounts" })) as string[];
         if (!accounts?.length) throw new Error("No accounts returned");
         set({ kind: "injected", personaIndex: null, address: accounts[0]!.toLowerCase() });
-        void window.ethereum.on?.("accountsChanged", (accs: string[]) => {
+        void window.ethereum.on?.("accountsChanged", (...args: unknown[]) => {
+          const accs = args[0] as string[] | undefined;
           if (!accs?.length) set({ kind: null, personaIndex: null, address: null });
           else set({ address: accs[0]!.toLowerCase() });
         });

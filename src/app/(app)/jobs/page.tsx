@@ -31,22 +31,31 @@ export default function JobsPage() {
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+        <div className="max-w-[62ch]">
           <SectionLabel>marketplace</SectionLabel>
           <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">Open work</h1>
-          <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
+          <p className="mt-3 text-sm leading-relaxed text-dim">
             Jobs posted with milestone templates — the sum the client expects to escrow, broken into reviewable
             chunks before anyone starts.
           </p>
         </div>
-        {session.token && (
-          <Link
-            href="/jobs/new"
-            className={`inline-flex items-center gap-2 rounded-full bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}
-          >
-            Post a job
-          </Link>
-        )}
+        <div className="flex flex-col items-end gap-2.5">
+          {data && (
+            <div className="num text-right text-[11px] leading-relaxed text-faint">
+              {data.items.length} {data.items.length === 1 ? "listing" : "listings"}
+              <br />
+              milestone sums pre-validated
+            </div>
+          )}
+          {session.token && (
+            <Link
+              href="/jobs/new"
+              className={`inline-flex items-center gap-2 rounded-full bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}
+            >
+              Post a job
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="mt-9 flex flex-wrap items-center gap-2.5">

@@ -26,19 +26,27 @@ export default function DisputesPage() {
     );
   }
 
-  const byProject = new Map((projects ?? []).map((p) => [p.id, p]));
   const open = (disputes ?? []).filter((d) => d.status !== "resolved");
   const resolved = (disputes ?? []).filter((d) => d.status === "resolved");
 
   return (
     <div className="space-y-10">
-      <div>
-        <SectionLabel>disputes</SectionLabel>
-        <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">The arbiter path.</h1>
-        <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
-          Disagreements lock the milestone on-chain and hand coordination to a nominated arbiter. Mutual nomination
-          assigns instantly; the 48h fallback lets the platform admin assign one.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-[62ch]">
+          <SectionLabel>disputes</SectionLabel>
+          <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">The arbiter path.</h1>
+          <p className="mt-3 text-sm leading-relaxed text-dim">
+            Disagreements lock the milestone on-chain and hand coordination to a nominated arbiter. Mutual nomination
+            assigns instantly; the 48h fallback lets the platform admin assign one.
+          </p>
+        </div>
+        {(open.length > 0 || resolved.length > 0) && (
+          <div className="num pb-1.5 text-right text-[11px] leading-relaxed text-faint">
+            {open.length} open · {resolved.length} resolved
+            <br />
+            SLA clock runs on-chain
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -48,7 +56,7 @@ export default function DisputesPage() {
       ) : (
         <section className="space-y-4">
           {open.map((d) => (
-            <DisputeRow key={d.id} dispute={d} projectTitle={byProject.get(d.projectId) ? undefined : undefined} />
+            <DisputeRow key={d.id} dispute={d} />
           ))}
         </section>
       )}

@@ -2,9 +2,10 @@
 
 /** /dashboard — role-aware control room: work in flight, money state. */
 import Link from "next/link";
-import { useProjects, useJobs, useDisputes, useProject, useLedger } from "@/lib/queries";
+import { useProjects, useJobs, useDisputes, useProject, useJob, useLedger } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { EthAmount, Skeleton, EmptyState, SectionLabel, StatusBadge, AddressText, press } from "@/components/design";
+import { SpotCard } from "@/components/motion";
 import { STATE_COLORS, timeAgo } from "@/lib/format";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Briefcase } from "@phosphor-icons/react/dist/csr/Briefcase";
@@ -50,9 +51,13 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* stat strip — hairlines, no boxes (density 4) */}
+      {/* stat strip — hairlines, no boxes (density 4); earnings lead in rose */}
       <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
-        <Stat label="earned on-chain" value={<EthAmount wei={me.stats.totalEarnedWei} />} icon={<TrendUp className="h-4 w-4 text-state-released" />} />
+        <Stat
+          label="earned on-chain"
+          value={<EthAmount wei={me.stats.totalEarnedWei} className="text-rose-bright" />}
+          icon={<TrendUp className="h-4 w-4 text-rose-bright" />}
+        />
         <Stat label="paid through escrow" value={<EthAmount wei={me.stats.totalPaidWei} />} icon={<TrendDown className="h-4 w-4 text-state-submitted" />} />
         <Stat label="projects in flight" value={<span className="num">{active.length}</span>} sub={`${done.length} completed`} />
         <Stat label="open disputes" value={<span className="num">{openDisputes.length}</span>} icon={openDisputes.length ? <Gavel className="h-4 w-4 text-state-disputed" /> : undefined} />
@@ -79,7 +84,7 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {projects.map((p) => <ProjectCard key={p.id} id={p.id} />)}
+            {projects.map((p) => <ProjectCard key={p.id} id={p.id} jobId={p.jobId} />)}
           </div>
         )}
       </section>
@@ -143,8 +148,9 @@ function Stat({ label, value, sub, icon }: { label: string; value: React.ReactNo
 }
 
 /** Loads the full project view for one card (milestones + parties). */
-function ProjectCard({ id }: { id: string }) {
+function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
   const { data: p, isLoading } = useProject(id);
+  const { data: job } = useJob(jobId);
   const session = useSession();
   if (isLoading || !p) return <Skeleton className="h-44 rounded-3xl" />;
   const isClient = p.client.id === session.user?.id;
@@ -152,14 +158,15 @@ function ProjectCard({ id }: { id: string }) {
   const role = isClient ? "client" : "freelancer";
 
   return (
-    <Link href={`/projects/${id}`} className="glass group block rounded-3xl p-6 transition-all hover:border-line-strong">
+    <Link href={`/projects/${id}`} className="group block">
+      <SpotCard className="glass h-full rounded-3xl p-6 transition-colors hover:border-line-strong">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">
             {role} · vs {counterpart.displayName ?? <AddressText value={counterpart.walletAddress} size={3} />}
           </div>
-          <div className="mt-2 truncate text-[15.5px] font-medium tracking-tight">
-            {p.jobId ? "" : ""}project {id.slice(0, 8)}
+          <div className="mt-2 truncate text-[15.5px] font-medium tracking-tight transition-colors group-hover:text-rose-bright">
+            {job?.title ?? `project ${id.slice(0, 8)}`}
           </div>
         </div>
         <StatusBadge status={p.status === "active" ? "funded" : p.status} />
@@ -187,6 +194,7 @@ function ProjectCard({ id }: { id: string }) {
         </div>
         <EthAmount wei={p.milestones.reduce((a, m) => a + BigInt(m.amountWei), 0n)} className="text-sm text-dim" />
       </div>
+      </SpotCard>
     </Link>
   );
 }

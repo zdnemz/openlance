@@ -6,7 +6,7 @@ import { useWallet } from "@/lib/wallet";
 import { get, post, useInvalidate, useOverview, useLedger } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { useChainAction, withdrawFeesAction } from "@/lib/chain-actions";
-import { SectionLabel, EmptyState, EthAmount, HashText, press, StatusBadge } from "@/components/design";
+import { SectionLabel, EthAmount, HashText, press, Skeleton, StatusBadge } from "@/components/design";
 import { formatEth, timeAgo } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -35,12 +35,38 @@ export default function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <EmptyState
-        className="mt-16"
-        icon={<ShieldStar className="h-5 w-5" />}
-        title="Admin surface"
-        body="Sign in with the admin wallet (devnet persona Mara Voss — anvil #0, the deployer) to see reconciliation runs, fee accounting, and indexer controls."
-      />
+      <div className="space-y-10">
+        <div>
+          <SectionLabel>admin</SectionLabel>
+          <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">Platform controls.</h1>
+          <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
+            Trust levers, intentionally admin-gated: mirror-vs-chain reconciliation with a live solvency check, fee
+            exit, and the indexer checkpoint.
+          </p>
+        </div>
+        {/* the console, gated: a dimmed preview of the bento behind a lock plate */}
+        <div className="relative">
+          <div aria-hidden className="grid gap-4 opacity-45 blur-[1.5px] md:grid-cols-5">
+            <Skeleton className="h-60 rounded-3xl md:col-span-3" />
+            <Skeleton className="h-60 rounded-3xl md:col-span-2" />
+            <Skeleton className="h-28 rounded-3xl md:col-span-5" />
+          </div>
+          <div className="absolute inset-0 grid place-items-center px-4">
+            <div className="glass-raised flex max-w-md flex-col gap-2.5 rounded-2xl px-6 py-5 text-center sm:flex-row sm:text-left">
+              <div className="grid h-10 w-10 shrink-0 place-items-center self-center rounded-xl bg-rose-soft ring-1 ring-rose-accent/30">
+                <ShieldStar weight="bold" className="h-5 w-5 text-rose-bright" />
+              </div>
+              <div>
+                <div className="text-[14px] font-medium">Operator gate</div>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-faint">
+                  Sign in as devnet persona <span className="text-dim">Mara Voss</span> — anvil #0, the deployer — to open
+                  reconciliation runs, fee exit, and the solvency check.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -82,56 +108,87 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="glass rounded-3xl p-6">
-          <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">chain mode</div>
-          <div className="num mt-2 text-lg font-medium">{overview?.config.chainMode ?? "…"}</div>
-          <div className="num mt-1 text-[11px] text-faint">
-            chain {overview?.config.chainId} · fee {((overview?.config.feeBps ?? 0) / 100).toFixed(1)}%
-          </div>
-          <div className="num mt-3 truncate text-[10.5px] text-faint">escrow {overview?.config.contracts.escrow?.slice(0, 14)}…</div>
-          <div className="num truncate text-[10.5px] text-faint">registry {overview?.config.contracts.arbiterRegistry?.slice(0, 14)}…</div>
+      {/* asymmetric operator bento: manifest wide, fees beside, solvency below */}
+      <div className="grid gap-4 md:grid-cols-5">
+        {/* deployment manifest — hairline definition rows, copyable addresses */}
+        <div className="glass rounded-3xl p-6 md:col-span-3">
+          <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">deployment manifest</div>
+          <dl className="mt-4 divide-y divide-white/[0.06]">
+            {[
+              ["chain", `anvil · ${overview?.config.chainId ?? "…"}`],
+              ["mode", overview?.config.chainMode ?? "…"],
+              ["fee", `${((overview?.config.feeBps ?? 0) / 100).toFixed(1)}% (${overview?.config.feeBps ?? "…"} bps)`],
+            ].map(([k, v]) => (
+              <div key={k} className="flex items-baseline justify-between gap-6 py-2.5">
+                <dt className="text-[12px] text-faint">{k}</dt>
+                <dd className="num text-right text-[12.5px] text-dim">{v}</dd>
+              </div>
+            ))}
+            <div className="flex items-baseline justify-between gap-6 py-2.5">
+              <dt className="text-[12px] text-faint">escrow</dt>
+              <dd className="text-right"><HashText value={overview?.config.contracts.escrow ?? null} size={6} /></dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-6 py-2.5">
+              <dt className="text-[12px] text-faint">registry</dt>
+              <dd className="text-right"><HashText value={overview?.config.contracts.arbiterRegistry ?? null} size={6} /></dd>
+            </div>
+          </dl>
         </div>
 
-        <div className="glass rounded-3xl p-6">
+        <div className="glass flex flex-col rounded-3xl p-6 md:col-span-2">
           <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">fees accrued (mirror)</div>
-          <EthAmount wei={accruedWei} className="mt-2 block text-xl font-medium text-state-split" />
+          <EthAmount wei={accruedWei} className="mt-3 block text-3xl font-medium tracking-tight text-state-split" />
+          <p className="mt-2 text-[10.5px] leading-relaxed text-faint">
+            The contract is the authority; this figure re-derives from ledger events.
+          </p>
           <Button
             disabled={chain.phase !== "idle" && chain.phase !== "done" || accruedWei === 0n || !address}
             onClick={async () => {
               const result = await withdrawFeesAction(chain.run)(address!);
               if (result.ok) toast.success("Fees withdrawn");
             }}
-            className="mt-4 w-full rounded-full bg-white/10 py-2.5 text-[12.5px] hover:bg-white/20"
+            className="mt-auto w-full rounded-full bg-white/10 py-2.5 text-[12.5px] hover:bg-white/20"
           >
             <Coins className="mr-2 h-3.5 w-3.5" /> withdrawFees → admin wallet
           </Button>
-          <p className="mt-2.5 text-[10.5px] leading-relaxed text-faint">
-            The contract is the authority; this figure re-derives from ledger events.
-          </p>
         </div>
 
-        <div className="glass rounded-3xl p-6">
+        <div className="glass rounded-3xl p-6 md:col-span-5">
           <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">solvency check</div>
           {runs?.[0]?.report?.solvency ? (
-            <>
-              <div className={`mt-2 flex items-center gap-2 text-lg font-medium ${runs[0].report.solvency.ok ? "text-state-released" : "text-state-disputed"}`}>
+            <div className="mt-4 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div className={`flex items-center gap-2 text-lg font-medium ${runs[0].report.solvency.ok ? "text-state-released" : "text-state-disputed"}`}>
                 <CheckCircle weight="bold" className="h-5 w-5" />
                 {runs[0].report.solvency.ok ? "balance ≥ liabilities" : "drift detected"}
               </div>
-              <div className="num mt-1.5 text-[11px] leading-relaxed text-faint">
-                balance {formatEth(runs[0].report.solvency.balanceWei)} ETH
-                <br />
-                unsettled + fees {formatEth(runs[0].report.solvency.liabilitiesWei)} ETH
+              {/* the balance sheet, stated as two figures with a verdict between */}
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
+                <span className="num text-2xl font-medium tracking-tight">
+                  {formatEth(runs[0].report.solvency.balanceWei)}
+                  <span className="ml-1.5 text-xs text-faint">ETH held</span>
+                </span>
+                <span className="text-[11px] uppercase tracking-widest text-faint">vs</span>
+                <span className="num text-2xl font-medium tracking-tight text-dim">
+                  {formatEth(runs[0].report.solvency.liabilitiesWei)}
+                  <span className="ml-1.5 text-xs text-faint">ETH owed</span>
+                </span>
               </div>
-            </>
+              <Button onClick={reconcile} disabled={reconciling} className="rounded-full bg-rose-accent px-6 py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
+                <ArrowsClockwise className={`mr-2 h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
+                {reconciling ? "Reconciling…" : "Run reconciliation"}
+              </Button>
+            </div>
           ) : (
-            <p className="mt-2 text-[12px] text-faint">Run a reconciliation to check escrow solvency against the chain.</p>
+            <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <p className="max-w-[52ch] text-[12.5px] leading-relaxed text-faint">
+                Run a reconciliation to verify escrow solvency against the chain — held balance vs unsettled milestones and accrued fees.
+              </p>
+              <Button onClick={reconcile} disabled={reconciling} className="shrink-0 rounded-full bg-rose-accent px-6 py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
+                <ArrowsClockwise className={`mr-2 h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
+                {reconciling ? "Reconciling…" : "Run reconciliation"}
+              </Button>
+            </div>
           )}
-          <Button onClick={reconcile} disabled={reconciling} className="mt-4 w-full rounded-full bg-rose-accent py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
-            <ArrowsClockwise className={`mr-2 h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
-            {reconciling ? "Reconciling…" : "Run reconciliation"}
-          </Button>
         </div>
       </div>
 

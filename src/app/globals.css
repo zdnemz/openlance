@@ -7,8 +7,10 @@
   EscrowLance design tokens — dark premium, Deep Rose accent.
   Dials: DESIGN_VARIANCE 8 · MOTION_INTENSITY 6 (calm app, cinematic landing)
   · VISUAL_DENSITY 4 (gallery-airy).
-  Base: zinc-950. One accent: #e11d48 (desaturated rose). Emerald reserved
-  for money-released semantics. No purple, no pure black, no neon glows.
+  Base: zinc-950. ONE accent: #e11d48 (desaturated rose). Emerald and the
+  state hues exist only as milestone semantics — never as decoration.
+  No purple, no pure black, no neon glows, no blur-blob washes: structure
+  (hairline grids, edges, numerals) replaces glow.
 */
 @theme inline {
   --color-background: var(--background);
@@ -91,9 +93,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image:
-      radial-gradient(1100px 520px at 82% -8%, rgba(225, 29, 72, 0.055), transparent 62%),
-      radial-gradient(900px 480px at -12% 12%, rgba(56, 189, 248, 0.035), transparent 60%);
+    /* one accent, painted once — structure does the rest */
+    background-image: radial-gradient(1100px 520px at 82% -8%, rgba(225, 29, 72, 0.05), transparent 62%);
     background-attachment: fixed;
   }
   ::selection {
@@ -137,6 +138,57 @@
 
 @utility hairline-t {
   border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/*
+  Architectural hero surface — fine 1px drafting grid, no glow.
+  Structure over decoration: the grid reads as "ledger paper" for escrow.
+*/
+@utility hairline-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 90% 70% at 60% 0%, black 30%, transparent 78%);
+}
+
+/*
+  Spotlight card — cursor-tracked border illumination. The component sets
+  --mx/--my custom properties directly on pointermove (no React re-render);
+  this style turns them into a soft radial border light. Rose only.
+*/
+@utility spotlight {
+  position: relative;
+}
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(
+    220px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(244, 63, 94, 0.38),
+    rgba(244, 63, 94, 0.07) 45%,
+    transparent 70%
+  );
+  -webkit-mask: linear-gradient(black, black) content-box, linear-gradient(black, black);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(black, black) content-box, linear-gradient(black, black);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+.spotlight:hover::before,
+.spotlight:focus-within::before {
+  opacity: 1;
+}
+
+/* ghost numeral — oversized index digits behind step cards */
+@utility ghost-num {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.09);
 }
 
 /* breathing status dot — the only perpetual animation in the calm app shell */

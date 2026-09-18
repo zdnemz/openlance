@@ -11,6 +11,7 @@ import { useRef, memo, useEffect, useState } from "react";
 import { Logo } from "@/components/app-shell";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { StatusDot } from "@/components/design";
+import { MagneticLink, SpotCard } from "@/components/motion";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
 import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -45,7 +46,7 @@ const EscrowCard = memo(function EscrowCard() {
   const current = FLOW[step]!;
 
   return (
-    <div className="glass-raised relative w-full max-w-md rounded-3xl p-6">
+    <SpotCard className="glass-raised relative w-full max-w-md rounded-[26px] p-6">
       <div className="flex items-center justify-between">
         <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">milestone 1 · threat model</span>
         <motion.span
@@ -106,10 +107,10 @@ const EscrowCard = memo(function EscrowCard() {
       </div>
 
       <div className="num mt-4 flex items-center justify-between text-[10px] text-faint">
-        <span>tx 0x7f3a…c21e</span>
+        <span>tx 0x7f3a…c21e · 12 conf</span>
         <span>escrowlance · anvil</span>
       </div>
-    </div>
+    </SpotCard>
   );
 });
 
@@ -120,7 +121,7 @@ export default function LandingPage() {
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
   const cardY = useTransform(scrollYProgress, [0, 1], [0, 120]);
   const cardOpacity = useTransform(scrollYProgress, [0, 0.85], [1, 0]);
-  const glowY = useTransform(scrollYProgress, [0, 1], [0, -80]);
+  const gridY = useTransform(scrollYProgress, [0, 1], [0, 60]);
 
   return (
     <div className="relative min-h-[100dvh] w-full overflow-x-clip">
@@ -147,9 +148,14 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* ── hero: asymmetric split ─────────────────────────────────────── */}
+      {/* ── hero: asymmetric split over drafting-grid paper ────────── */}
       <section ref={heroRef} className="relative mx-auto min-h-[100dvh] max-w-[1400px] px-5 pb-24 pt-32 md:px-8 md:pt-36">
-        <motion.div style={{ y: glowY }} aria-hidden className="pointer-events-none absolute -top-20 right-[8%] h-[480px] w-[480px] rounded-full bg-rose-accent/[0.07] blur-[130px]" />
+        {/* structural backdrop: 1px ledger grid, drifts on scroll — no glow blobs */}
+        <motion.div
+          style={{ y: gridY }}
+          aria-hidden
+          className="hairline-grid pointer-events-none absolute inset-x-[-5%] -top-24 h-[720px]"
+        />
         <div className="grid items-center gap-14 lg:grid-cols-[1.08fr_0.92fr]">
           <div className="max-w-2xl">
             <motion.div variants={rise} initial="hidden" animate="show" custom={0} className="flex items-center gap-2.5">
@@ -163,7 +169,7 @@ export default function LandingPage() {
               initial="hidden"
               animate="show"
               custom={1}
-              className="mt-7 text-[42px] font-semibold leading-[1.02] tracking-tighter text-balance md:text-[64px]"
+              className="mt-7 text-[40px] font-semibold leading-[1.04] tracking-tighter text-balance md:text-[56px]"
             >
               Freelance work,
               <br />
@@ -179,13 +185,13 @@ export default function LandingPage() {
             </motion.p>
 
             <motion.div variants={rise} initial="hidden" animate="show" custom={3} className="mt-9 flex flex-wrap items-center gap-3.5">
-              <Link
+              <MagneticLink
                 href="/jobs"
-                className="group inline-flex items-center gap-2 rounded-full bg-rose-accent px-6 py-3.5 text-sm font-medium text-white transition-all hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
+                className="group inline-flex items-center gap-2 rounded-full bg-rose-accent px-6 py-3.5 text-sm font-medium text-white transition-colors hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
               >
                 Explore the marketplace
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" weight="bold" />
-              </Link>
+              </MagneticLink>
               <Link
                 href="/jobs/new"
                 className="inline-flex items-center gap-2 rounded-full border border-line-strong bg-white/[0.03] px-6 py-3.5 text-sm font-medium text-foreground transition-all hover:bg-white/[0.06] active:translate-y-px active:scale-[0.985]"
@@ -194,15 +200,22 @@ export default function LandingPage() {
               </Link>
             </motion.div>
 
-            <motion.dl variants={rise} initial="hidden" animate="show" custom={4} className="mt-12 grid max-w-lg grid-cols-3 gap-6">
+            {/* asymmetric stat rail — hairlines, no boxes; the fee leads */}
+            <motion.dl
+              variants={rise}
+              initial="hidden"
+              animate="show"
+              custom={4}
+              className="mt-14 grid max-w-xl grid-cols-[1.35fr_1fr_1fr] divide-x divide-white/[0.07] border-t border-line pt-6"
+            >
               {[
-                ["2.5%", "fee on released value — nothing else"],
-                ["72h", "arbiter SLA, enforced by slashing"],
-                ["48h", "window to agree on an arbiter"],
-              ].map(([num, label]) => (
-                <div key={label}>
-                  <dt className="num text-2xl font-medium tracking-tight">{num}</dt>
-                  <dd className="mt-1 text-[11.5px] leading-snug text-faint">{label}</dd>
+                ["2.5%", "fee on released value — nothing else", true],
+                ["72h", "arbiter SLA, enforced by slashing", false],
+                ["48h", "window to agree on an arbiter", false],
+              ].map(([num, label, lead]) => (
+                <div key={label as string} className={lead ? "pr-5" : "px-5"}>
+                  <dt className={`num text-[26px] font-medium tracking-tight ${lead ? "text-rose-bright" : ""}`}>{num}</dt>
+                  <dd className="mt-1.5 text-[11.5px] leading-snug text-faint">{label}</dd>
                 </div>
               ))}
             </motion.dl>
@@ -258,9 +271,13 @@ export default function LandingPage() {
           <div className="space-y-5">
             {steps.map((step, i) => (
               <div key={step.title} className="lg:sticky" style={{ top: `${112 + i * 18}px` }}>
-                <div className="glass-raised flex gap-6 rounded-3xl p-7 md:p-8">
+                <SpotCard className="glass-raised relative flex gap-6 overflow-hidden rounded-[26px] p-7 md:p-8">
+                  {/* ghost index — oversized, hollow, structural */}
+                  <span aria-hidden className="ghost-num num pointer-events-none absolute -right-3 -top-7 select-none text-[110px] font-semibold leading-none tracking-tighter">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
                   <span className="num mt-1 text-[13px] text-rose-bright">{String(i + 1).padStart(2, "0")}</span>
-                  <div className="min-w-0">
+                  <div className="relative min-w-0">
                     <div className="flex items-center gap-3">
                       <step.icon weight="bold" className="h-5 w-5 text-rose-bright" />
                       <h3 className="text-[19px] font-medium tracking-tight">{step.title}</h3>
@@ -270,7 +287,7 @@ export default function LandingPage() {
                       {step.chip}
                     </div>
                   </div>
-                </div>
+                </SpotCard>
               </div>
             ))}
           </div>
@@ -286,18 +303,19 @@ export default function LandingPage() {
               title="Disputes end in hours, with people who stake their name."
               body="Both parties nominate an arbiter; a match starts the 72-hour SLA clock. Resolutions within SLA raise the arbiter's on-chain trust score; overdue ones slash it. The badge is soulbound — ERC-5194 — so the score can't be bought, sold, or reset."
             />
-            <div className="mt-9 grid grid-cols-3 gap-5">
+            {/* hairline stat ledger — rows, not boxes; numeral left, meaning right */}
+            <dl className="mt-10 max-w-md">
               {[
-                ["+1", "trust per resolution inside SLA"],
-                ["−2", "slashed when the clock runs out"],
-                ["SBT", "soulbound badge, non-transferable"],
-              ].map(([n, l]) => (
-                <div key={l} className="rounded-2xl border border-line bg-white/[0.02] p-5">
-                  <div className="num text-[26px] font-medium tracking-tight">{n}</div>
-                  <div className="mt-1.5 text-[11.5px] leading-snug text-faint">{l}</div>
+                ["+1", "trust per resolution inside the 72h SLA", true],
+                ["−2", "slashed when the clock runs out — anyone can call it", false],
+                ["SBT", "soulbound badge (ERC-5194), non-transferable by design", false],
+              ].map(([n, l, lead]) => (
+                <div key={l as string} className="flex items-baseline justify-between gap-6 border-t border-line py-4 last:border-b">
+                  <dt className={`num shrink-0 text-[26px] font-medium tracking-tight ${lead ? "text-rose-bright" : ""}`}>{n}</dt>
+                  <dd className="text-right text-[12.5px] leading-snug text-dim">{l}</dd>
                 </div>
               ))}
-            </div>
+            </dl>
           </div>
           <ArbiterCardVisual className="order-1 lg:order-2" />
         </div>
@@ -313,13 +331,13 @@ export default function LandingPage() {
               <span className="text-dim">Start escrowing.</span>
             </h2>
             <div className="flex flex-col gap-3.5 lg:items-end">
-              <Link
+              <MagneticLink
                 href="/jobs/new"
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-rose-accent px-7 py-4 text-sm font-medium text-white transition-all hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-rose-accent px-7 py-4 text-sm font-medium text-white transition-colors hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
               >
                 Post your first job
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" weight="bold" />
-              </Link>
+              </MagneticLink>
               <span className="text-xs text-faint">anvil devnet — no real funds, real contracts</span>
             </div>
           </div>

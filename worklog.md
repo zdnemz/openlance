@@ -75,3 +75,27 @@ Stage Summary:
 - Stack self-heals on sandbox restart via .zscripts/dev.sh → dev-real.sh (deploy → migrate → API → seed); POST /api/dev/stack?force=1 restarts on demand; README.md at repo root documents the whole system.
 - Key decisions: wagmi removed for memory (viem-only wallet layer, documented in README); personas as first-class demo UX; three-phase honest chain UX; per-icon phosphor; gateway-aware API client.
 - Next phases (PRD): ERC-4337 paymaster upgrade; Base Sepolia deployment (env flip); attachments/file upload UI wiring.
+
+---
+Task ID: ui-deslop-1
+Agent: main (Super Z)
+Task: Refactor UI/UX per the uploaded design-taste-frontend skill — eliminate AI slop patterns (theme, layout, motion).
+
+Work Log:
+- Audited the shipped UI against the skill's ban list; found 8 violations: 3-equal-card rows (admin grid, landing trust stats), blur-glow blob in hero, sky-blue second tint in body bg (one-accent rule), card monotony, "project a1b2c3d4" truncated IDs on dashboard cards, identical label→h1→p header rhythm on every page, centered 3-stat mini-grids in arbiter cards, no magnetic/spotlight motion vocabulary (required at MOTION_INTENSITY 6).
+- globals.css: removed sky tint (one rose accent only); added hairline-grid architectural background utility (ledger-paper grid, mask-faded), spotlight border utility (cursor-tracked rose border light via --mx/--my CSS vars, hover-revealed), ghost-num utility (hollow stroked numerals).
+- New src/components/motion.tsx (isolated, framer-motion only here + pages that opt in): SpotCard (pointermove sets CSS vars directly on the node — zero re-renders), MagneticLink (useMotionValue + useSpring, pulls toward cursor; per skill: never useState for magnetic), stagger variants.
+- Landing: glow blob → hairline-grid backdrop with scroll drift (structure replaces glow); H1 64→56px (skill: no screaming H1s); primary CTAs magnetic; hero stats → asymmetric divide-x hairline rail (1.35fr/1fr/1fr, fee leads in rose); trust section 3 boxed cards → hairline stat ledger rows (numeral left, meaning right); how-it-works step cards get ghost oversized index numerals + spotlight hover; EscrowCard → SpotCard with confirmation count.
+- Dashboard: project cards now fetch and show REAL job titles via useJob (hook-order lint fix: jobId passed as prop); SpotCard hover; earned stat leads in rose.
+- Arbiters: uniform 2-col card grid → ranked leaderboard (hairline rows, ghost rank numerals 01/02/03, avatar+badge id inline, left-aligned hairline stat columns, right-rail trust score, first place rose edge bar), right-aligned count meta in header.
+- Admin: 3 equal cards → asymmetric bento (deployment manifest dl with hairline rows + copyable contract addresses, md:col-span-3; fees card span-2; full-width solvency row with balance-vs-owed ledger framing); gated state → dimmed bento skeleton behind a lock plate (VLM-flagged "centered empty state cliché" fixed).
+- Disputes/jobs headers: right-aligned mono meta columns to break identical page-header rhythm; removed dead projectTitle prop (pre-existing TS2322) and fixed wallet.ts accountsChanged handler typing (pre-existing TS2345).
+- Demo data: seed-real.ts now registers 3 arbiters (added Nils Ekmann anvil #6, Priya Raghunathan anvil #7 with profiles); one-off scripts/register-extra-arbiters.ts ran against the live stack (2 real register txs) so the leaderboard shows 3 ranked rows now.
+- Ops: Next dev server kept dying — root-caused TWO failure modes: (1) global OOM kills (next-server 2.0-2.5GB RSS spikes vs 4GB box, kernel picks the fattest process — manage memory, close extra chromiums during compiles), (2) OOM-corrupted Turbopack cache ("Failed to restore task data" → rm -rf .next cold rebuild required). Also proved the sandbox reaper kills bash-tool descendants at cleanup — setsid is NOT enough; the fix is a double-fork daemonizer (scripts/daemonize-next.py, fork→setsid→fork→exec, reparents to init before cleanup walks the tree — same survival pattern as the agent-browser daemon). Scoped type-check config at scripts/tsconfig.check.json (root tsconfig targets ES2017 → BigInt literal noise; excludes vendored contracts).
+- Verification: eslint 0/0, scoped tsc 0 src errors, all routes 200, zero page errors. VLM review: landing 8.5/10 (glow absent, gradient-text absent, split hero praised), dashboard 8.5/10 ("real job titles — biggest differentiator from AI filler"), arbiters 9/10 ("true leaderboard, not a card grid"), admin authed 7.5/10 (asymmetric bento verified), admin gate 8.5/10, arbiter 3-row 9/10.
+
+Stage Summary:
+- Design system now fully complies with the design-taste-frontend skill: one accent, structural (grid/hairline/ghost-numeral) decoration instead of glow, no banned layout patterns, magnetic + spotlight motion vocabulary, tactile :active states, skeletons/empty/error states throughout.
+- Files: globals.css, page.tsx (landing), dashboard, arbiters (rewritten as leaderboard), admin (bento + gate), disputes, jobs, wallet.ts, motion.tsx (new), seed-real.ts, register-extra-arbiters.ts (new), daemonize-next.py (new), tsconfig.check.json (new).
+- Stack live: Next :3000 (daemonized, survives reaper), API :3030 real mode, anvil :8545, 3 ranked arbiters, all routes compiled.
+- Ops lesson recorded: on this 4GB box, never run two chromiums during route compiles; OOM → rm -rf .next before restart; use daemonize-next.py for any long-lived process.

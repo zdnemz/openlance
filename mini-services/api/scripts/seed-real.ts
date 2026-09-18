@@ -40,6 +40,8 @@ const P = {
   junko:  { key: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a', addr: '0x3c44cddddb6a900fa2b585dd299e03d12fa4293bc', name: 'Junko Almeida' },
   rhys:   { key: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6', addr: '0x90f79bf6eb2c4f870365e785982e1f101e93b906', name: 'Rhys Okafor' },
   ingrid: { key: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba', addr: '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc', name: 'Ingrid Salm' },
+  nils:   { key: '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e', addr: '0x976ea74026e726554db657fa54763abd0c3a0aa9', name: 'Nils Ekmann' },
+  priya:  { key: '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356', addr: '0x14dc79964da2c08b23698b3d3cc7ca32193d9955', name: 'Priya Raghunathan' },
 }
 
 const ESCROW_FN = parseAbi([
@@ -141,8 +143,19 @@ async function main() {
     skills: ['security', 'auditing', 'solidity'],
   }, t.ingrid)
 
-  log('registering arbiter on-chain (Ingrid)')
-  await tx(P.mara.key, { address: REGISTRY, abi: REGISTRY_FN, functionName: 'register', args: [P.ingrid.addr] })
+  await api('PATCH', '/users/me', {
+    displayName: 'Nils Ekmann', role: 'freelancer', bio: 'Backend auditor turned arbiter. Ex-Erigon contributor; I read diffs for fun and settle on the spec, not the volume of the argument.',
+    skills: ['auditing', 'golang', 'protocol-design'],
+  }, await siweLogin(P.nils))
+  await api('PATCH', '/users/me', {
+    displayName: 'Priya Raghunathan', role: 'freelancer', bio: 'Formal-methods engineer (TLA+, Certora). Arbiter on the side — disputes with a written spec end in one read; disputes without one end in questions.',
+    skills: ['formal-methods', 'solidity', 'certora'],
+  }, await siweLogin(P.priya))
+
+  log('registering arbiters on-chain (Ingrid, Nils, Priya)')
+  for (const a of [P.ingrid, P.nils, P.priya]) {
+    await tx(P.mara.key, { address: REGISTRY, abi: REGISTRY_FN, functionName: 'register', args: [a.addr] })
+  }
 
   // ── Jobs ─────────────────────────────────────────────────────────────────
   log('posting jobs')
