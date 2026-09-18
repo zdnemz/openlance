@@ -10,7 +10,7 @@ import { eq, isNotNull } from 'drizzle-orm'
 import { getDb } from '../lib/db'
 import { logger } from '../lib/logger'
 import { getChainAdapter } from './adapter'
-import { isTerminal } from '../domain/state-machine'
+import { isTerminal, type MilestoneStatus } from '../domain/state-machine'
 import { ledgerEvents, projectMilestones, projects, reconciliationRuns, users } from '../db/schema'
 
 const log = logger.child({ component: 'reconcile' })
@@ -50,14 +50,56 @@ export async function runReconciliation(): Promise<{ checked: number; drifts: nu
 
   // Derived stats are recomputed from the event-sourced ledger (settlement events).
   const stats = await recomputeUserStats()
-  const driftCount = drifts.length + stats.corrected
+
+  // Solvency check (PRD §7.4 core invariant, server-side): on-chain escrow
+  // balance vs mirror liabilities = Σ unsettled milestone amounts + unwithdrawn
+  // fees. Real mode only — the mock moves no ETH (the invariant is enforced by
+  // the Foundry suite in contracts/).
+  const solvency = await checkSolvency(rows)
+  if (solvency && !solvency.ok) {
+    log.error('SOLVENCY DRIFT: escrow balance below liabilities', solvency)
+  }
+
+  const driftCount = drifts.length + stats.corrected + (solvency && !solvency.ok ? 1 : 0)
 
   await db.update(reconciliationRuns).set({
-    finishedAt: new Date(), checked: rows.length, drifts: driftCount, report: { milestones: drifts, stats },
+    finishedAt: new Date(), checked: rows.length, drifts: driftCount,
+    report: { milestones: drifts, stats, solvency },
   }).where(eq(reconciliationRuns.id, run!.id))
 
   log.info('reconciliation complete', { checked: rows.length, drifts: driftCount })
   return { checked: rows.length, drifts: driftCount, report: drifts }
+}
+
+/** balance ≥ Σ unsettled milestones + accrued (unwithdrawn) fees. */
+async function checkSolvency(
+  milestones: { amountWei: string; chainStatus: MilestoneStatus }[],
+): Promise<{ ok: boolean; balanceWei: string; liabilitiesWei: string } | null> {
+  const adapter = getChainAdapter()
+  const balance = await adapter.getEscrowBalance().catch(() => null)
+  if (balance === null) return null
+
+  const unsettled = milestones
+    .filter((m) => !isTerminal(m.chainStatus))
+    .reduce((acc, m) => acc + BigInt(m.amountWei), 0n)
+
+  const db = await getDb()
+  const ledger = await db
+    .select({ eventType: ledgerEvents.eventType, payload: ledgerEvents.payload })
+    .from(ledgerEvents)
+  let feesAccrued = 0n
+  let feesWithdrawn = 0n
+  for (const ev of ledger) {
+    const p = ev.payload as Record<string, unknown>
+    if (ev.eventType === 'MilestoneReleased' || ev.eventType === 'MilestoneSplit') {
+      feesAccrued += BigInt(String(p.fee ?? '0'))
+    } else if (ev.eventType === 'FeeWithdrawn') {
+      feesWithdrawn += BigInt(String(p.amount ?? '0'))
+    }
+  }
+
+  const liabilities = unsettled + (feesAccrued - feesWithdrawn)
+  return { ok: BigInt(balance) >= liabilities, balanceWei: balance, liabilitiesWei: liabilities.toString() }
 }
 
 /** Rebuild totalEarned/totalPaid/completedProjects from ledger events + milestone states. */

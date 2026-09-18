@@ -27,6 +27,11 @@ export const ESCROW_ABI = parseAbi([
   'event ArbiterRegistered(address indexed arbiter, uint256 sbtTokenId)',
   'event ArbiterDeregistered(address indexed arbiter)',
   'event TrustScoreUpdated(address indexed arbiter, int256 delta, uint256 newScore, bool withinSla)',
+  // RPC read surface (contracts/Escrow.sol) — readContract cannot encode calls
+  // from an events-only ABI. Found during the contracts phase; the review-gating
+  // and reconciliation paths depend on milestoneStatus.
+  'function milestoneStatus(uint256 milestoneId) view returns (uint8)',
+  'function accruedFees() view returns (uint256)',
 ])
 
 /** Dispute resolution outcomes — must match the contract enum. */

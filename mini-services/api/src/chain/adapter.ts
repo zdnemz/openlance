@@ -32,12 +32,32 @@ export interface ChainAdapter {
   fetchLogs(fromBlock: number, toBlock: number): Promise<RawChainLog[]>
   /** Re-derive milestone status from the chain (truth for money-relevant checks). */
   getMilestoneStatus(onchainId: number): Promise<MilestoneStatus | null>
+  /** Real mode: the escrow contract's ETH balance (solvency invariant input). Mock: null. */
+  getEscrowBalance(): Promise<string | null>
   getLatestBlock(): Promise<number>
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Real adapter (viem)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * viem decodes uint/int args as BigInt; the mock chain synthesizes them as
+ * strings/numbers. The indexer pipeline (ledger jsonb payload, numOrNull/str
+ * coercion) speaks the MOCK shape — found live during the anvil e2e
+ * ("JSON.stringify cannot serialize BigInt"). Normalizing here keeps one
+ * canonical arg shape for both sources.
+ */
+function normalizeArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(args)) {
+    if (typeof v === 'bigint') out[k] = v.toString()
+    else if (Array.isArray(v)) out[k] = v.map((x) => (typeof x === 'bigint' ? x.toString() : x))
+    else out[k] = v
+  }
+  return out
+}
+
 export class RealChainAdapter implements ChainAdapter {
   mode = 'real' as const
   private client: import('viem').PublicClient | undefined
@@ -56,28 +76,37 @@ export class RealChainAdapter implements ChainAdapter {
     return { client: this.client! }
   }
 
+  /**
+   * Poll BOTH contracts: the escrow (milestones, disputes, fees) and the
+   * arbiter registry (ArbiterRegistered/Deregistered, TrustScoreUpdated live
+   * there — matching contracts/ArbiterRegistry.sol). One ABI, two addresses;
+   * each log is tagged with the address it actually came from.
+   */
   async fetchLogs(fromBlock: number, toBlock: number): Promise<RawChainLog[]> {
     const { client } = await this.viem()
     const { ESCROW_ABI } = await import('./abi')
-    const logs = await client.getContractEvents({
-      address: this.escrowAddress as `0x${string}`,
-      abi: ESCROW_ABI,
-      fromBlock: BigInt(fromBlock),
-      toBlock: BigInt(toBlock),
-    })
+    const sources = [this.escrowAddress, this.registryAddress]
     const out: RawChainLog[] = []
-    for (const log of logs) {
-      if (!log.blockNumber) continue
-      const block = await client.getBlock({ blockNumber: log.blockNumber })
-      out.push({
-        address: this.escrowAddress,
-        blockNumber: Number(log.blockNumber),
-        blockTime: new Date(Number(block.timestamp) * 1000),
-        txHash: log.transactionHash ?? '0xunknown',
-        logIndex: log.logIndex ?? 0,
-        name: log.eventName as ChainEventName,
-        args: log.args as unknown as Record<string, unknown>,
+    for (const source of sources) {
+      const logs = await client.getContractEvents({
+        address: source as `0x${string}`,
+        abi: ESCROW_ABI,
+        fromBlock: BigInt(fromBlock),
+        toBlock: BigInt(toBlock),
       })
+      for (const log of logs) {
+        if (!log.blockNumber) continue
+        const block = await client.getBlock({ blockNumber: log.blockNumber })
+        out.push({
+          address: source,
+          blockNumber: Number(log.blockNumber),
+          blockTime: new Date(Number(block.timestamp) * 1000),
+          txHash: log.transactionHash ?? '0xunknown',
+          logIndex: log.logIndex ?? 0,
+          name: log.eventName as ChainEventName,
+          args: normalizeArgs(log.args as unknown as Record<string, unknown>),
+        })
+      }
     }
     return out.sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex)
   }
@@ -97,6 +126,16 @@ export class RealChainAdapter implements ChainAdapter {
     if (data === null) return null
     const { ONCHAIN_MILESTONE_STATUS } = await import('./events')
     return ONCHAIN_MILESTONE_STATUS[Number(data)] ?? null
+  }
+
+  /** The contract-side input of the solvency check (balance ≥ liabilities). */
+  async getEscrowBalance(): Promise<string | null> {
+    const { client } = await this.viem()
+    const balance = await client.getBalance({ address: this.escrowAddress as `0x${string}` }).catch((err) => {
+      logger.warn('getBalance failed', { err: String(err) })
+      return null
+    })
+    return balance === null ? null : balance.toString()
   }
 
   async getLatestBlock(): Promise<number> {
@@ -203,6 +242,11 @@ export class MockChainAdapter implements ChainAdapter {
   async getMilestoneStatus(onchainId: number): Promise<MilestoneStatus | null> {
     return (await this.state()).milestones[String(onchainId)]?.status ?? null
   }
+
+  async getEscrowBalance(): Promise<string | null> {
+    return null // the mock moves no real ETH; solvency is enforced by the contract tests
+  }
+
   async getLatestBlock(): Promise<number> {
     return (await this.state()).block
   }

@@ -4,11 +4,14 @@ Milestone-based freelance marketplace backend with smart-contract escrow, disput
 
 **Stack:** Hono (API) · Postgres via Drizzle (Supabase-compatible; embedded PGlite for zero-infra dev) · Redis via BullMQ (optional; in-process fallback) · viem (Base Sepolia) · SIWE auth · TypeScript throughout.
 
+> **Contracts are live:** [`../../contracts/`](../../contracts/) holds the Foundry implementation (Escrow + ERC-5194 ArbiterRegistry, 90 tests incl. invariant fuzzing). `bun run e2e:anvil` below proves the whole stack against a real EVM.
+
 ```
 bun install
 bun run db:setup        # migrate + seed demo data (embedded Postgres, no infra)
 bun run dev             # API + inline workers on :3030
-bun scripts/smoke.ts    # full golden-path E2E against the running API
+bun scripts/smoke.ts    # full golden-path E2E against the running API (mock chain)
+bun run e2e:anvil       # SAME golden path on a real EVM: anvil + deployed contracts
 ```
 
 That's the entire local setup — no Docker, no Supabase project, no RPC key needed. Every infrastructure dependency has a dev-mode adapter (see [The adapter matrix](#the-adapter-matrix)); flip env vars to go real.
@@ -158,8 +161,10 @@ bun scripts/smoke.ts # E2E golden path against a running server
 1. `docker compose up -d` (Postgres + Redis) or point at a Supabase project.
 2. Copy `.env.example` → `.env`, set `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`.
 3. Create the storage bucket named by `STORAGE_BUCKET` (service-role only — all object access flows through the API).
-4. Deploy + verify the Escrow and ArbiterRegistry contracts (they must emit the events in `src/chain/abi.ts`), then set `CHAIN_MODE=real`, `ESCROW_ADDRESS`, `ARBITER_REGISTRY_ADDRESS`.
+4. Deploy the contracts (`cd ../../contracts && forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast`), then set `CHAIN_MODE=real`, `ESCROW_ADDRESS`, `ARBITER_REGISTRY_ADDRESS`. The indexer polls both addresses (escrow milestones/fees + registry trust events) and normalizes viem's BigInt args into the canonical event shape.
 5. `bun run db:migrate && bun run db:seed` (or your own data) → `bun run start` + `bun run worker` behind a process manager.
+
+The nightly reconciliation additionally checks the **solvency invariant** server-side (on-chain escrow balance vs Σ unsettled milestones + accrued fees, from the ledger) and reports it in every run's JSON report.
 
 ## Testing
 
@@ -168,8 +173,8 @@ bun scripts/smoke.ts # E2E golden path against a running server
 - **Webhook domain tests** — HMAC determinism/tamper detection, exponential retry ladder with cap, 2xx-only success.
 - **Indexer integration test** — the real pipeline against embedded Postgres: happy path, dispute → split resolution (+ trust score), idempotent re-ingest, illegal-transition drift handling, project completion, outbox fan-out.
 
-## What's next (build plan phases 2+)
+## What's next (build plan phase 3+)
 
-1. **Foundry contracts** matching `src/chain/abi.ts` (the event surface is the contract) — invariant tests first: *balance ≥ Σ unsettled milestones + accrued fees*, no double-release.
-2. **Next.js frontend** — RainbowKit + wagmi, SIWE login against this API, Supabase Realtime for chat/ledger, fund/submit/approve/dispute wallet txs replacing the `/dev/chain` calls.
-3. Pull from the upgrade roadmap: ERC-4337 paymaster (fixes the recruiter-without-testnet-ETH demo problem), EAS-attested reviews, deadlines/auto-release.
+1. ~~Foundry contracts~~ **DONE** — [`../../contracts/`](../../contracts/): Escrow + ArbiterRegistry, 90 tests, invariant fuzzing (solvency, conservation, no-double-settle), event surface locked to `src/chain/abi.ts`, proven end-to-end on anvil (`bun run e2e:anvil`) and ready for Base Sepolia.
+2. **Next.js frontend** — RainbowKit + wagmi, SIWE login against this API, Supabase Realtime for chat/ledger, fund/submit/approve/dispute wallet txs replacing the `/dev/chain` calls (the e2e-anvil script is the reference implementation of those interactions).
+3. Pull from the upgrade roadmap: ERC-4337 paymaster (fixes the recruiter-without-testnet-ETH demo problem), EAS-attested reviews, deadlines/auto-release, ERC-20 support (the contract storage layout already reserves room).

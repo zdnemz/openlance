@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun src/scripts/migrate.ts",
     "db:seed": "bun src/scripts/seed.ts",
-    "db:setup": "bun run db:migrate && bun run db:seed"
+    "db:setup": "bun run db:migrate && bun run db:seed",
+    "e2e:anvil": "bash scripts/run-anvil-e2e.sh"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
