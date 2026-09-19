@@ -7,7 +7,8 @@
  */
 import { useArbiters } from "@/lib/queries";
 import { AddressAvatar, Skeleton, EmptyState, press } from "@/components/design";
-import { shortAddress, dateLabel } from "@/lib/format";
+import { ArbiterStakePanel } from "@/components/arbiter-stake-panel";
+import { shortAddress, dateLabel, formatEth } from "@/lib/format";
 import Link from "next/link";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
 import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
@@ -24,9 +25,9 @@ export default function ArbitersPage() {
         <div className="max-w-[60ch]">
           <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Arbiters stake their name.</h1>
           <p className="mt-3 text-sm leading-relaxed text-dim">
-            Arbiters hold a soulbound badge (ERC-5194) whose trust score moves with their record: +1 per resolution
-            inside the 72h SLA, −2 when the clock expires; the slash is permissionless on-chain. Scores can&apos;t be
-            bought, transferred, or reset.
+            Arbiters bond ETH collateral and hold a soulbound badge (ERC-5194). Trust moves with their record:
+            +5 for a majority vote, −10 minority, −15 missed deadline, −25 overturned. Drop below the threshold and
+            the stake locks; reach zero and it is slashed to the treasury.
           </p>
         </div>
         {registered.length > 0 && (
@@ -38,6 +39,8 @@ export default function ArbitersPage() {
         )}
       </div>
 
+      <ArbiterStakePanel />
+
       {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-24 rounded-2xl" />
@@ -47,7 +50,7 @@ export default function ArbitersPage() {
         <EmptyState
           icon={<Scales className="h-5 w-5" />}
           title="No registered arbiters yet"
-          body="The registry mints badges on registration. The admin wallet registers arbiters with a single on-chain call."
+          body="Be the first — stake collateral above to join the pool. New arbiters start at trust score 100."
         />
       ) : (
         <ol className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
@@ -78,7 +81,8 @@ export default function ArbitersPage() {
                       <SealCheck weight="fill" className="h-4 w-4 shrink-0 text-rose-bright" />
                     </span>
                     <span className="num mt-0.5 block text-[12px] text-faint">
-                      registered {dateLabel(a.registeredAt)} · badge {a.sbtTokenId ? `#${BigInt(a.sbtTokenId)}` : "pending"} · soulbound
+                      {a.registeredAt ? `registered ${dateLabel(a.registeredAt)}` : "registered"} · stake {formatEth(BigInt(a.stakeWei || "0"))} ETH · badge {a.sbtTokenId ? `#${BigInt(a.sbtTokenId)}` : "pending"}
+                      {a.locked && <span className="text-state-disputed"> · locked</span>}
                     </span>
                   </span>
                 </span>

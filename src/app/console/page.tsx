@@ -116,7 +116,7 @@ const API_GROUPS: { title: string; icon: typeof ServerCog; rows: [string, string
   { title: 'Money & trust (F4–F14)', icon: ShieldCheck, rows: [
     ['GET /projects/:id/milestones', 'mirror + fund tx hints (ref bytes32)'],
     ['POST /milestones/:id/reviews', 'settlement re-verified via RPC'],
-    ['POST …/disputes → /disputes/:id/arbiter-proposal', '48h mutual agreement window'],
+    ['POST …/disputes → openDispute() + commit/reveal', 'random 3-arbiter panel, 2-of-3 quorum'],
     ['GET /ledger · GET /arbiters', 'event-sourced cache + SBT scores'],
   ] },
   { title: 'Platform (F9)', icon: Radio, rows: [

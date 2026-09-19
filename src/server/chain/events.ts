@@ -58,6 +58,74 @@ export interface EvDisputeResolved {
   arbiter: string
   outcome: ResolutionOutcome
 }
+// ── Multi-arbiter dispute events (contract v2) ─────────────────────────────
+export interface EvArbitersSelected {
+  milestoneId: number
+  round: number
+  arbiters: [string, string, string] // zero-padded to 3
+  count: number
+}
+export interface EvVoteCommitted {
+  milestoneId: number
+  round: number
+  arbiter: string
+  commitHash: string
+}
+export interface EvVoteRevealed {
+  milestoneId: number
+  round: number
+  arbiter: string
+  outcome: number
+}
+export interface EvDisputeFinalized {
+  milestoneId: number
+  round: number
+  outcome: number
+  revealCount: number
+  quorumMet: boolean
+}
+export interface EvAppealOpened {
+  milestoneId: number
+  newRound: number
+  by: string
+  appealFee: string
+}
+export interface EvAppealResolved {
+  milestoneId: number
+  round: number
+  overturned: boolean
+}
+export interface EvArbiterRewarded {
+  milestoneId: number
+  arbiter: string
+  amount: string
+}
+export interface EvArbiterPenalized {
+  milestoneId: number
+  arbiter: string
+  reason: number
+}
+// ── Registry staking + score events (contract v2) ──────────────────────────
+export interface EvScoreChanged {
+  arbiter: string
+  oldScore: number
+  newScore: number
+  reason: number
+}
+export interface EvStakeDeposited {
+  arbiter: string
+  amount: string
+  totalStake: string
+}
+export interface EvStakeWithdrawn {
+  arbiter: string
+  amount: string
+}
+export interface EvStakeSlashed {
+  arbiter: string
+  treasury: string
+  amount: string
+}
 export interface EvFeeWithdrawn {
   to: string
   amount: string
@@ -106,3 +174,21 @@ export const ONCHAIN_MILESTONE_STATUS: Record<number, MilestoneStatus> = {
   7: 'resolved_split',
   8: 'cancelled',
 }
+
+/** Escrow.Phase enum ordinals → mirror enum values. */
+export const ONCHAIN_DISPUTE_PHASE: Record<number, 'none' | 'commit' | 'reveal' | 'resolved'> = {
+  0: 'none',
+  1: 'commit',
+  2: 'reveal',
+  3: 'resolved',
+}
+
+/** ArbiterRegistry score-change reason codes (ScoreChanged.reason). */
+export const SCORE_REASON = {
+  1: 'majority',
+  2: 'minority',
+  3: 'missed',
+  4: 'overturned',
+  5: 'recovery',
+} as const
+export type ScoreReason = (typeof SCORE_REASON)[keyof typeof SCORE_REASON]

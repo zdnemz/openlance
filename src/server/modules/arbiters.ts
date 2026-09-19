@@ -11,6 +11,12 @@ function view(a: typeof arbiters.$inferSelect, profile?: typeof users.$inferSele
     registered: a.registered,
     sbtTokenId: a.sbtTokenId,
     trustScore: a.trustScore,
+    stakeWei: a.stakeWei,
+    /** Below MIN_SCORE_TO_WITHDRAW: stake locked + benched from selection. */
+    locked: a.locked,
+    unstakeRequested: a.unstakeRequested,
+    /** Whether the arbiter may be drawn for new disputes (mirrors isEligible). */
+    eligible: a.registered && !a.locked && !a.unstakeRequested,
     resolutions: a.resolutions,
     resolutionsWithinSla: a.resolutionsWithinSla,
     resolutionsLate: a.resolutionsLate,

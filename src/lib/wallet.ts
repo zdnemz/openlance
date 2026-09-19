@@ -16,7 +16,7 @@
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { encodeFunctionData, type Abi } from "viem";
+import { encodeFunctionData, decodeFunctionResult, type Abi } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
 export const CHAIN_ID = 31337;
@@ -99,6 +99,27 @@ export async function rpc<T = unknown>(method: string, params: unknown[]): Promi
 
 export async function fetchBalance(address: string): Promise<bigint> {
   return rpc<bigint>("eth_getBalance", [address, "latest"]);
+}
+
+/**
+ * Read a contract function through the relay (eth_call). Used by the UI to
+ * fetch live round/arbiter state straight from the chain — money-relevant
+ * truth is always re-derived from the contract, never trusted from the API.
+ */
+export async function readContract<T = unknown>(opts: {
+  to: string;
+  abi: Abi;
+  functionName: string;
+  args?: unknown[];
+}): Promise<T | null> {
+  try {
+    const data = encodeFunctionData({ abi: opts.abi, functionName: opts.functionName, args: opts.args ?? [] });
+    const raw = await rpc<`0x${string}` | null>("eth_call", [{ to: opts.to, data }, "latest"]);
+    if (!raw || raw === "0x") return null;
+    return decodeFunctionResult({ abi: opts.abi, functionName: opts.functionName, data: raw }) as T;
+  } catch {
+    return null; // contract not deployed / wrong chain → callers render an offline state
+  }
 }
 
 /* ── wallet store ───────────────────────────────────────────────────────── */

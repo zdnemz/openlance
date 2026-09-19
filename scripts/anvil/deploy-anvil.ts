@@ -1,79 +1,74 @@
 /**
- * Deploy Escrow + ArbiterRegistry to the local anvil chain (chain 31337)
- * using the forge build artifacts — no forge binary needed at deploy time.
+ * Deploy OpenLance to the local anvil devnet (chain 31337) by delegating to the
+ * Hardhat deploy script — the same code path used for Base Sepolia, so dev and
+ * testnet can never drift.
  *
- * Boot flow (scripts/dev-real.sh): anvil up → this script → .env written
- * → migrate → API starts in CHAIN_MODE=real → demo seed.
+ * Boot flow (scripts/anvil/dev-real.sh): anvil up -> this script -> .env written
+ * -> migrate -> API starts in CHAIN_MODE=real -> demo seed.
  *
  * Output: a single JSON line on stdout:
- *   {"escrow":"0x..","arbiterRegistry":"0x..","deployer":"0x..","chainId":31337}
+ *   {"escrow":"0x..","arbiterRegistry":"0x..","timelock":"0x..","deployer":"0x..","chainId":31337}
+ *
+ * Implementation: spawns `npx hardhat run scripts/deploy.ts --network localhost`
+ * from the contracts/ directory, parses the printed addresses, and writes the
+ * deployment JSON next to this file.
  */
-import { createPublicClient, createWalletClient, http, type Abi, type Hex } from 'viem'
-import { anvil } from 'viem/chains'
-import { privateKeyToAccount } from 'viem/accounts'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { spawnSync } from "node:child_process";
+import { createPublicClient, http } from "viem";
+import { anvil } from "viem/chains";
+import { writeFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const RPC = process.env.ANVIL_RPC_URL ?? 'http://127.0.0.1:8545'
-const DEPLOYER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' // anvil #0
+const RPC = process.env.ANVIL_RPC_URL ?? "http://127.0.0.1:8545";
+const here = dirname(fileURLToPath(import.meta.url));
+const contractsDir = resolve(here, "../../contracts");
 
-const here = dirname(fileURLToPath(import.meta.url))
-const artifact = (name: string) => {
-  const p = resolve(here, '../../contracts/out', `${name}.sol`, `${name}.json`)
-  const parsed = JSON.parse(readFileSync(p, 'utf8')) as { abi: Abi; bytecode: { object: Hex } }
-  return { abi: parsed.abi, bytecode: parsed.bytecode.object }
-}
+// Anvil account #0 — the devnet deployer and the default ADMIN_WALLETS entry.
+const DEPLOYER = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 
 async function main() {
-  const escrowArt = artifact('Escrow')
-  const registryArt = artifact('ArbiterRegistry')
+  const publicClient = createPublicClient({ chain: anvil, transport: http(RPC) });
+  const chainId = await publicClient.getChainId();
+  if (chainId !== 31337) throw new Error(`expected chain 31337, got ${chainId}`);
 
-  const account = privateKeyToAccount(DEPLOYER_KEY)
-  const publicClient = createPublicClient({ chain: anvil, transport: http(RPC) })
-  const walletClient = createWalletClient({ account, chain: anvil, transport: http(RPC) })
+  // Short timelock delay on the devnet so wiring feels immediate.
+  const res = spawnSync(
+    "npx",
+    ["hardhat", "run", "scripts/deploy.ts", "--network", "localhost"],
+    {
+      cwd: contractsDir,
+      env: { ...process.env, TIMELOCK_DELAY: "5", BASE_SEPOLIA_RPC_URL: RPC, DEPLOYER_KEY: process.env.DEPLOYER_KEY ?? "" },
+      encoding: "utf8",
+    },
+  );
 
-  const chainId = await publicClient.getChainId()
-  if (chainId !== 31337) throw new Error(`expected chain 31337, got ${chainId}`)
+  if (res.status !== 0) {
+    process.stderr.write(res.stdout ?? "");
+    process.stderr.write(res.stderr ?? "");
+    throw new Error(`hardhat deploy exited with ${res.status}`);
+  }
 
-  // 1. ArbiterRegistry(name, symbol, owner)
-  const registryHash = await walletClient.deployContract({
-    ...registryArt,
-    functionName: 'constructor',
-    args: ['OpenLance Arbiter', 'OLANCE', account.address],
-    account,
-  })
-  const registryReceipt = await publicClient.waitForTransactionReceipt({ hash: registryHash })
-  const registryAddress = registryReceipt.contractAddress
-  if (!registryAddress) throw new Error('registry deploy failed — no contract address')
+  const out = res.stdout + res.stderr;
+  const grab = (key: string) => {
+    const m = out.match(new RegExp(`${key}=(0x[0-9a-fA-F]{40})`));
+    if (!m) throw new Error(`could not parse ${key} from deploy output`);
+    return m[1];
+  };
 
-  // 2. Escrow(arbiterRegistry, owner)
-  const escrowHash = await walletClient.deployContract({
-    ...escrowArt,
-    functionName: 'constructor',
-    args: [registryAddress, account.address],
-    account,
-  })
-  const escrowReceipt = await publicClient.waitForTransactionReceipt({ hash: escrowHash })
-  const escrowAddress = escrowReceipt.contractAddress
-  if (!escrowAddress) throw new Error('escrow deploy failed — no contract address')
+  const deployment = {
+    escrow: grab("ESCROW_ADDRESS"),
+    arbiterRegistry: grab("ARBITER_REGISTRY_ADDRESS"),
+    timelock: grab("TIMELOCK_ADDRESS"),
+    deployer: DEPLOYER,
+    chainId,
+  };
 
-  // 3. registry.setEscrow(escrow)
-  const wireHash = await walletClient.writeContract({
-    address: registryAddress,
-    abi: registryArt.abi,
-    functionName: 'setEscrow',
-    args: [escrowAddress],
-    account,
-  })
-  await publicClient.waitForTransactionReceipt({ hash: wireHash })
-
-  const out = { escrow: escrowAddress, arbiterRegistry: registryAddress, deployer: account.address, chainId }
-  writeFileSync(resolve(here, '../.anvil-deployment.json'), JSON.stringify(out, null, 2))
-  console.log(JSON.stringify(out))
+  writeFileSync(resolve(here, "../.anvil-deployment.json"), JSON.stringify(deployment, null, 2));
+  console.log(JSON.stringify(deployment));
 }
 
 main().catch((err) => {
-  console.error('deploy-anvil failed:', err)
-  process.exit(1)
-})
+  console.error("deploy-anvil failed:", err);
+  process.exit(1);
+});

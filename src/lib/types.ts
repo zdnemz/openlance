@@ -14,6 +14,8 @@ export type MilestoneChainStatus =
 export type ProposalStatus = "submitted" | "accepted" | "rejected" | "withdrawn";
 export type ProjectStatus = "active" | "completed" | "cancelled";
 export type DisputeStatus = "open" | "agreed" | "assigned" | "resolved";
+/** On-chain round phase (Escrow.Phase) mirrored by the indexer. */
+export type DisputePhase = "none" | "commit" | "reveal" | "resolved";
 export type UserRole = "client" | "freelancer" | "both";
 
 export interface PublicUser {
@@ -144,11 +146,32 @@ export interface DisputeView {
   openedById: string;
   reason: string;
   status: DisputeStatus;
+  // ── Multi-arbiter round state (mirrored from chain) ─────────────────────
+  round: number;
+  phase: DisputePhase;
+  /** Arbiters selected for the current round (lowercase addresses). */
+  selectedArbiters: string[];
+  committedArbiters: string[];
+  revealedArbiters: string[];
+  /** Revealed vote tally per round, keyed by round index → [release, refund, split]. */
+  tally: Record<string, number[]>;
+  commitDeadline: string | null;
+  revealDeadline: string | null;
+  appealCount: number;
+  finalized: boolean;
+  finalizedAt: string | null;
+  // ── Legacy nomination fields (schema-compatible; unused by the v2 flow) ─
   clientProposedArbiter: string | null;
   freelancerProposedArbiter: string | null;
   agreedArbiter: string | null;
   adminAssignedArbiter: string | null;
   agreementDeadline: string;
+  // ── Settlement ──────────────────────────────────────────────────────────
+  resolvedArbiter: string | null;
+  majorityArbiters: string[];
+  outcome: "release" | "refund" | "split" | null;
+  resolutionTxHash: string | null;
+  resolvedAt: string | null;
   createdAt: string;
 }
 
@@ -171,6 +194,13 @@ export interface ArbiterView {
   registered: boolean;
   sbtTokenId: string | null;
   trustScore: number;
+  /** ETH collateral (wei). */
+  stakeWei: string;
+  /** Below minScoreToWithdraw → stake locked + benched. */
+  locked: boolean;
+  unstakeRequested: boolean;
+  /** May be drawn for new disputes (mirrors on-chain isEligible). */
+  eligible: boolean;
   resolutions: number;
   resolutionsWithinSla: number;
   resolutionsLate: number;
@@ -183,7 +213,13 @@ export interface RuntimeConfig {
   chainMode: string;
   chainId: number;
   feeBps: number;
-  contracts: { escrow: string | null; arbiterRegistry: string | null };
+  /** Minimum ETH (wei) to open a dispute — from the contract. */
+  disputeFeeWei: string;
+  /** Minimum arbiter collateral (wei). */
+  minStakeWei: string;
+  /** Trust score n below which a stake locks. */
+  minScoreToWithdraw: number;
+  contracts: { escrow: string | null; arbiterRegistry: string | null; timelock: string | null };
 }
 
 export interface Overview {

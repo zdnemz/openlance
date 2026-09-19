@@ -23,7 +23,14 @@ export const milestoneChainStatus = pgEnum('milestone_chain_status', [
   'resolved_release', 'resolved_refund', 'resolved_split', 'cancelled',
 ])
 export const submissionSoftStatus = pgEnum('submission_soft_status', ['submitted', 'changes_requested'])
+/**
+ * Dispute lifecycle status. `open` covers the whole commit→reveal→tally window
+ * (the on-chain `phase` column narrows it down); `resolved` is set once the
+ * milestone settles.
+ */
 export const disputeStatus = pgEnum('dispute_status', ['open', 'agreed', 'assigned', 'resolved'])
+/** On-chain round phase (Escrow.Phase): None/Commit/Reveal/Resolved. */
+export const disputePhase = pgEnum('dispute_phase', ['none', 'commit', 'reveal', 'resolved'])
 export const disputeOutcome = pgEnum('dispute_outcome', ['release', 'refund', 'split'])
 export const attachmentStatus = pgEnum('attachment_status', ['pending', 'confirmed'])
 export const deliveryStatus = pgEnum('delivery_status', ['pending', 'success', 'failed'])
@@ -189,8 +196,12 @@ export const reviews = pgTable('reviews', {
 
 /**
  * Dispute coordination lives off-chain; funds/outcomes live on-chain.
- * Arbiter selection (PRD F10): both parties propose; matching proposal =
- * agreed; after ARBITER_AGREEMENT_WINDOW_HOURS the platform admin may assign.
+ *
+ * Multi-arbiter model (contract v2): opening a dispute selects up to 3 random,
+ * eligible, non-party arbiters who vote via commit-reveal; the 2-of-3 majority
+ * decides. The columns below are the indexer's mirror of the on-chain round so
+ * the UI can render the phase, the selected arbiters, the deadline clocks and
+ * the tally. Money truth is always re-derived from the chain, never from here.
  */
 export const disputes = pgTable('disputes', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -199,12 +210,32 @@ export const disputes = pgTable('disputes', {
   openedById: uuid('opened_by_id').notNull().references(() => users.id),
   reason: text('reason'),
   status: disputeStatus('status').notNull().default('open'),
+  // ── On-chain round mirror ───────────────────────────────────────────────
+  /** Current round index (0 = original, 1+ = appeals). */
+  round: integer('round').notNull().default(0),
+  phase: disputePhase('phase').notNull().default('none'),
+  /** Selected arbiters for the current round (lowercase addresses). */
+  selectedArbiters: jsonb('selected_arbiters').notNull().default(sql`'[]'::jsonb`),
+  commitDeadline: timestamp('commit_deadline', { withTimezone: true }),
+  revealDeadline: timestamp('reveal_deadline', { withTimezone: true }),
+  appealCount: integer('appeal_count').notNull().default(0),
+  /** Revealed vote tally per outcome, keyed by round index. */
+  tally: jsonb('tally').notNull().default(sql`'{}'::jsonb`),
+  revealedArbiters: jsonb('revealed_arbiters').notNull().default(sql`'[]'::jsonb`),
+  committedArbiters: jsonb('committed_arbiters').notNull().default(sql`'[]'::jsonb`),
+  finalized: boolean('finalized').notNull().default(false),
+  finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+  // ── Legacy nomination fields (kept for older rows; unused by v2 flow) ────
   clientProposedArbiter: text('client_proposed_arbiter'),
   freelancerProposedArbiter: text('freelancer_proposed_arbiter'),
   agreedArbiter: text('agreed_arbiter'),
   adminAssignedArbiter: text('admin_assigned_arbiter'),
   agreementDeadline: timestamp('agreement_deadline', { withTimezone: true }).notNull(),
+  // ── Settlement ───────────────────────────────────────────────────────────
+  /** Winning arbiter (majority representative) for the settled round. */
   resolvedArbiter: text('resolved_arbiter'),
+  /** Majority arbiters of the settled round. */
+  majorityArbiters: jsonb('majority_arbiters').notNull().default(sql`'[]'::jsonb`),
   outcome: disputeOutcome('outcome'),
   resolutionTxHash: text('resolution_tx_hash'),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
@@ -239,12 +270,18 @@ export const indexerState = pgTable('indexer_state', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-/** Mirror of ArbiterRegistry + ERC-5194 SBT trust data (PRD F11/F12). */
+/** Mirror of ArbiterRegistry + ERC-5194 SBT trust data + staking (PRD F11/F12). */
 export const arbiters = pgTable('arbiters', {
   address: text('address').primaryKey(), // lowercase
   registered: boolean('registered').notNull().default(true),
   sbtTokenId: bigint('sbt_token_id', { mode: 'number' }),
   trustScore: integer('trust_score').notNull().default(0),
+  /** ETH collateral held on-chain (wei). Mirror of `stakeOf`. */
+  stakeWei: wei('stake_wei').notNull().default('0'),
+  /** True when the arbiter has requested to unstake (benched from selection). */
+  unstakeRequested: boolean('unstake_requested').notNull().default(false),
+  /** True when score < minScoreToWithdraw: stake locked, benched. */
+  locked: boolean('locked').notNull().default(false),
   resolutions: integer('resolutions').notNull().default(0),
   resolutionsWithinSla: integer('resolutions_within_sla').notNull().default(0),
   resolutionsLate: integer('resolutions_late').notNull().default(0),

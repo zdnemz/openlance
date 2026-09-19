@@ -50,8 +50,19 @@ const schema = z.object({
   CHAIN_RPC_URL: z.string().default('https://sepolia.base.org'),
   ESCROW_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   ARBITER_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  /** TimelockController that owns the UUPS proxies (informational). */
+  TIMELOCK_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   /** Display-only mirror of the contract's fee; the contract is the authority. */
   PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(250),
+  /**
+   * Display-only mirror of the escrow's dispute fee (wei). The contract reads
+   * are authoritative; this is used for UI copy before the first RPC read.
+   */
+  DISPUTE_FEE_WEI: z.string().regex(/^\d+$/).default('50000000000000000'), // 0.05 ETH
+  /** Minimum arbiter stake (wei) shown in the staking UI. */
+  MIN_STAKE_WEI: z.string().regex(/^\d+$/).default('100000000000000000'), // 0.1 ETH
+  /** Minimum trust score n below which a stake locks (mirrors the registry). */
+  MIN_SCORE_TO_WITHDRAW: z.coerce.number().int().min(0).max(100).default(50),
   ARBITER_FEE_SHARE_BPS: z.coerce.number().int().min(0).max(10_000).default(2000), // 20% of the fee
   INDEXER_POLL_MS: z.coerce.number().int().positive().default(10_000),
   INDEXER_CONFIRMATIONS: z.coerce.number().int().positive().default(5),

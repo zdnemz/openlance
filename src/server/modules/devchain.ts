@@ -104,8 +104,8 @@ export async function devDispute(request: Request) {
   assertDevChainEnabled()
   const body = await validate(request, z.object({ milestoneId: z.string().uuid(), by: ADDRESS }).strict())
   const { milestone } = await loadMilestone(body.milestoneId)
-  const log = await getMockAdapter().dispute(requireOnchainId(milestone), body.by)
-  return { txHash: log.txHash, block: log.blockNumber }
+  const logs = await getMockAdapter().dispute(requireOnchainId(milestone), body.by)
+  return { txHashes: logs.map((l) => l.txHash), block: logs.at(-1)?.blockNumber }
 }
 
 export async function devResolve(request: Request) {

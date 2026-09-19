@@ -116,11 +116,25 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'MilestoneSplit': return applySplit(tx, evt)
     case 'MilestoneCancelled': return applyCancelled(tx, evt)
     case 'DisputeOpened': return applyDisputeOpened(tx, evt)
+    case 'ArbitersSelected': return applyArbitersSelected(tx, evt)
+    case 'VoteCommitted': return applyVoteCommitted(tx, evt)
+    case 'VoteRevealed': return applyVoteRevealed(tx, evt)
     case 'DisputeResolved': return applyDisputeResolved(tx, evt)
+    case 'DisputeFinalized': return applyDisputeFinalized(tx, evt)
+    case 'NoQuorumFallback': return applyNoQuorumFallback(tx, evt)
+    case 'AppealOpened': return applyAppealOpened(tx, evt)
+    case 'AppealResolved': return applyAppealResolved(tx, evt)
+    case 'ArbiterRewarded':
+    case 'ArbiterPenalized': return null // ledger-only; scores mirror via TrustScoreUpdated
     case 'FeeWithdrawn': return null // ledger-only
     case 'ArbiterRegistered': return applyArbiterRegistered(tx, evt)
     case 'ArbiterDeregistered': return applyArbiterDeregistered(tx, evt)
     case 'TrustScoreUpdated': return applyTrustScore(tx, evt)
+    case 'ScoreChanged': return applyScoreChanged(tx, evt)
+    case 'StakeDeposited': return applyStakeDeposited(tx, evt)
+    case 'StakeWithdrawn': return applyStakeWithdrawn(tx, evt)
+    case 'StakeLocked': return applyStakeLocked(tx, evt)
+    case 'StakeSlashed': return applyStakeSlashed(tx, evt)
     default: return null
   }
 }
@@ -333,6 +347,173 @@ async function applyDisputeResolved(tx: Tx, evt: RawChainLog): Promise<PlannedNo
     milestoneId: m.id,
     payload: { outcome, txHash: evt.txHash },
   }
+}
+
+// ── Multi-arbiter dispute round mirror ──────────────────────────────────────
+
+/** Load the dispute row by on-chain milestone id. */
+async function loadDisputeByOnchainId(tx: Tx, onchainId: number) {
+  const m = await loadMilestoneByOnchainId(tx, onchainId)
+  if (!m) return { milestone: null, dispute: null } as const
+  const [dispute] = await tx.select().from(disputes).where(eq(disputes.milestoneId, m.id)).limit(1)
+  return { milestone: m, dispute: dispute ?? null } as const
+}
+
+const numArr = (v: unknown): number[] => (Array.isArray(v) ? v.map(Number) : [])
+const strArr = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((x) => String(x).toLowerCase()).filter((x) => x !== '0x0000000000000000000000000000000000000000') : []
+
+async function applyArbitersSelected(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const { milestone, dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
+  if (!milestone || !dispute) return drift('ArbitersSelected', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  const round = numOrNull(evt.args.round) ?? 0
+  const arbiters = strArr(evt.args.arbiters).slice(0, numOrNull(evt.args.count) ?? 3)
+  await tx.update(disputes).set({
+    phase: 'commit',
+    round,
+    selectedArbiters: arbiters,
+    committedArbiters: [],
+    revealedArbiters: [],
+    commitDeadline: null, // filled by the deadline read; events carry no timestamp here
+    updatedAt: evt.blockTime,
+  }).where(eq(disputes.id, dispute.id))
+  return null
+}
+
+async function applyVoteCommitted(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const { dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
+  if (!dispute) return drift('VoteCommitted', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  const who = str(evt.args.arbiter).toLowerCase()
+  const list = new Set<string>([...strArr(dispute.committedArbiters), who])
+  await tx.update(disputes).set({ committedArbiters: [...list], updatedAt: evt.blockTime })
+    .where(eq(disputes.id, dispute.id))
+  return null
+}
+
+async function applyVoteRevealed(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const { dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
+  if (!dispute) return drift('VoteRevealed', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  const who = str(evt.args.arbiter).toLowerCase()
+  const list = new Set<string>([...strArr(dispute.revealedArbiters), who])
+  const tally = (dispute.tally as Record<string, number[]>) ?? {}
+  const roundKey = String(numOrNull(evt.args.round) ?? 0)
+  const counts = tally[roundKey] ?? [0, 0, 0]
+  counts[Number(evt.args.outcome) || 0] = (counts[Number(evt.args.outcome) || 0] ?? 0) + 1
+  tally[roundKey] = counts
+  await tx.update(disputes).set({
+    revealedArbiters: [...list], tally, phase: 'reveal', updatedAt: evt.blockTime,
+  }).where(eq(disputes.id, dispute.id))
+  return null
+}
+
+async function applyDisputeFinalized(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const { milestone, dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
+  if (!milestone || !dispute) return drift('DisputeFinalized', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  const outcome = outcomeFromUint8(Number(evt.args.outcome))
+  const quorumMet = Boolean(evt.args.quorumMet)
+  // The winners are the revealed arbiters whose vote equals the outcome — we
+  // can approximate majority membership from the tally only, so we record the
+  // round outcome here and let DisputeResolved stamp the representative.
+  await tx.update(disputes).set({
+    phase: 'resolved',
+    outcome,
+    finalized: quorumMet && outcome !== undefined,
+    finalizedAt: evt.blockTime,
+    updatedAt: evt.blockTime,
+  }).where(eq(disputes.id, dispute.id))
+  return {
+    type: 'dispute.finalized',
+    actorAddress: null,
+    projectId: milestone.projectId,
+    milestoneId: milestone.id,
+    payload: { outcome, quorumMet, txHash: evt.txHash },
+  }
+}
+
+async function applyNoQuorumFallback(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const { milestone, dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
+  if (!milestone || !dispute) return drift('NoQuorumFallback', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  await tx.update(disputes).set({
+    phase: 'resolved', finalized: false, updatedAt: evt.blockTime,
+  }).where(eq(disputes.id, dispute.id))
+  return {
+    type: 'dispute.no_quorum',
+    actorAddress: str(evt.args.opener).toLowerCase(),
+    projectId: milestone.projectId,
+    milestoneId: milestone.id,
+    payload: { refunded: str(evt.args.refunded), txHash: evt.txHash },
+  }
+}
+
+async function applyAppealOpened(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const { dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
+  if (!dispute) return drift('AppealOpened', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  await tx.update(disputes).set({
+    round: numOrNull(evt.args.newRound) ?? dispute.round + 1,
+    appealCount: dispute.appealCount + 1,
+    status: 'open',
+    finalized: false,
+    updatedAt: evt.blockTime,
+  }).where(eq(disputes.id, dispute.id))
+  return null
+}
+
+async function applyAppealResolved(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const { dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
+  if (!dispute) return drift('AppealResolved', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  await tx.update(disputes).set({ updatedAt: evt.blockTime }).where(eq(disputes.id, dispute.id))
+  return null
+}
+
+// ── Registry staking + score mirror ─────────────────────────────────────────
+
+async function applyScoreChanged(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  const newScore = numOrNull(evt.args.newScore) ?? 0
+  const reason = numOrNull(evt.args.reason) ?? 0
+  const locked = newScore < 50 // MIN_SCORE_TO_WITHDRAW default; refined by StakeLocked
+  await tx.update(arbiters).set({
+    trustScore: newScore,
+    locked,
+    resolutions: sql`${arbiters.resolutions} + 1`,
+    resolutionsWithinSla: sql`${arbiters.resolutionsWithinSla} + ${reason === 1 ? 1 : 0}`,
+    resolutionsLate: sql`${arbiters.resolutionsLate} + ${reason === 3 ? 1 : 0}`,
+    updatedAt: new Date(),
+  }).where(eq(arbiters.address, address))
+  return null
+}
+
+async function applyStakeDeposited(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  await tx.insert(arbiters).values({
+    address, registered: true, stakeWei: str(evt.args.totalStake), registeredAt: evt.blockTime,
+  }).onConflictDoUpdate({
+    target: arbiters.address,
+    set: { stakeWei: str(evt.args.totalStake), updatedAt: evt.blockTime },
+  })
+  return null
+}
+
+async function applyStakeWithdrawn(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  await tx.update(arbiters).set({
+    stakeWei: '0', registered: false, unstakeRequested: false, locked: false, updatedAt: evt.blockTime,
+  }).where(eq(arbiters.address, address))
+  return null
+}
+
+async function applyStakeLocked(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  await tx.update(arbiters).set({ locked: true, updatedAt: evt.blockTime }).where(eq(arbiters.address, address))
+  return null
+}
+
+async function applyStakeSlashed(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  await tx.update(arbiters).set({
+    stakeWei: '0', registered: false, locked: false, updatedAt: evt.blockTime,
+  }).where(eq(arbiters.address, address))
+  return null
 }
 
 async function applyArbiterRegistered(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {

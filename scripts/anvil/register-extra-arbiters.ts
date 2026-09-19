@@ -16,9 +16,10 @@ const RPC = process.env.CHAIN_RPC_URL ?? 'http://127.0.0.1:8545'
 const API = process.env.APP_URI?.replace(/\/$/, '') ?? 'http://localhost:3000'
 const here = dirname(fileURLToPath(import.meta.url))
 const deployment = JSON.parse(readFileSync(resolve(here, '.anvil-deployment.json'), 'utf8')) as {
-  escrow: `0x${string}`; arbiterRegistry: `0x${string}`
+  escrow: `0x${string}`; arbiterRegistry: `0x${string}`; timelock: `0x${string}`
 }
 const REGISTRY = deployment.arbiterRegistry
+const TIMELOCK = deployment.timelock
 
 const MARA = { key: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', addr: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266' }
 const EXTRA = [
@@ -39,9 +40,14 @@ const EXTRA = [
 ]
 
 const REGISTRY_FN = parseAbi([
-  'function register(address arbiter)',
+  'function register(address arbiter) payable',
   'function isRegistered(address) view returns (bool)',
 ])
+const TIMELOCK_FN = parseAbi([
+  'function schedule(address target, uint256 value, bytes data, bytes32 predecessor, bytes32 salt, uint256 delay)',
+  'function execute(address target, uint256 value, bytes data, bytes32 predecessor, bytes32 salt)',
+])
+const ZERO32 = `0x${'00'.repeat(32)}` as `0x${string}`
 
 const publicClient = createPublicClient({ chain: anvil, transport: http(RPC) })
 const wallet = (key: string) => createWalletClient({ account: privateKeyToAccount(key as `0x${string}`), chain: anvil, transport: http(RPC) })
@@ -90,12 +96,21 @@ for (const a of EXTRA) {
   const token = await siweLogin(a)
   await api('PATCH', '/users/me', { displayName: a.name, role: 'freelancer', bio: a.bio, skills: a.skills }, token)
 
-  log(`${a.name}: on-chain register`)
-  const hash = await wallet(MARA.key).writeContract({
-    address: REGISTRY, abi: REGISTRY_FN, functionName: 'register', args: [a.addr as `0x${string}`],
-    account: acct(MARA.key), chain: anvil,
+  log(`${a.name}: on-chain register (via timelock)`)
+  const { encodeFunctionData } = await import('viem')
+  const MIN_STAKE = 100000000000000000n // 0.1 ETH
+  const data = encodeFunctionData({ abi: REGISTRY_FN, functionName: 'register', args: [a.addr as `0x${string}`] })
+  const scheduleHash = await wallet(MARA.key).writeContract({
+    address: TIMELOCK, abi: TIMELOCK_FN, functionName: 'schedule',
+    args: [REGISTRY, MIN_STAKE, data, ZERO32, ZERO32, 5000n], value: MIN_STAKE, account: acct(MARA.key), chain: anvil,
   })
-  await publicClient.waitForTransactionReceipt({ hash })
-  log(`${a.name}: done (tx ${hash})`)
+  await publicClient.waitForTransactionReceipt({ hash: scheduleHash })
+  await new Promise((r) => setTimeout(r, 6500))
+  const execHash = await wallet(MARA.key).writeContract({
+    address: TIMELOCK, abi: TIMELOCK_FN, functionName: 'execute',
+    args: [REGISTRY, MIN_STAKE, data, ZERO32, ZERO32], value: MIN_STAKE, account: acct(MARA.key), chain: anvil,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: execHash })
+  log(`${a.name}: done (tx ${execHash})`)
 }
 log('complete')

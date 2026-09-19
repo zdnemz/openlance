@@ -28,10 +28,11 @@ const here = dirname(fileURLToPath(import.meta.url))
 const API = process.env.SEED_API ?? 'http://localhost:3000/api'
 const RPC = process.env.SEED_RPC ?? 'http://127.0.0.1:8545'
 const deployment = JSON.parse(readFileSync(resolve(here, '.anvil-deployment.json'), 'utf8')) as {
-  escrow: `0x${string}`; arbiterRegistry: `0x${string}`
+  escrow: `0x${string}`; arbiterRegistry: `0x${string}`; timelock: `0x${string}`
 }
 const ESCROW = deployment.escrow
 const REGISTRY = deployment.arbiterRegistry
+const TIMELOCK = deployment.timelock
 
 // ── Personas (anvil deterministic accounts — public test keys) ──────────────
 const P = {
@@ -48,12 +49,22 @@ const ESCROW_FN = parseAbi([
   'function fund(bytes32 ref, address freelancer) payable',
   'function submit(uint256 milestoneId)',
   'function approve(uint256 milestoneId)',
-  'function openDispute(uint256 milestoneId)',
-  'function nominateArbiter(uint256 milestoneId, address candidate)',
-  'function resolveDispute(uint256 milestoneId, uint8 outcome)',
+  'function openDispute(uint256 milestoneId) payable',
+  'function commitVote(uint256 milestoneId, uint8 round, bytes32 commitHash)',
+  'function revealVote(uint256 milestoneId, uint8 round, uint8 outcome, bytes32 salt)',
+  'function resolveDispute(uint256 milestoneId)',
+  'function finalizeDispute(uint256 milestoneId)',
+  'function disputeFee() view returns (uint256)',
+  'function appealWindow() view returns (uint64)',
+  'function getRound(uint256 milestoneId, uint8 round) view returns (address[3] arbiters, uint8 arbiterCount, uint8 commitCount, uint8 revealCount, uint8[3] tally, uint64 commitDeadline, uint64 revealDeadline, bool resolved, uint8 winningOutcome)',
   'function withdrawFees(address to)',
 ])
-const REGISTRY_FN = parseAbi(['function register(address arbiter)'])
+const REGISTRY_FN = parseAbi(['function register(address arbiter) payable'])
+const TIMELOCK_FN = parseAbi([
+  'function schedule(address target, uint256 value, bytes data, bytes32 predecessor, bytes32 salt, uint256 delay)',
+  'function execute(address target, uint256 value, bytes data, bytes32 predecessor, bytes32 salt)',
+])
+const ZERO32 = `0x${'00'.repeat(32)}` as `0x${string}`
 
 const publicClient = createPublicClient({ chain: anvil, transport: http(RPC) })
 const wallet = (key: string) => createWalletClient({ account: privateKeyToAccount(key as `0x${string}`), chain: anvil, transport: http(RPC) })
@@ -62,6 +73,107 @@ const tx = async (key: string, call: Parameters<ReturnType<typeof wallet>['write
   const hash = await wallet(key).writeContract({ ...call, account: acct(key), chain: anvil })
   await publicClient.waitForTransactionReceipt({ hash })
   return hash
+}
+
+/**
+ * Register an arbiter through the TimelockController — the same authorization
+ * path production uses (the registry owner is the timelock, never an EOA).
+ * The devnet timelock has a 5s delay, so we wait it out between schedule and
+ * execute.
+ */
+const MIN_STAKE = 100000000000000000n // 0.1 ETH — matches the registry's minStake
+const DISPUTE_FEE = 50000000000000000n // 0.05 ETH — matches the escrow's disputeFee
+const registerViaTimelock = async (arbiter: `0x${string}`) => {
+  const { encodeFunctionData } = await import('viem')
+  const data = encodeFunctionData({ abi: REGISTRY_FN, functionName: 'register', args: [arbiter] })
+  await tx(P.mara.key, {
+    address: TIMELOCK, abi: TIMELOCK_FN, functionName: 'schedule',
+    args: [REGISTRY, MIN_STAKE, data, ZERO32, ZERO32, 5000n],
+    value: MIN_STAKE,
+  })
+  await new Promise((r) => setTimeout(r, 6500))
+  await tx(P.mara.key, {
+    address: TIMELOCK, abi: TIMELOCK_FN, functionName: 'execute',
+    args: [REGISTRY, MIN_STAKE, data, ZERO32, ZERO32],
+    value: MIN_STAKE,
+  })
+}
+
+/**
+ * Drive a full multi-arbiter commit-reveal round for the personas the contract
+ * actually selected. Personas registered as arbiters are Ingrid, Nils, Priya —
+ * so with 3 on the roster, every selected arbiter is one we can sign for.
+ *
+ * `outcomes` maps a persona address to its vote; anything unspecified defaults
+ * to `defaultOutcome`. Wallets not selected simply don't vote.
+ */
+const runDisputeRound = async (
+  milestoneId: bigint,
+  round: number,
+  defaultOutcome: number,
+  outcomes: Record<string, number> = {},
+) => {
+  const { encodeFunctionData, keccak256, encodeAbiParameters, parseAbiParameters } = await import('viem')
+
+  const roundRaw = (await publicClient.readContract({
+    address: ESCROW, abi: ESCROW_FN, functionName: 'getRound', args: [milestoneId, round],
+  })) as readonly unknown[]
+  const arbiters = (roundRaw[0] as `0x${string}`[]).slice(0, Number(roundRaw[1]))
+
+  const personaByAddr = new Map(
+    [P.ingrid, P.nils, P.priya].map((p) => [p.addr.toLowerCase(), p]),
+  )
+
+  const salts = new Map<string, `0x${string}`>()
+  for (const [i, a] of arbiters.entries()) {
+    const persona = personaByAddr.get(a.toLowerCase())
+    if (!persona) continue
+    const outcome = outcomes[a.toLowerCase()] ?? defaultOutcome
+    const salt = keccak256(encodeAbiParameters(parseAbiParameters('uint256'), [BigInt(9000 + i + round * 10)]))
+    const commit = keccak256(
+      encodeAbiParameters(parseAbiParameters('uint8,bytes32,address,uint256,uint8'), [outcome, salt, a, milestoneId, round]),
+    )
+    await tx(persona.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'commitVote', args: [milestoneId, round, commit] })
+    salts.set(a.toLowerCase(), salt)
+  }
+
+  // Wait past the commit deadline (devnet windows are short), then reveal.
+  const r = (await publicClient.readContract({
+    address: ESCROW, abi: ESCROW_FN, functionName: 'getRound', args: [milestoneId, round],
+  })) as readonly unknown[]
+  const commitDeadline = Number(r[5] as bigint)
+  const nowSec = Math.floor(Date.now() / 1000)
+  if (commitDeadline + 1 > nowSec) await sleep((commitDeadline + 2 - nowSec) * 1000)
+
+  for (const [i, a] of arbiters.entries()) {
+    const persona = personaByAddr.get(a.toLowerCase())
+    if (!persona) continue
+    const outcome = outcomes[a.toLowerCase()] ?? defaultOutcome
+    await tx(persona.key, {
+      address: ESCROW, abi: ESCROW_FN, functionName: 'revealVote',
+      args: [milestoneId, round, outcome, salts.get(a.toLowerCase())!],
+    })
+    void i
+  }
+
+  // Past the reveal deadline -> tally, then finalize after the appeal window.
+  const r2 = (await publicClient.readContract({
+    address: ESCROW, abi: ESCROW_FN, functionName: 'getRound', args: [milestoneId, round],
+  })) as readonly unknown[]
+  const revealDeadline = Number(r2[6] as bigint)
+  const now2 = Math.floor(Date.now() / 1000)
+  if (revealDeadline + 1 > now2) await sleep((revealDeadline + 2 - now2) * 1000)
+
+  await tx(P.mara.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'resolveDispute', args: [milestoneId] })
+
+  // Finalize (payout) after the appeal window lapses.
+  const appealWindow = Number(
+    await publicClient.readContract({ address: ESCROW, abi: ESCROW_FN, functionName: 'appealWindow' }),
+  )
+  const now3 = Math.floor(Date.now() / 1000)
+  const finalAt = revealDeadline + appealWindow + 2
+  if (finalAt > now3) await sleep((finalAt - now3) * 1000)
+  await tx(P.mara.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'finalizeDispute', args: [milestoneId] })
 }
 
 // ── API helpers ──────────────────────────────────────────────────────────────
@@ -154,7 +266,7 @@ async function main() {
 
   log('registering arbiters on-chain (Ingrid, Nils, Priya)')
   for (const a of [P.ingrid, P.nils, P.priya]) {
-    await tx(P.mara.key, { address: REGISTRY, abi: REGISTRY_FN, functionName: 'register', args: [a.addr] })
+    await registerViaTimelock(a.addr as `0x${string}`)
   }
 
   // ── Jobs ─────────────────────────────────────────────────────────────────
@@ -320,7 +432,7 @@ async function main() {
     await api('POST', `/projects/${projB}/milestones/${m1.id}/disputes`, {
       reason: 'Scope disagreement. The feed layer works, but the spec said the reconnect replay must be seamless — under the chaos proxy there is a visible 800ms stall while the buffer replays. I read "graceful degradation" as no visible stall; Rhys reads it as no data loss. We could not close this in chat, so locking it with an arbiter per the contract. (Also: the metrics tap is excellent and I want to keep it — that part is not in dispute.)',
     }, t.mara)
-    await tx(P.mara.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'openDispute', args: [BigInt(view.milestones[0]!.onchainId!)] })
+    await tx(P.mara.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'openDispute', args: [BigInt(view.milestones[0]!.onchainId!)], value: DISPUTE_FEE })
     await mirrorWait('B m1 disputed', projB, t.mara, (p) => p.milestones[0]!.chainStatus === 'disputed')
 
     await api('POST', `/projects/${projB}/messages`, { body: 'Opened a dispute on m1 — nothing personal, the replay stall is a spec gap and I want an arbiter reading of "graceful". Everything else you shipped is above bar.' }, t.mara)
@@ -363,19 +475,23 @@ async function main() {
     await api('POST', `/projects/${projC}/milestones/${m2.id}/disputes`, {
       reason: 'Deliverable deviation: handover notes specified JSON simulation artifacts, received TOML. My CI ingests JSON. Dario says forge 1.8 emits TOML natively and converting is trivial — but the work to convert is billable time neither of us budgeted. Small money, honest disagreement: who eats the conversion cost?',
     }, t.junko)
-    await tx(P.junko.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'openDispute', args: [BigInt(view.milestones[1]!.onchainId!)] })
+    await tx(P.junko.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'openDispute', args: [BigInt(view.milestones[1]!.onchainId!)], value: DISPUTE_FEE })
     view = await mirrorWait('C m2 disputed', projC, t.junko, (p) => p.milestones[1]!.chainStatus === 'disputed')
 
     const onchain2 = view.milestones[1]!.onchainId!
     const disputes = await api('GET', '/disputes', undefined, t.junko)
     const disputeC = disputes.find((d: any) => d.milestoneId === m2.id)
+    // Off-chain arbiter proposal trail (kept for the UI record); the on-chain
+    // selection is now random from the staked roster, so this is narrative only.
     await api('POST', `/disputes/${disputeC.id}/arbiter-proposal`, { arbiterAddress: P.ingrid.addr }, t.junko)
     await api('POST', `/disputes/${disputeC.id}/arbiter-proposal`, { arbiterAddress: P.ingrid.addr }, t.dario)
-    await tx(P.junko.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'nominateArbiter', args: [BigInt(onchain2), P.ingrid.addr] })
-    await tx(P.dario.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'nominateArbiter', args: [BigInt(onchain2), P.ingrid.addr] })
 
-    log('project C: arbiter resolves — split')
-    await tx(P.ingrid.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'resolveDispute', args: [BigInt(onchain2), 2 /* split */] })
+    log('project C: arbiters run commit-reveal → split')
+    // Majority votes Split (2); any third arbiter votes Release (0) to exercise
+    // a minority penalty, so everyone is one of our personas.
+    await runDisputeRound(BigInt(onchain2), 0, 2 /* split */, {
+      [P.nils.addr.toLowerCase()]: 0, // deliberate minority vote
+    })
     const settled = await mirrorWait('C m2 resolved_split + completed', projC, t.junko, (p) => p.milestones[1]!.chainStatus === 'resolved_split' && p.status === 'completed')
 
     await api('POST', `/milestones/${m2.id}/reviews`, { rating: 4, body: 'Split was the fair read — the format deviation was mine to flag earlier, the conversion was his to eat. Arbiter called it in 3 hours.' }, t.junko)

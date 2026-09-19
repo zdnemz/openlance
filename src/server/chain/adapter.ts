@@ -165,6 +165,7 @@ interface MockState {
 }
 
 const BLOCK_KEY = 'mockchain:block'
+const ZERO_ADDR = '0x0000000000000000000000000000000000000000'
 
 export class MockChainAdapter implements ChainAdapter {
   mode = 'mock' as const
@@ -320,12 +321,31 @@ export class MockChainAdapter implements ChainAdapter {
     return this.emit('MilestoneCancelled', { milestoneId: onchainId, client: m.client, amount: m.amount }, s.block)
   }
 
-  async dispute(onchainId: number, by: string): Promise<RawChainLog> {
+  async dispute(onchainId: number, by: string): Promise<RawChainLog[]> {
     const s = await this.state()
     const m = this.milestone(s, onchainId)
     if (m.status !== 'funded' && m.status !== 'submitted') throw new Error(`mock: milestone ${onchainId} is ${m.status}, not disputable`)
     if (m.client !== by.toLowerCase() && m.freelancer !== by.toLowerCase()) throw new Error('mock: only a party may dispute')
-    return this.emit('DisputeOpened', { milestoneId: onchainId, by: by.toLowerCase(), lockedAmount: m.amount }, s.block)
+
+    const logs: RawChainLog[] = []
+    logs.push(await this.emit('DisputeOpened', { milestoneId: onchainId, by: by.toLowerCase(), lockedAmount: m.amount }, s.block))
+
+    // Model the multi-arbiter round: pick up to 3 registered, non-party arbiters
+    // deterministically (mock has no prevrandao) and emit ArbitersSelected so the
+    // dispute mirror gets a phase + selected list, matching real-mode shape.
+    const pool = Object.entries(s.arbiters)
+      .filter(([addr, a]) => a.registered && addr !== m.client && addr !== m.freelancer)
+      .map(([addr]) => addr)
+    const selected = pool.slice(0, 3)
+    const padded: [string, string, string] = [
+      selected[0] ?? ZERO_ADDR,
+      selected[1] ?? ZERO_ADDR,
+      selected[2] ?? ZERO_ADDR,
+    ]
+    logs.push(await this.emit('ArbitersSelected', {
+      milestoneId: onchainId, round: 0, arbiters: padded, count: selected.length,
+    }, s.block + logs.length))
+    return logs
   }
 
   async resolve(onchainId: number, arbiter: string, outcome: ResolutionOutcome, withinSla: boolean): Promise<RawChainLog[]> {
@@ -336,8 +356,14 @@ export class MockChainAdapter implements ChainAdapter {
     if (!s.arbiters[arb]?.registered) throw new Error('mock: arbiter not registered')
 
     const logs: RawChainLog[] = []
+    const outcomeIdx = ['release', 'refund', 'split'].indexOf(outcome)
+    // Reveal + tally mirror (dev-only approximation of the commit-reveal round).
+    logs.push(await this.emit('VoteRevealed', { milestoneId: onchainId, round: 0, arbiter: arb, outcome: outcomeIdx }, s.block))
+    logs.push(await this.emit('DisputeFinalized', {
+      milestoneId: onchainId, round: 0, outcome: outcomeIdx, revealCount: 2, quorumMet: true,
+    }, s.block + logs.length))
     // the contract emits a uint8 enum: 0=release 1=refund 2=split
-    logs.push(await this.emit('DisputeResolved', { milestoneId: onchainId, arbiter: arb, outcome: ['release', 'refund', 'split'].indexOf(outcome) }, s.block))
+    logs.push(await this.emit('DisputeResolved', { milestoneId: onchainId, arbiter: arb, outcome: outcomeIdx }, s.block + logs.length))
 
     if (outcome === 'release') {
       const fee = feeOf(m.amount, env.PLATFORM_FEE_BPS)
@@ -359,10 +385,11 @@ export class MockChainAdapter implements ChainAdapter {
       }, s.block + logs.length))
     }
 
-    // deterministic trust score: +1 within SLA, −2 late (PRD F12)
-    const delta = withinSla ? 1 : -2
+    // deterministic trust score for the mock: +5 majority, −10 minority (v2 deltas)
+    const delta = withinSla ? 5 : -10
     const newScore = Math.max(0, s.arbiters[arb]!.trustScore + delta)
     logs.push(await this.emit('TrustScoreUpdated', { arbiter: arb, delta, newScore, withinSla }, s.block + logs.length))
+    logs.push(await this.emit('ScoreChanged', { arbiter: arb, oldScore: s.arbiters[arb]!.trustScore, newScore, reason: withinSla ? 1 : 2 }, s.block + logs.length))
     return logs
   }
 

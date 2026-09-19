@@ -8,9 +8,15 @@ export const NOTIFICATION_TYPES = [
   'submission.received',
   'milestone.changes_requested',
   'dispute.opened',
+  'dispute.arbiters_selected', // random arbiter pool chosen on-chain
+  'dispute.vote_committed',
+  'dispute.vote_revealed',
+  'dispute.finalized', // majority tallied (payout may still be pending appeal window)
+  'dispute.no_quorum', // fewer than 2 reveals → refunded to opener
+  'dispute.tally_due', // reveal window closed, tally pending
+  'dispute.appealed',
   'dispute.arbiter_agreed',
   'dispute.arbiter_assigned',
-  'dispute.assignment_due', // 48h window expired, admin action required
   'dispute.resolved',
   'milestone.released',
   'milestone.refunded',

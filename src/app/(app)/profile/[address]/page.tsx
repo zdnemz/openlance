@@ -2,6 +2,7 @@
 
 /** /profile/:address — public identity: chain-derived stats, reviews, badge. */
 import { use, useState } from "react";
+import Link from "next/link";
 import { useUser, useUserReviews, useArbiters, useProjects, useInvalidate, patch, post } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import {
@@ -18,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { useRegisterArbiter } from "@/lib/register-arbiter";
 
 export default function ProfilePage({ params }: { params: Promise<{ address: string }> }) {
   const { address } = use(params);
@@ -151,7 +151,6 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: import("@/lib
   const [skills, setSkills] = useState(user.skills.join(", "));
   const [saving, setSaving] = useState(false);
   const invalidate = useInvalidate();
-  const registerArbiter = useRegisterArbiter();
 
   return (
     <div className="mt-5 space-y-4 border-t border-line pt-6">
@@ -196,9 +195,9 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: import("@/lib
         <Button variant="ghost" onClick={onDone} className="rounded-full border border-line px-5 text-dim">
           <X className="mr-2 h-4 w-4" /> Cancel
         </Button>
-        <button type="button" onClick={registerArbiter} className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">
-          admin: register this address as arbiter (on-chain)
-        </button>
+        <Link href="/arbiters" className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">
+          arbiter staking &amp; registry →
+        </Link>
       </div>
     </div>
   );

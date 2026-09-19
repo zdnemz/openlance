@@ -467,8 +467,8 @@ const steps = [
   },
   {
     title: "Approve — or open the arbiter path",
-    body: "approve() releases the escrowed value instantly, minus the 2.5% fee. Can't agree? Either side locks the milestone into dispute and both nominate an arbiter; the contract enforces the rest.",
+    body: "approve() releases the escrowed value instantly, minus the 2.5% fee. Can't agree? Either side locks the milestone into dispute and pays the fee; the contract draws up to 3 random, staked arbiters who vote commit-reveal to a 2-of-3 majority.",
     icon: Gavel,
-    chip: "approve · openDispute · nominateArbiter",
+    chip: "approve · openDispute · commitReveal",
   },
 ] as const;

@@ -94,10 +94,17 @@ async function loadOverview() {
       chainMode: adapter.mode,
       chainId: env.CHAIN_ID,
       feeBps: env.PLATFORM_FEE_BPS,
+      disputeFeeWei: env.DISPUTE_FEE_WEI,
+      minStakeWei: env.MIN_STAKE_WEI,
+      minScoreToWithdraw: env.MIN_SCORE_TO_WITHDRAW,
       dbDriver: env.databaseDriver,
       storageDriver: env.storageDriver,
       queueMode: env.queueMode,
-      contracts: { escrow: adapter.escrowAddress, arbiterRegistry: adapter.registryAddress },
+      contracts: {
+        escrow: adapter.escrowAddress,
+        arbiterRegistry: adapter.registryAddress,
+        timelock: env.TIMELOCK_ADDRESS ?? null,
+      },
     },
     counts: {
       users: userCount, jobs: jobCount, projects: projectCount, proposals: proposalCount,

@@ -9,7 +9,7 @@ Three deliverables, one repo:
 
 | Piece | Where | What it proves |
 |---|---|---|
-| **Contracts** | [`contracts/`](./contracts) | Solidity 0.8.28 + OZ 5.7: `Escrow` + `ArbiterRegistry` (ERC-5194). 90 tests incl. invariant fuzz + event-surface lock to the backend ABI; 97%+ branch coverage. |
+| **Contracts** | [`contracts/`](./contracts) | Solidity 0.8.28 + OZ 5.6 on **Hardhat 3**: `Escrow` + `ArbiterRegistry` (ERC-5194), both **UUPS-upgradeable** behind an OZ **TimelockController**. 39 tests incl. event-surface lock, upgrade-safety and reentrancy proofs; Slither clean. |
 | **Backend** | [`src/server`](./src/server) + [`src/app/api`](./src/app/api) | Next.js server runtime (App Router route handlers): SIWE auth, marketplace, dispute coordination, chain indexer/mirror, transactional-outbox webhooks. Supabase Postgres + Upstash Redis caching. |
 | **Frontend** | `src/` (this app) | Next.js 16 product UI against the live stack: wallet-first auth, milestone state machine, real on-chain actions, arbiter surface. |
 
@@ -39,9 +39,9 @@ browser ──────► Next.js :3000 ── /api route handlers ── Su
   mirror, and every wallet action waits through three honest phases —
   *signing → mining → indexer mirroring* — before declaring success.
 - **Boot self-healing**: the Next.js server babysits the chain stack through
-  `scripts/anvil/dev-real.sh`: anvil → deploy (viem, from `contracts/out`
-  artifacts) → write contract addresses to `.env.local` → migrate → demo seed
-  (idempotent). `POST /api/dev/stack?force=1` restarts it on demand.
+  `scripts/anvil/dev-real.sh`: anvil → build + deploy (Hardhat 3, UUPS proxies
+  behind a timelock) → write contract addresses to `.env.local` → migrate →
+  demo seed (idempotent). `POST /api/dev/stack?force=1` restarts it on demand.
 
 ## Running the backend
 

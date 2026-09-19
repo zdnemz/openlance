@@ -11,7 +11,7 @@
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { sendContractCall, waitForReceipt } from "@/lib/wallet";
-import { ESCROW_ABI, REGISTRY_ABI, DISPUTE_OUTCOME } from "@/lib/contracts";
+import { ESCROW_ABI, REGISTRY_ABI } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import { get } from "@/lib/api";
 import { toast } from "sonner";
@@ -146,42 +146,104 @@ export function approveMilestoneAction(run: ReturnType<typeof useChainAction>["r
     });
 }
 
-export function openDisputeAction(run: ReturnType<typeof useChainAction>["run"]) {
+export function cancelMilestoneAction(run: ReturnType<typeof useChainAction>["run"]) {
   return (onchainId: number, projectId: string, expect: (p: ProjectView) => boolean) =>
+    run({
+      label: "Cancel milestone",
+      contract: "escrow",
+      functionName: "cancel",
+      args: [BigInt(onchainId)],
+      projectId,
+      expect,
+      successMessage: "Cancelled — full refund issued",
+    });
+}
+
+/* ── Multi-arbiter dispute lifecycle ────────────────────────────────────── */
+
+/** Open a dispute: payable — the caller must send at least the dispute fee. */
+export function openDisputeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (onchainId: number, feeWei: bigint, projectId: string, expect: (p: ProjectView) => boolean) =>
     run({
       label: "Open dispute",
       contract: "escrow",
       functionName: "openDispute",
       args: [BigInt(onchainId)],
+      value: feeWei,
       projectId,
       expect,
-      successMessage: "Dispute locked on-chain — arbiter selection open",
+      successMessage: "Dispute opened — arbiters being selected on-chain",
     });
 }
 
-export function nominateArbiterAction(run: ReturnType<typeof useChainAction>["run"]) {
-  return (onchainId: number, candidate: string, projectId: string, expect?: (p: ProjectView) => boolean) =>
+/** Commit a hidden vote: keccak256 of (outcome, salt, arbiter, milestoneId, round). */
+export function commitVoteAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (onchainId: number, round: number, commitHash: `0x${string}`, projectId?: string, expect?: (p: ProjectView) => boolean) =>
     run({
-      label: "Nominate arbiter",
+      label: "Commit vote",
       contract: "escrow",
-      functionName: "nominateArbiter",
-      args: [BigInt(onchainId), candidate],
+      functionName: "commitVote",
+      args: [BigInt(onchainId), round, commitHash],
       projectId,
       expect,
-      successMessage: "Nomination recorded on-chain",
+      successMessage: "Vote committed — your choice is hidden until the reveal phase",
     });
 }
 
-export function resolveDisputeAction(run: ReturnType<typeof useChainAction>["run"]) {
-  return (onchainId: number, outcome: keyof typeof DISPUTE_OUTCOME, projectId: string, expect: (p: ProjectView) => boolean) =>
+/** Reveal a committed vote. */
+export function revealVoteAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (onchainId: number, round: number, outcome: number, salt: `0x${string}`, projectId?: string, expect?: (p: ProjectView) => boolean) =>
     run({
-      label: "Resolve dispute",
+      label: "Reveal vote",
       contract: "escrow",
-      functionName: "resolveDispute",
-      args: [BigInt(onchainId), DISPUTE_OUTCOME[outcome]],
+      functionName: "revealVote",
+      args: [BigInt(onchainId), round, outcome, salt],
       projectId,
       expect,
-      successMessage: `Dispute resolved — ${outcome} executed on-chain`,
+      successMessage: "Vote revealed — tally will run at the deadline",
+    });
+}
+
+/** Tally the round (records the majority; payout follows finalize). */
+export function tallyDisputeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (onchainId: number, round: number, projectId?: string, expect?: (p: ProjectView) => boolean) =>
+    run({
+      label: "Tally dispute",
+      contract: "escrow",
+      functionName: round === 0 ? "resolveDispute" : "resolveAppeal",
+      args: [BigInt(onchainId)],
+      projectId,
+      expect,
+      successMessage: "Round tallied — majority recorded",
+    });
+}
+
+/** Finalize the decision after the appeal window (executes the payout). */
+export function finalizeDisputeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (onchainId: number, projectId: string, expect: (p: ProjectView) => boolean) =>
+    run({
+      label: "Finalize dispute",
+      contract: "escrow",
+      functionName: "finalizeDispute",
+      args: [BigInt(onchainId)],
+      projectId,
+      expect,
+      successMessage: "Dispute finalized — funds settled on-chain",
+    });
+}
+
+/** Appeal a tallied decision (payable: another dispute fee). */
+export function appealDisputeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (onchainId: number, feeWei: bigint, projectId: string, expect?: (p: ProjectView) => boolean) =>
+    run({
+      label: "Appeal dispute",
+      contract: "escrow",
+      functionName: "appeal",
+      args: [BigInt(onchainId)],
+      value: feeWei,
+      projectId,
+      expect,
+      successMessage: "Appeal opened — a fresh arbiter round begins",
     });
 }
 
@@ -196,13 +258,79 @@ export function withdrawFeesAction(run: ReturnType<typeof useChainAction>["run"]
     });
 }
 
+/* ── Arbiter staking ────────────────────────────────────────────────────── */
+
+/** Self-register as an arbiter by depositing at least the minimum stake. */
+export function registerArbiterWithStakeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (stakeWei: bigint) =>
+    run({
+      label: "Register as arbiter",
+      contract: "registry",
+      functionName: "registerArbiter",
+      args: [],
+      value: stakeWei,
+      successMessage: "Registered — SBT badge minted, you're in the selection pool",
+    });
+}
+
+/** Top up collateral. */
+export function addStakeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (amountWei: bigint) =>
+    run({
+      label: "Add stake",
+      contract: "registry",
+      functionName: "addStake",
+      args: [],
+      value: amountWei,
+      successMessage: "Stake topped up",
+    });
+}
+
+/** Request to leave; benched from selection immediately. */
+export function requestUnstakeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return () =>
+    run({
+      label: "Request unstake",
+      contract: "registry",
+      functionName: "requestUnstake",
+      args: [],
+      successMessage: "Unstake requested — you're out of the selection pool",
+    });
+}
+
+/** Cancel a pending unstake and rejoin the pool. */
+export function cancelUnstakeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return () =>
+    run({
+      label: "Cancel unstake",
+      contract: "registry",
+      functionName: "cancelUnstake",
+      args: [],
+      successMessage: "Unstake cancelled — back in the selection pool",
+    });
+}
+
+/** Withdraw collateral (only when idle and score healthy). */
+export function withdrawStakeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return () =>
+    run({
+      label: "Withdraw stake",
+      contract: "registry",
+      functionName: "withdrawStake",
+      args: [],
+      successMessage: "Stake withdrawn",
+    });
+}
+
+/** Admin-vetted registration of another arbiter (owner = timelock in prod). */
 export function registerArbiterAction(run: ReturnType<typeof useChainAction>["run"]) {
-  return (arbiter: string) =>
+  return (arbiter: string, stakeWei: bigint) =>
     run({
       label: "Register arbiter",
       contract: "registry",
       functionName: "register",
       args: [arbiter],
-      successMessage: "Arbiter registered — SBT badge will mint on first resolution",
+      value: stakeWei,
+      successMessage: "Arbiter registered with stake",
     });
 }

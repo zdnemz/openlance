@@ -51,11 +51,15 @@ rpc_ok || { log "FATAL: anvil did not come up"; exit 1; }
 log "anvil ready"
 
 # ── 2. deploy contracts (fresh every boot — anvil state resets) ─────────────
+log "building contracts (hardhat)"
+(cd "$ROOT/contracts" && npx hardhat build) > "$HERE/.state/build.log" 2>&1 || { log "FATAL: contract build failed (see $HERE/.state/build.log)"; exit 1; }
+
 log "deploying contracts"
 DEPLOY_OUT="$(bun "$HERE/deploy-anvil.ts" 2>/dev/null | tail -1)" || { log "FATAL: deploy failed"; exit 1; }
 log "deployed: $DEPLOY_OUT"
 ESCROW_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"escrow":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
 REGISTRY_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"arbiterRegistry":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
+TIMELOCK_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"timelock":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
 [ -n "$ESCROW_ADDR" ] && [ -n "$REGISTRY_ADDR" ] || { log "FATAL: could not parse deployment"; exit 1; }
 
 # ── 3. write the resolved chain config into .env.local (Next reads it) ──────
@@ -63,7 +67,7 @@ REGISTRY_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"arbiterRegistry":"\(0x[0-9a-f
 # chain-specific keys.
 ENV_FILE="$ROOT/.env.local"
 touch "$ENV_FILE"
-strip_keys() { grep -vE "^(CHAIN_MODE|CHAIN_ID|CHAIN_RPC_URL|ESCROW_ADDRESS|ARBITER_REGISTRY_ADDRESS|INDEXER_POLL_MS|INDEXER_CONFIRMATIONS|PLATFORM_FEE_BPS|ADMIN_WALLETS)=" "$ENV_FILE" 2>/dev/null || true; }
+strip_keys() { grep -vE "^(CHAIN_MODE|CHAIN_ID|CHAIN_RPC_URL|ESCROW_ADDRESS|ARBITER_REGISTRY_ADDRESS|TIMELOCK_ADDRESS|INDEXER_POLL_MS|INDEXER_CONFIRMATIONS|PLATFORM_FEE_BPS|ADMIN_WALLETS)=" "$ENV_FILE" 2>/dev/null || true; }
 strip_keys > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
 cat >> "$ENV_FILE" <<EOF
 CHAIN_MODE=real
@@ -71,6 +75,7 @@ CHAIN_ID=31337
 CHAIN_RPC_URL=http://127.0.0.1:8545
 ESCROW_ADDRESS=$ESCROW_ADDR
 ARBITER_REGISTRY_ADDRESS=$REGISTRY_ADDR
+TIMELOCK_ADDRESS=$TIMELOCK_ADDR
 INDEXER_POLL_MS=1500
 INDEXER_CONFIRMATIONS=1
 PLATFORM_FEE_BPS=250
