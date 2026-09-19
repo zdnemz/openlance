@@ -13,6 +13,7 @@ import { logger } from '../lib/logger'
 import * as schema from './schema'
 
 export type Db = PostgresJsDatabase<typeof schema>
+export type { schema }
 
 const globalForDb = globalThis as unknown as {
   __escrowlance_db?: Db
