@@ -6,7 +6,7 @@ import { useWallet } from "@/lib/wallet";
 import { get, post, useInvalidate, useOverview, useLedger } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { useChainAction, withdrawFeesAction } from "@/lib/chain-actions";
-import { SectionLabel, EthAmount, HashText, press, Skeleton, StatusBadge } from "@/components/design";
+import { ListHead, EthAmount, HashText, press, Skeleton, StatusBadge } from "@/components/design";
 import { formatEth, timeAgo } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -37,8 +37,7 @@ export default function AdminPage() {
     return (
       <div className="space-y-10">
         <div>
-          <SectionLabel>admin</SectionLabel>
-          <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">Platform controls.</h1>
+          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Platform controls.</h1>
           <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
             Trust levers, intentionally admin-gated: mirror-vs-chain reconciliation with a live solvency check, fee
             exit, and the indexer checkpoint.
@@ -100,8 +99,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-10">
       <div>
-        <SectionLabel>admin</SectionLabel>
-        <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">Platform controls.</h1>
+        <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Platform controls.</h1>
         <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
           Trust levers, intentionally admin-gated: mirror-vs-chain reconciliation with a live solvency check, fee
           exit, and the indexer checkpoint.
@@ -112,7 +110,7 @@ export default function AdminPage() {
       <div className="grid gap-4 md:grid-cols-5">
         {/* deployment manifest — hairline definition rows, copyable addresses */}
         <div className="glass rounded-3xl p-6 md:col-span-3">
-          <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">deployment manifest</div>
+          <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">deployment manifest</div>
           <dl className="mt-4 divide-y divide-white/[0.06]">
             {[
               ["chain", `anvil · ${overview?.config.chainId ?? "…"}`],
@@ -136,9 +134,9 @@ export default function AdminPage() {
         </div>
 
         <div className="glass flex flex-col rounded-3xl p-6 md:col-span-2">
-          <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">fees accrued (mirror)</div>
+          <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">fees accrued (mirror)</div>
           <EthAmount wei={accruedWei} className="mt-3 block text-3xl font-medium tracking-tight text-state-split" />
-          <p className="mt-2 text-[10.5px] leading-relaxed text-faint">
+          <p className="mt-2 max-w-[56ch] text-[12px] leading-relaxed text-faint">
             The contract is the authority; this figure re-derives from ledger events.
           </p>
           <Button
@@ -154,7 +152,7 @@ export default function AdminPage() {
         </div>
 
         <div className="glass rounded-3xl p-6 md:col-span-5">
-          <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">solvency check</div>
+          <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">solvency check</div>
           {runs?.[0]?.report?.solvency ? (
             <div className="mt-4 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div className={`flex items-center gap-2 text-lg font-medium ${runs[0].report.solvency.ok ? "text-state-released" : "text-state-disputed"}`}>
@@ -193,7 +191,7 @@ export default function AdminPage() {
       </div>
 
       <section>
-        <SectionLabel>reconciliation runs</SectionLabel>
+        <ListHead>Reconciliation runs</ListHead>
         <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
           {(runs ?? []).map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-x-6 gap-y-1.5 bg-white/[0.012] px-6 py-4">

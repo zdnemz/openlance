@@ -5,7 +5,7 @@ import { use, useState } from "react";
 import { useUser, useUserReviews, useArbiters, useProjects, useInvalidate, patch, post } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import {
-  AddressAvatar, Chip, EthAmount, SectionLabel, Skeleton, EmptyState, StatusBadge, press, Copyable,
+  AddressAvatar, Chip, EthAmount, ListHead, Skeleton, EmptyState, StatusBadge, press, Copyable,
 } from "@/components/design";
 import { shortAddress, timeAgo, dateLabel } from "@/lib/format";
 import { personaForAddress } from "@/lib/wallet";
@@ -55,7 +55,7 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="text-2xl font-semibold tracking-tight">{user.displayName ?? shortAddress(address)}</h1>
-                {persona && <span className="num rounded-full bg-rose-soft px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-rose-bright">devnet persona</span>}
+                {persona && <span className="num rounded-full bg-rose-soft px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-rose-bright">devnet persona</span>}
                 {arbiter?.registered && (
                   <span className="flex items-center gap-1.5 rounded-full bg-state-split/10 px-2.5 py-0.5 text-[10.5px] text-state-split">
                     <SealCheck weight="fill" className="h-3.5 w-3.5" /> arbiter · trust {arbiter.trustScore}
@@ -78,7 +78,7 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
           )}
         </div>
 
-        {user.bio && !editing && <p className="mt-5 max-w-[70ch] text-[14px] leading-relaxed text-dim">{user.bio}</p>}
+        {user.bio && !editing && <p className="mt-5 max-w-[58ch] text-[14px] leading-relaxed text-dim">{user.bio}</p>}
         {user.links && Object.keys(user.links).length > 0 && !editing && (
           <div className="num mt-4 flex flex-wrap gap-5 text-[12px]">
             {Object.entries(user.links).map(([k, v]) => (
@@ -104,7 +104,7 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
       {/* reviews */}
       <section>
         <div className="flex items-baseline justify-between">
-          <SectionLabel>reviews received</SectionLabel>
+          <ListHead>Reviews received</ListHead>
           {avgRating !== null && (
             <span className="num flex items-center gap-1.5 text-[12px] text-dim">
               <Star weight="fill" className="h-3.5 w-3.5 text-amber-300" />
@@ -126,7 +126,7 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
                   </div>
                   <span className="num text-[10.5px] text-faint">{timeAgo(r.createdAt)} · tx {r.txHash?.slice(0, 8)}…</span>
                 </div>
-                {r.body && <p className="mt-2.5 max-w-[80ch] text-[13.5px] leading-relaxed text-dim">{r.body}</p>}
+                {r.body && <p className="mt-2.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{r.body}</p>}
               </div>
             ))}
           </div>
@@ -139,7 +139,7 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
 function Stat({ label, value, tone = "text-foreground" }: { label: string; value: React.ReactNode; tone?: string }) {
   return (
     <div>
-      <div className="num text-[10px] uppercase tracking-[0.14em] text-faint">{label}</div>
+      <div className="num text-[11px] uppercase tracking-[0.14em] text-faint">{label}</div>
       <div className={`mt-1.5 text-xl font-medium tracking-tight ${tone}`}>{value}</div>
     </div>
   );

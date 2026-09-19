@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session";
 import { post } from "@/lib/queries";
-import { SectionLabel, press } from "@/components/design";
+import { press } from "@/components/design";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -95,11 +95,10 @@ export default function NewJobPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <SectionLabel>new job</SectionLabel>
-      <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">Break the work into escrowable chunks.</h1>
+      <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Break the work into escrowable chunks.</h1>
       <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
         The milestone template is the contract's blueprint. Each milestone gets funded, delivered, submitted, and
-        released on its own — the sum must fit the budget range you declare.
+        released on its own; the sum must fit the budget range you declare.
       </p>
 
       <div className="glass mt-10 space-y-6 rounded-3xl p-7 md:p-9">
@@ -120,7 +119,7 @@ export default function NewJobPage() {
             placeholder="Context, scope, acceptance criteria, what the reviewer checks at each milestone. Markdown-ish paragraphs work well."
             className="resize-none border-line bg-white/[0.03] text-sm"
           />
-          <p className="text-[11px] text-faint">Minimum 20 characters. This is what proposals will be written against.</p>
+          <p className="text-[12px] text-faint">Minimum 20 characters. This is what proposals will be written against.</p>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-3">
@@ -150,7 +149,7 @@ export default function NewJobPage() {
             placeholder="solidity, foundry, fuzzing"
             className="h-11 border-line bg-white/[0.03] text-sm"
           />
-          <p className="text-[11px] text-faint">Comma-separated, up to 15.</p>
+          <p className="text-[12px] text-faint">Comma-separated, up to 15.</p>
         </div>
 
         {/* milestone builder */}

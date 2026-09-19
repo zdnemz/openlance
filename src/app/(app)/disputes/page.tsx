@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useDisputes, useProjects, useArbiters, useInvalidate, post } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { useChainAction } from "@/lib/chain-actions";
-import { SectionLabel, Skeleton, EmptyState, StatusBadge, press, AddressText, HashText } from "@/components/design";
+import { ListHead, Skeleton, EmptyState, StatusBadge, press, AddressText, HashText } from "@/components/design";
 import { timeAgo, timeUntil, shortAddress } from "@/lib/format";
 import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
@@ -32,16 +32,15 @@ export default function DisputesPage() {
   return (
     <div className="space-y-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-[62ch]">
-          <SectionLabel>disputes</SectionLabel>
-          <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">The arbiter path.</h1>
+        <div className="max-w-[56ch]">
+          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">The arbiter path.</h1>
           <p className="mt-3 text-sm leading-relaxed text-dim">
             Disagreements lock the milestone on-chain and hand coordination to a nominated arbiter. Mutual nomination
             assigns instantly; the 48h fallback lets the platform admin assign one.
           </p>
         </div>
         {(open.length > 0 || resolved.length > 0) && (
-          <div className="num pb-1.5 text-right text-[11px] leading-relaxed text-faint">
+          <div className="num pb-1.5 text-right text-[12px] leading-relaxed text-faint">
             {open.length} open · {resolved.length} resolved
             <br />
             SLA clock runs on-chain
@@ -63,7 +62,7 @@ export default function DisputesPage() {
 
       {resolved.length > 0 && (
         <section>
-          <SectionLabel>resolved</SectionLabel>
+          <ListHead>Resolved</ListHead>
           <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
             {resolved.map((d) => (
               <div key={d.id} className="flex flex-wrap items-center gap-x-5 gap-y-1.5 bg-white/[0.012] px-6 py-4">
@@ -71,7 +70,7 @@ export default function DisputesPage() {
                 <Link href={`/projects/${d.projectId}`} className="num text-[12.5px] text-dim hover:text-foreground">
                   project {d.projectId.slice(0, 8)}
                 </Link>
-                <span className="num ml-auto text-[11px] text-faint">closed {timeAgo(d.createdAt)}</span>
+                <span className="num ml-auto text-[12px] text-faint">closed {timeAgo(d.createdAt)}</span>
               </div>
             ))}
           </div>
@@ -100,21 +99,21 @@ function DisputeRow({ dispute }: { dispute: import("@/lib/types").DisputeView })
         <Link href={`/projects/${dispute.projectId}`} className="text-[14px] font-medium hover:text-rose-bright">
           {project ? "Open project room" : `project ${dispute.projectId.slice(0, 8)}`}
         </Link>
-        <span className="num ml-auto text-[11px] text-faint">
+        <span className="num ml-auto text-[12px] text-faint">
           {dispute.status === "open" && !windowElapsed ? `nomination window · ${timeUntil(dispute.agreementDeadline)} left` : dispute.status}
         </span>
       </div>
-      <p className="mt-3.5 max-w-[80ch] text-[13.5px] leading-relaxed text-dim">{dispute.reason}</p>
+      <p className="mt-3.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{dispute.reason}</p>
 
       <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-line pt-4">
-        <span className="num text-[11.5px] text-faint">
+        <span className="num text-[12px] text-faint">
           client → <span className="text-dim">{dispute.clientProposedArbiter ? shortAddress(dispute.clientProposedArbiter, 4) : "no proposal"}</span>
         </span>
-        <span className="num text-[11.5px] text-faint">
+        <span className="num text-[12px] text-faint">
           freelancer → <span className="text-dim">{dispute.freelancerProposedArbiter ? shortAddress(dispute.freelancerProposedArbiter, 4) : "no proposal"}</span>
         </span>
         {assigned && (
-          <span className="num flex items-center gap-1.5 text-[11.5px] text-state-split">
+          <span className="num flex items-center gap-1.5 text-[12px] text-state-split">
             <Scales className="h-3.5 w-3.5" /> arbiter {shortAddress(assigned, 4)} · SLA {timeUntil(dispute.agreementDeadline)}
           </span>
         )}
@@ -145,7 +144,7 @@ function DisputeRow({ dispute }: { dispute: import("@/lib/types").DisputeView })
                     toast.error("Assignment failed", { description: err instanceof Error ? err.message : "Unknown error" });
                   }
                 }}
-                className={`num rounded-full border border-line px-3.5 py-1.5 text-[11.5px] text-dim hover:border-rose-accent/40 hover:text-foreground ${press}`}
+                className={`num rounded-full border border-line px-3.5 py-1.5 text-[12px] text-dim hover:border-rose-accent/40 hover:text-foreground ${press}`}
               >
                 {a.profile?.displayName ?? shortAddress(a.address)} · trust {a.trustScore}
               </button>

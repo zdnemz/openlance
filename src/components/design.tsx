@@ -59,7 +59,7 @@ export function EthAmount({ wei, className, suffix = true }: { wei: string | big
   return (
     <span className={cn("num", className)}>
       {formatEth(wei)}
-      {suffix && <span className="ml-1 text-[0.72em] text-faint">ETH</span>}
+      {suffix && <span className="ml-1 text-[max(0.72em,11px)] text-faint">ETH</span>}
     </span>
   );
 }
@@ -138,8 +138,8 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("skeleton-shimmer rounded-lg", className)} />;
 }
 
-export function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("num text-[11px] uppercase tracking-[0.18em] text-faint", className)}>{children}</div>;
+export function ListHead({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <h2 className={cn("text-[13px] font-semibold tracking-normal text-foreground/90", className)}>{children}</h2>;
 }
 
 export function EmptyState({
@@ -157,7 +157,7 @@ export function EmptyState({
 }) {
   return (
     <div className={cn("flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line px-8 py-14 text-center", className)}>
-      {icon && <div className="grid h-11 w-11 place-items-center rounded-full border border-line bg-white/[0.03] text-dim">{icon}</div>}
+      {icon && <div className="text-faint [&_svg]:h-7 [&_svg]:w-7">{icon}</div>}
       <div className="text-[15px] font-medium">{title}</div>
       {body && <p className="max-w-[46ch] text-sm leading-relaxed text-faint">{body}</p>}
       {action && <div className="mt-1">{action}</div>}

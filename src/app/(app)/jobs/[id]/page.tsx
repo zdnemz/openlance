@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useJob, useProposals, useInvalidate, post } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import {
-  AddressAvatar, Chip, EthAmount, Skeleton, EmptyState, press, SectionLabel, StatusBadge, AddressText,
+  AddressAvatar, Chip, EthAmount, Skeleton, EmptyState, press, ListHead, StatusBadge, AddressText,
 } from "@/components/design";
 import { formatEth, timeAgo } from "@/lib/format";
 import { toast } from "sonner";
@@ -65,11 +65,11 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       {/* header */}
       <div>
         <div className="flex items-center gap-3">
-          <span className="num rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-wider text-dim">{job.category}</span>
+          <span className="num rounded-md bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">{job.category}</span>
           <StatusBadge status={job.status} pulse={job.status === "open"} />
           <span className="num text-[11px] text-faint">posted {timeAgo(job.createdAt)}</span>
         </div>
-        <h1 className="mt-4 max-w-[34ch] text-3xl font-semibold leading-tight tracking-tighter md:text-4xl">{job.title}</h1>
+        <h1 className="display mt-4 max-w-[34ch] text-[30px] leading-[1.08] md:text-[36px]">{job.title}</h1>
         <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
           {job.poster && (
             <Link href={`/profile/${job.poster.walletAddress}`} className="flex items-center gap-2.5 text-sm text-dim hover:text-foreground">
@@ -90,8 +90,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         {/* left: description + template */}
         <div className="min-w-0 space-y-10">
           <section>
-            <SectionLabel>the brief</SectionLabel>
-            <div className="mt-4 space-y-4 text-[14.5px] leading-relaxed text-dim">
+            <ListHead>The brief</ListHead>
+            <div className="mt-4 max-w-[60ch] space-y-4 text-[14.5px] leading-relaxed text-dim">
               {job.description.split("\n\n").map((para, i) => (
                 <p key={i} className="whitespace-pre-wrap">{para}</p>
               ))}
@@ -104,8 +104,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </section>
 
           <section>
-            <SectionLabel>milestone template</SectionLabel>
-            <p className="mt-2.5 text-[13px] text-faint">
+            <ListHead>Milestone template</ListHead>
+            <p className="mt-2.5 max-w-[58ch] text-[13px] text-faint">
               The poster's proposed breakdown — your bid can reshape it, but every milestone must be funded before its
               work starts.
             </p>
@@ -115,7 +115,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   <span className="num mt-0.5 text-[11px] text-faint">{String(m.position).padStart(2, "0")}</span>
                   <div className="min-w-0 flex-1">
                     <div className="text-[14.5px] font-medium">{m.title}</div>
-                    <p className="mt-1.5 text-[13px] leading-relaxed text-faint">{m.description}</p>
+                    <p className="mt-1.5 max-w-[62ch] text-[13px] leading-relaxed text-faint">{m.description}</p>
                   </div>
                   <EthAmount wei={m.amountWei} className="mt-0.5 shrink-0 text-sm text-foreground" />
                 </li>
@@ -132,7 +132,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           {isPoster ? (
             <section>
-              <SectionLabel>proposals ({proposals?.length ?? 0})</SectionLabel>
+              <ListHead>Proposals · {proposals?.length ?? 0}</ListHead>
               {!proposals?.length ? (
                 <EmptyState className="mt-4" title="No proposals yet" body="Freelancers see this job the moment it's open. The seeded personas are active on the devnet." />
               ) : (
@@ -179,7 +179,7 @@ function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/li
         </div>
         <StatusBadge status={proposal.status} pulse={false} />
       </div>
-      <p className="mt-4 text-[13.5px] leading-relaxed text-dim">{proposal.coverNote}</p>
+      <p className="mt-4 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{proposal.coverNote}</p>
       <div className="mt-4 space-y-1.5">
         {proposal.milestones.map((m) => (
           <div key={m.position} className="flex items-center justify-between rounded-xl border border-line bg-white/[0.02] px-3.5 py-2 text-[12.5px]">
@@ -249,13 +249,13 @@ function ProposeForm({ jobId }: { jobId: string }) {
   if (mine && !open) {
     return (
       <section>
-        <SectionLabel>your proposal</SectionLabel>
+        <ListHead>Your proposal</ListHead>
         <div className="glass mt-4 rounded-3xl p-6">
           <div className="flex items-center justify-between">
             <EthAmount wei={mine.bidTotalWei} className="text-lg font-medium text-rose-bright" />
             <StatusBadge status={mine.status} pulse={false} />
           </div>
-          <p className="mt-3 text-[13.5px] leading-relaxed text-dim">{mine.coverNote}</p>
+          <p className="mt-3 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{mine.coverNote}</p>
         </div>
       </section>
     );
@@ -265,7 +265,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
 
   return (
     <section>
-      <SectionLabel>propose</SectionLabel>
+      <ListHead>Propose</ListHead>
       <div className="glass mt-4 space-y-5 rounded-3xl p-6">
         <div className="space-y-2">
           <label className="text-[13px] font-medium">Cover note</label>

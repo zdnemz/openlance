@@ -115,7 +115,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
                 </span>
                 {persona && <SealCheck weight="fill" className="h-3 w-3 shrink-0 text-rose-bright" />}
               </span>
-              <span className="num block text-[10px] leading-tight text-faint">
+              <span className="num block text-[11px] leading-tight text-faint">
                 {persona ? persona.role : shortAddress(address, 4)}
               </span>
             </span>

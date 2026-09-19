@@ -6,7 +6,7 @@
  * a table of record, not a wall of identical boxes.
  */
 import { useArbiters } from "@/lib/queries";
-import { AddressAvatar, SectionLabel, Skeleton, EmptyState, press } from "@/components/design";
+import { AddressAvatar, Skeleton, EmptyState, press } from "@/components/design";
 import { shortAddress, dateLabel } from "@/lib/format";
 import Link from "next/link";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
@@ -22,16 +22,15 @@ export default function ArbitersPage() {
     <div className="space-y-9">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div className="max-w-[60ch]">
-          <SectionLabel>trust registry</SectionLabel>
-          <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">Arbiters stake their name.</h1>
+          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Arbiters stake their name.</h1>
           <p className="mt-3 text-sm leading-relaxed text-dim">
             Arbiters hold a soulbound badge (ERC-5194) whose trust score moves with their record: +1 per resolution
-            inside the 72h SLA, −2 when the clock expires — and the slash is permissionless on-chain. Scores can&apos;t be
+            inside the 72h SLA, −2 when the clock expires; the slash is permissionless on-chain. Scores can&apos;t be
             bought, transferred, or reset.
           </p>
         </div>
         {registered.length > 0 && (
-          <div className="num pb-1.5 text-right text-[11px] leading-relaxed text-faint">
+          <div className="num pb-1.5 text-right text-[12px] leading-relaxed text-faint">
             {registered.length} registered
             <br />
             ranked by on-chain trust
@@ -78,7 +77,7 @@ export default function ArbitersPage() {
                       </span>
                       <SealCheck weight="fill" className="h-4 w-4 shrink-0 text-rose-bright" />
                     </span>
-                    <span className="num mt-0.5 block text-[11px] text-faint">
+                    <span className="num mt-0.5 block text-[12px] text-faint">
                       registered {dateLabel(a.registeredAt)} · badge {a.sbtTokenId ? `#${BigInt(a.sbtTokenId)}` : "pending"} · soulbound
                     </span>
                   </span>
@@ -87,17 +86,17 @@ export default function ArbitersPage() {
                 <span className="flex items-center gap-0 divide-x divide-white/[0.07] md:gap-6">
                   <span className="pr-5 text-left md:pr-6">
                     <span className="num block text-lg font-medium leading-none">{a.resolutions}</span>
-                    <span className="mt-1 block text-[9.5px] uppercase tracking-[0.14em] text-faint">resolved</span>
+                    <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">resolved</span>
                   </span>
                   <span className="px-5 text-left md:px-6">
                     <span className="num block text-lg font-medium leading-none text-state-released">{a.resolutionsWithinSla}</span>
-                    <span className="mt-1 block text-[9.5px] uppercase tracking-[0.14em] text-faint">within SLA</span>
+                    <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">within SLA</span>
                   </span>
                   <span className="px-5 text-left md:px-6">
                     <span className={`num block text-lg font-medium leading-none ${a.resolutionsLate > 0 ? "text-state-disputed" : "text-dim"}`}>
                       {a.resolutionsLate}
                     </span>
-                    <span className="mt-1 block text-[9.5px] uppercase tracking-[0.14em] text-faint">late</span>
+                    <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">late</span>
                   </span>
                 </span>
                 {/* trust — the verdict, right rail */}
@@ -105,7 +104,7 @@ export default function ArbitersPage() {
                   <span className={`num text-4xl font-medium leading-none tracking-tight ${a.trustScore > 0 ? "text-state-released" : "text-dim"}`}>
                     {a.trustScore}
                   </span>
-                  <span className="num text-[9.5px] uppercase tracking-[0.16em] text-faint">trust</span>
+                  <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">trust</span>
                 </span>
               </Link>
             </li>

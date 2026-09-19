@@ -87,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Icon weight={active ? "fill" : "regular"} className={cn("h-[17px] w-[17px]", active && "text-rose-bright")} />
                 {item.label}
                 {item.badge ? (
-                  <span className="num ml-auto rounded-full bg-rose-accent/20 px-1.5 py-0.5 text-[10px] text-rose-bright">
+                  <span className="num ml-auto rounded-full bg-rose-accent/20 px-1.5 py-0.5 text-[11px] text-rose-bright">
                     {item.badge}
                   </span>
                 ) : null}
@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <AddressAvatar address={address} size={26} />
                 <span className="min-w-0">
                   <span className="block truncate leading-tight">{session.user?.displayName ?? shortAddress(address)}</span>
-                  <span className="block text-[10px] leading-tight text-faint">{persona?.role ?? "member"}</span>
+                  <span className="block text-[11px] leading-tight text-faint">{persona?.role ?? "member"}</span>
                 </span>
               </Link>
             )}
@@ -162,14 +162,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "relative flex flex-1 flex-col items-center justify-center gap-1 text-[10px]",
+                "relative flex flex-1 flex-col items-center justify-center gap-1 text-[11px]",
                 active ? "text-rose-bright" : "text-faint",
               )}
             >
               <Icon weight={active ? "fill" : "regular"} className="h-5 w-5" />
               {item.label}
               {item.badge ? (
-                <span className="num absolute right-[22%] top-2.5 rounded-full bg-rose-accent px-1 text-[9px] text-white">
+                <span className="num absolute right-[22%] top-2.5 rounded-full bg-rose-accent px-1 text-[10px] text-white">
                   {item.badge}
                 </span>
               ) : null}

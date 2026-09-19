@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useJobs } from "@/lib/queries";
 import { useSession } from "@/lib/session";
-import { AddressAvatar, Chip, Skeleton, EmptyState, press, SectionLabel } from "@/components/design";
+import { AddressAvatar, Chip, Skeleton, EmptyState, press } from "@/components/design";
 import { formatEth, timeAgo } from "@/lib/format";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Briefcase } from "@phosphor-icons/react/dist/csr/Briefcase";
@@ -31,17 +31,16 @@ export default function JobsPage() {
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-[62ch]">
-          <SectionLabel>marketplace</SectionLabel>
-          <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">Open work</h1>
+        <div className="max-w-[58ch]">
+          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Open work</h1>
           <p className="mt-3 text-sm leading-relaxed text-dim">
-            Jobs posted with milestone templates — the sum the client expects to escrow, broken into reviewable
+            Jobs posted with milestone templates: the sum the client expects to escrow, broken into reviewable
             chunks before anyone starts.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2.5">
           {data && (
-            <div className="num text-right text-[11px] leading-relaxed text-faint">
+            <div className="num text-right text-[12px] leading-relaxed text-faint">
               {data.items.length} {data.items.length === 1 ? "listing" : "listings"}
               <br />
               milestone sums pre-validated
@@ -121,11 +120,11 @@ export default function JobsPage() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2.5">
-                      <span className="num rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-wider text-dim">
+                      <span className="num rounded-md bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">
                         {job.category}
                       </span>
                       {job.status !== "open" && (
-                        <span className="num text-[10px] uppercase tracking-wider text-faint">{job.status.replace("_", " ")}</span>
+                        <span className="num text-[11px] uppercase tracking-wider text-faint">{job.status.replace("_", " ")}</span>
                       )}
                       <span className="num text-[11px] text-faint">{timeAgo(job.createdAt)}</span>
                     </div>
@@ -146,7 +145,7 @@ export default function JobsPage() {
                       <div className="num text-xl font-medium tracking-tight">
                         {formatEth(job.budget.minWei)}–{formatEth(job.budget.maxWei)} <span className="text-xs text-faint">ETH</span>
                       </div>
-                      <div className="num mt-0.5 text-[11px] text-faint">template sum {formatEth(job.templateTotalWei)} ETH</div>
+                      <div className="num mt-0.5 text-[12px] text-faint">template sum {formatEth(job.templateTotalWei)} ETH</div>
                     </div>
                     <ArrowUpRight className="h-4 w-4 text-faint opacity-0 transition-opacity group-hover:opacity-70" />
                   </div>

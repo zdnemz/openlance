@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useProjects, useJobs, useDisputes, useProject, useJob, useLedger } from "@/lib/queries";
 import { useSession } from "@/lib/session";
-import { EthAmount, Skeleton, EmptyState, SectionLabel, StatusBadge, AddressText, press } from "@/components/design";
+import { EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText, press } from "@/components/design";
 import { SpotCard } from "@/components/motion";
 import { STATE_COLORS, timeAgo } from "@/lib/format";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
@@ -41,8 +41,7 @@ export default function DashboardPage() {
     <div className="space-y-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <SectionLabel>dashboard</SectionLabel>
-          <h1 className="mt-2.5 text-3xl font-semibold tracking-tighter md:text-4xl">
+          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">
             {me.displayName ? `Back to work, ${me.displayName.split(" ")[0]}.` : "Your work."}
           </h1>
         </div>
@@ -66,13 +65,13 @@ export default function DashboardPage() {
       {/* active projects */}
       <section>
         <div className="flex items-baseline justify-between">
-          <SectionLabel>active projects</SectionLabel>
+          <ListHead>Active projects</ListHead>
           <span className="num text-[11px] text-faint">{projects?.length ?? 0} total</span>
         </div>
         {isLoading ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <Skeleton className="h-44 rounded-3xl" />
-            <Skeleton className="h-44 rounded-3xl" />
+            <Skeleton className="h-48 rounded-3xl" />
+            <Skeleton className="h-48 rounded-3xl" />
           </div>
         ) : !projects?.length ? (
           <EmptyState
@@ -92,9 +91,9 @@ export default function DashboardPage() {
       <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
         {/* my open jobs */}
         <section>
-          <SectionLabel>your open jobs</SectionLabel>
+          <ListHead>Your open jobs</ListHead>
           {!myJobs.length ? (
-            <p className="mt-4 text-sm text-faint">Nothing posted — <Link href="/jobs/new" className="text-rose-bright hover:underline">post one</Link> with its milestone template.</p>
+            <p className="mt-4 max-w-[60ch] text-sm text-faint">Nothing posted. <Link href="/jobs/new" className="text-rose-bright hover:underline">Post one</Link> with its milestone template.</p>
           ) : (
             <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
               {myJobs.map((j) => (
@@ -112,7 +111,7 @@ export default function DashboardPage() {
 
         {/* chain pulse */}
         <section>
-          <SectionLabel>chain pulse</SectionLabel>
+          <ListHead>Chain pulse</ListHead>
           <div className="mt-4 divide-y divide-white/[0.04] overflow-hidden rounded-3xl border border-line">
             {(ledger?.items ?? []).slice(0, 6).map((e) => (
               <div key={e.id} className="flex items-center gap-3 bg-white/[0.012] px-5 py-3.5">
@@ -152,20 +151,20 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
   const { data: p, isLoading } = useProject(id);
   const { data: job } = useJob(jobId);
   const session = useSession();
-  if (isLoading || !p) return <Skeleton className="h-44 rounded-3xl" />;
+  if (isLoading || !p) return <Skeleton className="h-48 rounded-3xl" />;
   const isClient = p.client.id === session.user?.id;
   const counterpart = isClient ? p.freelancer : p.client;
   const role = isClient ? "client" : "freelancer";
 
   return (
-    <Link href={`/projects/${id}`} className="group block">
-      <SpotCard className="glass h-full rounded-3xl p-6 transition-colors hover:border-line-strong">
+    <Link href={`/projects/${id}`} className="group block min-w-0">
+      <SpotCard className="glass h-full min-w-0 rounded-3xl p-6 transition-colors hover:border-line-strong">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="num text-[10px] uppercase tracking-[0.16em] text-faint">
+          <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">
             {role} · vs {counterpart.displayName ?? <AddressText value={counterpart.walletAddress} size={3} />}
           </div>
-          <div className="mt-2 truncate text-[15.5px] font-medium tracking-tight transition-colors group-hover:text-rose-bright">
+          <div className="mt-2 line-clamp-2 text-[15.5px] font-medium leading-snug tracking-tight transition-colors group-hover:text-rose-bright">
             {job?.title ?? `project ${id.slice(0, 8)}`}
           </div>
         </div>
@@ -187,7 +186,8 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
       <div className="mt-4 flex items-center justify-between">
         <div className="flex flex-wrap gap-2">
           {p.milestones.map((m) => (
-            <span key={m.id} className="num text-[11px]" style={{ color: STATE_COLORS[m.chainStatus] }}>
+            <span key={m.id} className="num flex items-center gap-1.5 text-[11px] text-faint">
+              <span className="h-1 w-1 rounded-full" style={{ background: STATE_COLORS[m.chainStatus] }} aria-hidden />
               m{m.position}
             </span>
           ))}
@@ -204,6 +204,6 @@ function ledgerColor(eventType: string): string {
   if (eventType.includes("Dispute")) return "#fb923c";
   if (eventType.includes("Funded")) return "#fbbf24";
   if (eventType.includes("Trust") || eventType.includes("Arbiter")) return "#f43f5e";
-  if (eventType.includes("Fee")) return "#5eead4";
+  if (eventType.includes("Fee")) return "#a7f3d0";
   return "#a1a1aa";
 }

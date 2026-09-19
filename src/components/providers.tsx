@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useRuntime } from "@/lib/runtime";
 import { useSession } from "@/lib/session";
 import { useWallet } from "@/lib/wallet";
+import { loginWithWallet } from "@/lib/siwe";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -53,6 +54,19 @@ function SessionBinding({ children }: { children: ReactNode }) {
     }
     if (address.toLowerCase() !== bound) clear();
   }, [address, kind, bound, clear]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    const index = Number(new URLSearchParams(window.location.search).get("persona"));
+    if (!Number.isInteger(index) || index < 0 || index > 4) return;
+    const s = useSession.getState();
+    const w = useWallet.getState();
+    if (s.token && w.kind === "persona" && w.personaIndex === index) return;
+    void (async () => {
+      useWallet.getState().connectPersona(index);
+      await loginWithWallet(useWallet.getState().address!);
+    })().catch((e) => console.error("[dev autologin]", e));
+  }, []);
 
   return <>{children}</>;
 }

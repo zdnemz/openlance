@@ -2,22 +2,22 @@
 
 /**
  * Landing — cinematic scrolltelling (MOTION budget spent here), asymmetric
- * split hero, sticky-stack how-it-works, trust section, kinetic marquee.
- * The app interior stays calm; this page is allowed to move.
+ * split hero, sticky-stack how-it-works, trust section, ledger strip.
+ * The app interior stays calm; this page is allowed to move — but only
+ * in response to the reader's scroll, never on its own clock.
  */
 import Link from "next/link";
-import { motion, useScroll, useTransform, type Variants } from "framer-motion";
+import { motion, useScroll, useTransform, MotionConfig, type Variants } from "framer-motion";
 import { useRef, memo, useEffect, useState } from "react";
 import { Logo } from "@/components/app-shell";
 import { WalletButton } from "@/components/wallet/wallet-button";
-import { StatusDot } from "@/components/design";
+import { StatusDot, AddressAvatar } from "@/components/design";
 import { MagneticLink, SpotCard } from "@/components/motion";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
 import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
 import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
-import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
 import { FilePlus } from "@phosphor-icons/react/dist/csr/FilePlus";
 
 /* ── motion vocabulary ──────────────────────────────────────────────────── */
@@ -32,9 +32,9 @@ const rise: Variants = {
 /* ── hero visual: the living escrow card ───────────────────────────────── */
 
 const FLOW = [
-  { state: "Funded", color: "#fbbf24", line: "Mara locks 0.24 ETH", sub: "escrow contract holds it — nobody can move it" },
-  { state: "Submitted", color: "#38bdf8", line: "Dario submits on-chain", sub: "delivery proof lands with the milestone" },
-  { state: "Released", color: "#34d399", line: "0.234 ETH paid out", sub: "approved → instant release, 2.5% fee accounted" },
+  { state: "Funded", color: "#fbbf24", line: "Mara locks 0.24 ETH", sub: "escrow contract holds it; nobody can move it" },
+  { state: "Submitted", color: "#60a5fa", line: "Dario submits on-chain", sub: "delivery proof lands with the milestone" },
+  { state: "Released", color: "#34d399", line: "0.234 ETH paid out", sub: "approved, instant release, 2.5% fee accounted" },
 ] as const;
 
 const EscrowCard = memo(function EscrowCard() {
@@ -48,13 +48,13 @@ const EscrowCard = memo(function EscrowCard() {
   return (
     <SpotCard className="glass-raised relative w-full max-w-md rounded-[26px] p-6">
       <div className="flex items-center justify-between">
-        <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">milestone 1 · threat model</span>
+        <span className="num text-[12px] uppercase tracking-[0.16em] text-faint">milestone 1 · threat model</span>
         <motion.span
           key={current.state}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={spring}
-          className="flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+          className="flex items-center gap-2 rounded-full border px-2.5 py-1 text-[12px] font-medium"
           style={{ color: current.color, borderColor: `color-mix(in oklab, ${current.color} 34%, transparent)`, background: `color-mix(in oklab, ${current.color} 9%, transparent)` }}
         >
           <StatusDot color={current.color} pulse />
@@ -70,43 +70,40 @@ const EscrowCard = memo(function EscrowCard() {
             <span className="ml-1.5 text-base text-faint">ETH</span>
           </div>
         </div>
-        <div className="num text-right text-[11px] leading-relaxed text-faint">
+        <div className="num text-right text-[12px] leading-relaxed text-faint">
           fee 2.5% · on release
           <br />
           Base-native settlement
         </div>
       </div>
 
-      <div className="mt-6 space-y-1.5 rounded-2xl border border-line bg-white/[0.02] p-4">
+      {/* ledger rows — hairlines, no nested boxes */}
+      <div className="mt-6 divide-y divide-white/[0.06] border-y border-line">
         {FLOW.map((f, i) => (
           <motion.div
             key={f.state}
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5"
-            animate={{
-              background: i === step ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0)",
-              opacity: i <= step ? 1 : 0.38,
-            }}
+            className="flex items-center gap-3 py-3"
+            animate={{ opacity: i <= step ? 1 : 0.42 }}
             transition={spring}
           >
             <span
-              className="grid h-5 w-5 shrink-0 place-items-center rounded-full border"
-              style={{ borderColor: `color-mix(in oklab, ${f.color} 42%, transparent)` }}
-            >
-              {i < step ? (
-                <CheckCircle weight="fill" className="h-3.5 w-3.5" style={{ color: f.color }} />
-              ) : (
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: i === step ? f.color : "rgba(255,255,255,0.2)" }} />
-              )}
-            </span>
+              className="h-4 w-[3px] shrink-0 rounded-full"
+              style={{ background: i === step ? f.color : "rgba(255,255,255,0.14)" }}
+            />
+            {i < step ? (
+              <CheckCircle weight="fill" className="h-4 w-4 shrink-0" style={{ color: f.color }} />
+            ) : (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: i === step ? f.color : "rgba(255,255,255,0.2)" }} />
+            )}
             <span className="min-w-0">
               <span className={`block text-[13px] ${i === step ? "text-foreground" : "text-dim"}`}>{f.line}</span>
-              <span className="block truncate text-[11px] text-faint">{f.sub}</span>
+              <span className="block truncate text-[12px] text-faint">{f.sub}</span>
             </span>
           </motion.div>
         ))}
       </div>
 
-      <div className="num mt-4 flex items-center justify-between text-[10px] text-faint">
+      <div className="num mt-4 flex items-center justify-between text-[12px] text-faint">
         <span>tx 0x7f3a…c21e · 12 conf</span>
         <span>escrowlance · anvil</span>
       </div>
@@ -118,13 +115,18 @@ const EscrowCard = memo(function EscrowCard() {
 
 export default function LandingPage() {
   const heroRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
   const cardY = useTransform(scrollYProgress, [0, 1], [0, 120]);
   const cardOpacity = useTransform(scrollYProgress, [0, 0.85], [1, 0]);
   const gridY = useTransform(scrollYProgress, [0, 1], [0, 60]);
+  /* ledger strip drifts with the reader's scroll, never on its own clock */
+  const { scrollYProgress: stripProgress } = useScroll({ target: stripRef, offset: ["start end", "end start"] });
+  const stripX = useTransform(stripProgress, [0, 1], ["4%", "-24%"]);
 
   return (
-    <div className="relative min-h-[100dvh] w-full overflow-x-clip">
+    <MotionConfig reducedMotion="user">
+    <div className="relative min-h-[100dvh] w-full">
       {/* nav */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-line/60 bg-ink/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-5 md:px-8">
@@ -154,12 +156,12 @@ export default function LandingPage() {
         <motion.div
           style={{ y: gridY }}
           aria-hidden
-          className="hairline-grid pointer-events-none absolute inset-x-[-5%] -top-24 h-[720px]"
+          className="hairline-grid pointer-events-none absolute inset-x-0 -top-24 h-[720px]"
         />
         <div className="grid items-center gap-14 lg:grid-cols-[1.08fr_0.92fr]">
           <div className="max-w-2xl">
             <motion.div variants={rise} initial="hidden" animate="show" custom={0} className="flex items-center gap-2.5">
-              <span className="flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11px] text-dim">
+              <span className="flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[12px] text-dim">
                 <StatusDot color="#34d399" pulse /> anvil devnet · Base-native by design
               </span>
             </motion.div>
@@ -169,18 +171,18 @@ export default function LandingPage() {
               initial="hidden"
               animate="show"
               custom={1}
-              className="mt-7 text-[40px] font-semibold leading-[1.04] tracking-tighter text-balance md:text-[56px]"
+              className="display mt-8 text-[42px] leading-[1.02] text-balance md:text-[58px]"
             >
               Freelance work,
               <br />
               paid the way code pays:
               <br />
-              <span className="text-dim">by proof.</span>
+              <span className="italic text-dim">by proof.</span>
             </motion.h1>
 
-            <motion.p variants={rise} initial="hidden" animate="show" custom={2} className="mt-7 max-w-[58ch] text-[15.5px] leading-relaxed text-dim">
+            <motion.p variants={rise} initial="hidden" animate="show" custom={2} className="mt-7 max-w-[60ch] text-[15.5px] leading-relaxed text-dim">
               Every milestone locks its value in a smart-contract escrow before the work starts. The freelancer
-              submits on-chain. The client approves. The contract pays — no invoicing, no chasing, no
+              submits on-chain. The client approves. The contract pays: no invoicing, no chasing, no
               &ldquo;the check is in the mail.&rdquo; Disagreements go to staked arbiters, not silence.
             </motion.p>
 
@@ -209,13 +211,13 @@ export default function LandingPage() {
               className="mt-14 grid max-w-xl grid-cols-[1.35fr_1fr_1fr] divide-x divide-white/[0.07] border-t border-line pt-6"
             >
               {[
-                ["2.5%", "fee on released value — nothing else", true],
+                ["2.5%", "fee on released value, nothing else", true],
                 ["72h", "arbiter SLA, enforced by slashing", false],
                 ["48h", "window to agree on an arbiter", false],
               ].map(([num, label, lead]) => (
                 <div key={label as string} className={lead ? "pr-5" : "px-5"}>
                   <dt className={`num text-[26px] font-medium tracking-tight ${lead ? "text-rose-bright" : ""}`}>{num}</dt>
-                  <dd className="mt-1.5 text-[11.5px] leading-snug text-faint">{label}</dd>
+                  <dd className="mt-1.5 text-[12px] leading-snug text-faint">{label}</dd>
                 </div>
               ))}
             </motion.dl>
@@ -240,18 +242,18 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── kinetic marquee ───────────────────────────────────────────── */}
-      <section aria-label="on-chain activity" className="hairline-t border-b border-line py-5">
+      {/* ── ledger strip: recent on-chain activity, drifts on scroll ─── */}
+      <section ref={stripRef} aria-label="on-chain activity" className="hairline-t border-b border-line py-5">
         <div className="relative flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)]">
-          <div className="marquee-track flex shrink-0 items-center gap-10 pr-10">
-            {[...marioItems, ...marioItems].map((item, i) => (
-              <span key={i} className="flex shrink-0 items-center gap-3 text-[12.5px] text-faint">
+          <motion.div style={{ x: stripX }} className="flex shrink-0 items-center gap-10 pr-10">
+            {ledgerItems.map((item) => (
+              <span key={item.label} className="flex shrink-0 items-center gap-3 text-[12.5px] text-faint">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.color }} />
                 <span className="num">{item.label}</span>
                 <span className="text-dim">{item.text}</span>
               </span>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -260,9 +262,8 @@ export default function LandingPage() {
         <div className="grid gap-16 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="lg:sticky lg:top-28 lg:self-start">
             <SectionHead
-              kicker="the escrow loop"
               title="Five moves. All of them on-chain."
-              body="The marketplace lives off-chain where content belongs. Money never does — every state change below is a contract call you can verify, not a database row you have to trust."
+              body="The marketplace lives off-chain where content belongs. Money never does; every state change below is a contract call you can verify, not a database row you have to trust."
             />
             <Link href="/jobs" className="group mt-8 inline-flex items-center gap-2 text-sm text-rose-bright">
               Watch it live on real jobs <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" weight="bold" />
@@ -283,7 +284,8 @@ export default function LandingPage() {
                       <h3 className="text-[19px] font-medium tracking-tight">{step.title}</h3>
                     </div>
                     <p className="mt-2.5 max-w-[62ch] text-sm leading-relaxed text-dim">{step.body}</p>
-                    <div className="num mt-4 inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.02] px-3 py-1.5 text-[11px] text-faint">
+                    <div className="num mt-4 text-[12px] text-faint">
+                      <span className="text-rose-bright">→ </span>
                       {step.chip}
                     </div>
                   </div>
@@ -299,15 +301,14 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-[1400px] items-center gap-16 px-5 md:px-8 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="order-2 lg:order-1">
             <SectionHead
-              kicker="the trust layer"
               title="Disputes end in hours, with people who stake their name."
-              body="Both parties nominate an arbiter; a match starts the 72-hour SLA clock. Resolutions within SLA raise the arbiter's on-chain trust score; overdue ones slash it. The badge is soulbound — ERC-5194 — so the score can't be bought, sold, or reset."
+              body="Both parties nominate an arbiter; a match starts the 72-hour SLA clock. Resolutions inside the SLA raise the arbiter's on-chain trust score, overdue ones slash it. The badge is soulbound (ERC-5194), so the score can't be bought, sold, or reset."
             />
             {/* hairline stat ledger — rows, not boxes; numeral left, meaning right */}
             <dl className="mt-10 max-w-md">
               {[
                 ["+1", "trust per resolution inside the 72h SLA", true],
-                ["−2", "slashed when the clock runs out — anyone can call it", false],
+                ["−2", "slashed when the clock runs out; anyone can call it", false],
                 ["SBT", "soulbound badge (ERC-5194), non-transferable by design", false],
               ].map(([n, l, lead]) => (
                 <div key={l as string} className="flex items-baseline justify-between gap-6 border-t border-line py-4 last:border-b">
@@ -325,10 +326,10 @@ export default function LandingPage() {
       <section className="border-t border-line py-28">
         <div className="mx-auto max-w-[1400px] px-5 md:px-8">
           <div className="grid gap-10 lg:grid-cols-[1.4fr_0.6fr] lg:items-end">
-            <h2 className="max-w-[20ch] text-[38px] font-semibold leading-[1.05] tracking-tighter text-balance md:text-[54px]">
+            <h2 className="display max-w-[20ch] text-[38px] leading-[1.04] text-balance md:text-[54px]">
               Stop invoicing.
               <br />
-              <span className="text-dim">Start escrowing.</span>
+              <span className="italic text-dim">Start escrowing.</span>
             </h2>
             <div className="flex flex-col gap-3.5 lg:items-end">
               <MagneticLink
@@ -338,7 +339,7 @@ export default function LandingPage() {
                 Post your first job
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" weight="bold" />
               </MagneticLink>
-              <span className="text-xs text-faint">anvil devnet — no real funds, real contracts</span>
+              <span className="text-xs text-faint">anvil devnet · no real funds, real contracts</span>
             </div>
           </div>
         </div>
@@ -351,7 +352,7 @@ export default function LandingPage() {
             <Logo size="sm" />
             <span className="text-xs text-faint">milestone escrow for freelance work</span>
           </div>
-          <div className="num flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-faint">
+          <div className="num flex flex-wrap gap-x-6 gap-y-2 text-[12px] text-faint">
             <Link href="/jobs" className="hover:text-dim">jobs</Link>
             <Link href="/arbiters" className="hover:text-dim">arbiters</Link>
             <Link href="/console" className="hover:text-dim">backend console</Link>
@@ -360,16 +361,16 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
+    </MotionConfig>
   );
 }
 
 /* ── section head ─────────────────────────────────────────────────────── */
 
-function SectionHead({ kicker, title, body }: { kicker: string; title: string; body: string }) {
+function SectionHead({ title, body }: { title: string; body: string }) {
   return (
     <div>
-      <div className="num text-[11px] uppercase tracking-[0.2em] text-rose-bright">{kicker}</div>
-      <h2 className="mt-4 max-w-[26ch] text-[30px] font-semibold leading-[1.08] tracking-tighter text-balance md:text-[40px]">{title}</h2>
+      <h2 className="display max-w-[26ch] text-[32px] leading-[1.06] text-balance md:text-[42px]">{title}</h2>
       <p className="mt-5 max-w-[62ch] text-[14.5px] leading-relaxed text-dim">{body}</p>
     </div>
   );
@@ -388,41 +389,41 @@ function ArbiterCardVisual({ className }: { className?: string }) {
     >
       <div className="glass-raised rounded-3xl p-7">
         <div className="flex items-center justify-between">
-          <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">arbiter registry · erc-5194</span>
-          <span className="flex items-center gap-2 rounded-full border border-state-disputed/30 bg-state-disputed/10 px-2.5 py-1 text-[11px] text-state-disputed">
+          <span className="num text-[12px] uppercase tracking-[0.16em] text-faint">arbiter registry · erc-5194</span>
+          <span className="flex items-center gap-2 rounded-full border border-state-disputed/30 bg-state-disputed/10 px-2.5 py-1 text-[12px] text-state-disputed">
             <StatusDot color="#fb923c" pulse /> 72h SLA live
           </span>
         </div>
         <div className="mt-6 flex items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-teal-500/70 to-emerald-700/50 ring-1 ring-white/15" aria-hidden />
+          <AddressAvatar address="0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc" size={56} className="rounded-2xl" />
           <div>
             <div className="text-lg font-medium tracking-tight">Ingrid Salm</div>
-            <div className="num text-[11px] text-faint">security researcher · 40+ peer reviews</div>
+            <div className="num text-[12px] text-faint">security researcher · 40+ peer reviews</div>
           </div>
           <div className="ml-auto text-right">
             <div className="num text-3xl font-medium tracking-tight text-state-released">12</div>
-            <div className="text-[10px] uppercase tracking-wider text-faint">trust</div>
+            <div className="text-[12px] uppercase tracking-wider text-faint">trust</div>
           </div>
         </div>
-        <div className="mt-6 space-y-2.5">
+        <div className="mt-6 divide-y divide-white/[0.06] border-y border-line">
           {[
-            ["resolved · split", "#5eead4", "1h 48m inside SLA", "+1"],
+            ["resolved · split", "#a7f3d0", "1h 48m inside SLA", "+1"],
             ["resolved · release", "#34d399", "3h 02m inside SLA", "+1"],
             ["resolved · refund", "#d4d4d8", "61h 20m inside SLA", "+1"],
           ].map(([label, color, time, delta]) => (
-            <div key={label} className="flex items-center justify-between rounded-xl border border-line bg-white/[0.02] px-4 py-3">
+            <div key={label} className="flex items-center justify-between py-3.5">
               <span className="flex items-center gap-2.5 text-[12.5px] text-dim">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
                 {label}
               </span>
               <span className="flex items-center gap-3">
-                <span className="num text-[11px] text-faint">{time}</span>
-                <span className="num rounded-full bg-state-released/10 px-2 py-0.5 text-[11px] text-state-released">{delta}</span>
+                <span className="num text-[12px] text-faint">{time}</span>
+                <span className="num text-[12px] text-state-released">{delta}</span>
               </span>
             </div>
           ))}
         </div>
-        <div className="num mt-5 text-[10px] text-faint">badge #7 · soulbound — transfer() reverts by design</div>
+        <div className="num mt-5 text-[12px] text-faint">badge #7 · soulbound · transfer() reverts by design</div>
       </div>
     </motion.div>
   );
@@ -430,11 +431,11 @@ function ArbiterCardVisual({ className }: { className?: string }) {
 
 /* ── data ─────────────────────────────────────────────────────────────── */
 
-const marioItems = [
+const ledgerItems = [
   { label: "0xf39F…2266", text: "funded milestone 1 · 0.240 ETH", color: "#fbbf24" },
-  { label: "0x7099…79C8", text: "submitted threat model for review", color: "#38bdf8" },
+  { label: "0x7099…79C8", text: "submitted threat model for review", color: "#60a5fa" },
   { label: "escrow", text: "released 0.234 ETH to freelancer · fee 0.006", color: "#34d399" },
-  { label: "0x9965…0a4D", text: "resolved dispute · split 50/50", color: "#5eead4" },
+  { label: "0x9965…0a4D", text: "resolved dispute · split 50/50", color: "#a7f3d0" },
   { label: "registry", text: "arbiter trust +1 · inside SLA", color: "#f43f5e" },
   { label: "0x3C44…93BC", text: "accepted proposal · 3 milestones", color: "#a1a1aa" },
 ];
@@ -442,7 +443,7 @@ const marioItems = [
 const steps = [
   {
     title: "Post the work, broken into milestones",
-    body: "A job carries its own milestone template — titles, scope, amounts. The API validates the sum against the budget range server-side; the template becomes the contract's blueprint when the work is awarded.",
+    body: "A job carries its own milestone template: titles, scope, amounts. The API validates the sum against the budget range server-side; the template becomes the contract's blueprint when the work is awarded.",
     icon: FilePlus,
     chip: "POST /jobs · milestone sum validated",
   },
@@ -471,5 +472,3 @@ const steps = [
     chip: "approve · openDispute · nominateArbiter",
   },
 ] as const;
-
-void Scales;
