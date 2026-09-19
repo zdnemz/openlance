@@ -21,7 +21,7 @@ import { createPublicClient, createWalletClient, http, parseAbi } from 'viem'
 import { anvil } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 
-const API = process.env.E2E_API ?? 'http://localhost:3031'
+const API = process.env.E2E_API ?? 'http://localhost:3000/api'
 const RPC = process.env.E2E_RPC ?? 'http://127.0.0.1:8545'
 const ESCROW = (process.env.ESCROW_ADDRESS ?? '').toLowerCase() as `0x${string}`
 const REGISTRY = (process.env.ARBITER_REGISTRY_ADDRESS ?? '').toLowerCase() as `0x${string}`

@@ -25,9 +25,9 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const API = process.env.SEED_API ?? 'http://localhost:3030'
+const API = process.env.SEED_API ?? 'http://localhost:3000/api'
 const RPC = process.env.SEED_RPC ?? 'http://127.0.0.1:8545'
-const deployment = JSON.parse(readFileSync(resolve(here, '../.anvil-deployment.json'), 'utf8')) as {
+const deployment = JSON.parse(readFileSync(resolve(here, '.anvil-deployment.json'), 'utf8')) as {
   escrow: `0x${string}`; arbiterRegistry: `0x${string}`
 }
 const ESCROW = deployment.escrow

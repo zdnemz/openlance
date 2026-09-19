@@ -4,7 +4,7 @@
  * The API now runs inside this Next.js process (route handlers under /api),
  * so this route no longer supervises a separate API process — it only reports
  * API/chain health and can (re)spawn the anvil + contracts + seed stack that
- * lives in mini-services/api/scripts/dev-real.sh.
+ * lives in scripts/anvil/dev-real.sh.
  */
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ import { openSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = process.cwd();
-const API_DIR = resolve(ROOT, "mini-services/api");
+const ANVIL_DIR = resolve(ROOT, "scripts/anvil");
 
 async function status() {
   // API health is this very process — resolve the origin from the request.
@@ -45,11 +45,11 @@ export async function POST(req: Request) {
       killer.on("exit", () => resolve());
     });
   }
-  const logPath = resolve(API_DIR, "data", "stack.log");
-  mkdirSync(resolve(API_DIR, "data"), { recursive: true });
+  const logPath = resolve(ANVIL_DIR, ".state", "stack.log");
+  mkdirSync(resolve(ANVIL_DIR, ".state"), { recursive: true });
   const out = openSync(logPath, "a");
-  const child = spawn("bash", [resolve(API_DIR, "scripts/dev-real.sh")], {
-    cwd: API_DIR,
+  const child = spawn("bash", [resolve(ANVIL_DIR, "dev-real.sh")], {
+    cwd: ANVIL_DIR,
     detached: true,
     stdio: ["ignore", out, out],
     env: { ...process.env, PATH: `${resolve(ROOT, ".foundry/bin")}:${process.env.PATH ?? ""}` },

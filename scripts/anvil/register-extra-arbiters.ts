@@ -9,12 +9,13 @@ import { createPublicClient, createWalletClient, http, parseAbi } from 'viem'
 import { anvil } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const RPC = process.env.CHAIN_RPC_URL ?? 'http://127.0.0.1:8545'
-const API = process.env.APP_URI?.replace(/\/$/, '') ?? 'http://localhost:3030'
-const here = import.meta.dir
-const deployment = JSON.parse(readFileSync(resolve(here, '../.anvil-deployment.json'), 'utf8')) as {
+const API = process.env.APP_URI?.replace(/\/$/, '') ?? 'http://localhost:3000'
+const here = dirname(fileURLToPath(import.meta.url))
+const deployment = JSON.parse(readFileSync(resolve(here, '.anvil-deployment.json'), 'utf8')) as {
   escrow: `0x${string}`; arbiterRegistry: `0x${string}`
 }
 const REGISTRY = deployment.arbiterRegistry

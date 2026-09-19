@@ -51,5 +51,6 @@ worklog.md
 .vercel
 
 # backend runtime state (live devnet data, regenerated per boot)
-mini-services/api/data/
-mini-services/api/.anvil-deployment.json
+scripts/anvil/.state/
+scripts/anvil/.anvil-deployment.json
+data/

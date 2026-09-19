@@ -1,4 +1,4 @@
-/** API shape contracts (mirrors mini-services/api modules). */
+/** API shape contracts (mirrors src/server modules). */
 
 export type JobStatus = "open" | "in_progress" | "completed" | "cancelled";
 export type MilestoneChainStatus =

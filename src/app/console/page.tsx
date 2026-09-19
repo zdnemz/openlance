@@ -195,7 +195,7 @@ export default function BackendConsole() {
           {loaded && error ? (
             <Card className="border-rose-500/30 bg-rose-500/5">
               <CardContent className="p-4 text-sm text-rose-700 dark:text-rose-400">
-                Backend unreachable ({error}). Start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">cd mini-services/api && bun run dev</code>, then this console refreshes automatically.
+                Backend unreachable ({error}). Start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">bun run dev</code> and ensure <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">DATABASE_URL</code> is set, then this console refreshes automatically.
               </CardContent>
             </Card>
           ) : null}
@@ -371,7 +371,7 @@ export default function BackendConsole() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base"><ServerCog className="size-4 text-emerald-600" aria-hidden />API surface <span className="text-muted-foreground font-normal text-sm">— what the frontend will build against</span></CardTitle>
               <CardDescription>
-                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">mini-services/api/requests.http</code>. Golden path E2E: <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">bun scripts/smoke.ts</code>.
+                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">src/app/api/**</code>. Golden path E2E: <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">bash scripts/anvil/run-anvil-e2e.sh</code>.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">

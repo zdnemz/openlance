@@ -10,7 +10,7 @@ Three deliverables, one repo:
 | Piece | Where | What it proves |
 |---|---|---|
 | **Contracts** | [`contracts/`](./contracts) | Solidity 0.8.28 + OZ 5.7: `Escrow` + `ArbiterRegistry` (ERC-5194). 90 tests incl. invariant fuzz + event-surface lock to the backend ABI; 97%+ branch coverage. |
-| **Backend** | [`mini-services/api`](./mini-services/api) | Hono API on :3030 — SIWE auth, marketplace, dispute coordination, chain indexer/mirror, transactional-outbox webhooks. Runs zero-infra (PGlite/in-process) and flips to Supabase/Redis/Base Sepolia via env. |
+| **Backend** | [`src/server`](./src/server) + [`src/app/api`](./src/app/api) | Next.js server runtime (App Router route handlers): SIWE auth, marketplace, dispute coordination, chain indexer/mirror, transactional-outbox webhooks. Supabase Postgres + Upstash Redis caching. |
 | **Frontend** | `src/` (this app) | Next.js 16 product UI against the live stack: wallet-first auth, milestone state machine, real on-chain actions, arbiter surface. |
 
 ## The devnet stack (what's running)
@@ -21,11 +21,15 @@ anvil :8545 ── Escrow + ArbiterRegistry (fresh deploy per boot)
     │  (same-origin  │  (poll logs, re-derive
     │   JSON-RPC     │   money truth via RPC)
     │   relay)       │
-browser ──────► Next.js :3000 ──────► Hono API :3030 ── PGlite (mirror/cache)
-   signs with            │
+browser ──────► Next.js :3000 ── /api route handlers ── Supabase Postgres
+   signs with            │                              + Upstash Redis (cache)
    anvil personas        └── seeded demo data, driven by REAL transactions
 ```
 
+- **One app, one origin**: the API is no longer a separate service — it runs
+  inside the Next.js server as App Router route handlers under `/api/**`
+  (`src/app/api`), with the domain logic in `src/server`. No CORS, no gateway
+  port forwarding from the client.
 - **Personas**: the connect panel offers five anvil deterministic accounts
   (public test keys) that sign locally in the browser — one click = wallet +
   SIWE session. A real browser wallet (MetaMask) rides the same surface via
@@ -35,9 +39,50 @@ browser ──────► Next.js :3000 ──────► Hono API :3030
   mirror, and every wallet action waits through three honest phases —
   *signing → mining → indexer mirroring* — before declaring success.
 - **Boot self-healing**: the Next.js server babysits the chain stack through
-  `mini-services/api`'s `dev` script (`scripts/dev-real.sh`): anvil → deploy
-  (viem, from `contracts/out` artifacts) → fresh DB → API (real mode) → demo
-  seed (idempotent). `POST /api/dev/stack?force=1` restarts it on demand.
+  `scripts/anvil/dev-real.sh`: anvil → deploy (viem, from `contracts/out`
+  artifacts) → write contract addresses to `.env.local` → migrate → demo seed
+  (idempotent). `POST /api/dev/stack?force=1` restarts it on demand.
+
+## Running the backend
+
+The backend lives in the same Next.js app. It needs a Postgres connection
+string (Supabase or any Postgres) and, optionally, Upstash Redis for cache /
+rate limits (an in-process fallback keeps local dev zero-infra).
+
+```bash
+cp .env.example .env.local        # set DATABASE_URL (+ Upstash/Supabase optional)
+bun install
+bun run db:migrate                # drizzle migrations + RLS/realtime bootstrap
+bun run db:seed                   # demo cast + a partially-progressed project
+bun run dev                       # Next.js + the API on :3000
+```
+
+Key env vars (see [`.env.example`](./.env.example)):
+
+| Var | Purpose |
+|---|---|
+| `DATABASE_URL` | Supabase Postgres connection string (required) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis: SIWE nonces, JWT denylist, rate limits, read cache (optional) |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase Storage + Realtime (optional) |
+| `SUPABASE_JWT_SECRET` | HS256 secret; the SIWE session token doubles as a Supabase JWT (required in prod) |
+| `CHAIN_MODE` `CHAIN_RPC_URL` `ESCROW_ADDRESS` `ARBITER_REGISTRY_ADDRESS` | chain indexer (mock by default) |
+
+### Backend layout
+
+```
+src/app/api/**        route handlers (the HTTP surface — same paths as before)
+src/server/           domain logic, ported 1:1 from the old Hono service
+  config.ts           env schema (Supabase + Upstash), derived config
+  db/                 Drizzle schema + Supabase Postgres client
+  lib/                kv (Upstash), cache, jwt, rate-limit, http, errors, queue
+  auth/               SIWE + session middleware
+  chain/              adapter (real/mock), events, indexer, reconcile
+  modules/            jobs, proposals, projects, disputes, files, … 
+  workers/            webhook delivery + crons
+  proxy.ts            CORS + OPTIONS preflight for /api/**
+scripts/              migrate.ts, seed.ts, anvil/ (dev chain tooling)
+drizzle/ + db/        migrations and Supabase RLS/realtime SQL
+```
 
 ## Demo data (created by real transactions at boot)
 
@@ -70,9 +115,8 @@ public identity · `/admin` reconciliation + fees · `/console` backend console.
 - **SIWE gotcha**: the parser enforces strict EIP-55 checksums — anvil's
   displayed casing is NOT EIP-55, so the frontend checksums with viem's
   `getAddress()` before building the message.
-- **Gateway requests**: through the preview proxy every API call is a
-  relative path + `?XTransformPort=3030`; on localhost:3000 the client talks
-  to `http://localhost:3030` directly (CORS-listed server-side).
+- **Gateway requests removed**: the API is same-origin now — the client calls
+  `/api/**` directly (`src/lib/api.ts`), no `?XTransformPort` rewriting.
 
 ## Frontend design system
 

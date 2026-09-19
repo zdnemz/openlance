@@ -20,7 +20,7 @@ const DEPLOYER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7b
 
 const here = dirname(fileURLToPath(import.meta.url))
 const artifact = (name: string) => {
-  const p = resolve(here, '../../../contracts/out', `${name}.sol`, `${name}.json`)
+  const p = resolve(here, '../../contracts/out', `${name}.sol`, `${name}.json`)
   const parsed = JSON.parse(readFileSync(p, 'utf8')) as { abi: Abi; bytecode: { object: Hex } }
   return { abi: parsed.abi, bytecode: parsed.bytecode.object }
 }
