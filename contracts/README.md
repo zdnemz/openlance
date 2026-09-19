@@ -1,20 +1,46 @@
 # OpenLance — Contracts
 
-The on-chain money authority of OpenLance (PRD build phase 2): **one escrow contract** holding every milestone — not a factory of per-project clones, because dispute/arbiter/fee/settlement logic is cross-project and a single accounting surface is what the invariant suite protects (PRD §7.2).
+The on-chain money authority of OpenLance: **one escrow contract** holding every
+milestone (dispute, arbiter, fee and settlement logic is cross-project and a
+single accounting surface is what the invariant tests protect).
 
-**Stack:** Solidity 0.8.28 · Foundry (forge test / fuzz / invariants) · OpenZeppelin 5.7 (ERC-721, ERC-5194, Ownable, ReentrancyGuard) · native ETH (ERC-20 is upgrade Tier 3).
+**Stack:** Solidity 0.8.28 · **Hardhat 3** (TypeScript + viem) · OpenZeppelin
+Contracts + Contracts-Upgradeable 5.6.1 · **UUPS upgradeable proxies** owned by an
+OZ **TimelockController** · native ETH.
+
+> This directory replaces the earlier Foundry setup. The public interface
+> (events, status enum ordinals, read surface) is preserved byte-for-byte so the
+> backend indexer (`src/server/chain/abi.ts`) keeps working unchanged.
 
 ```
-forge install            # already vendored in lib/ if you have the repo
-forge build
-forge test               # 90 tests: unit + event-surface lock + invariant fuzz
-FOUNDRY_PROFILE=ci forge test   # 1000 fuzz runs, 512×256 invariants
-forge coverage           # Escrow 100% lines / 97.4% branches · Registry 100% / 98.3%
+npm install
+npx hardhat build                 # compile
+npx hardhat test                  # 52 tests (unit + security + event-surface lock)
+npx hardhat run scripts/deploy.ts --network localhost      # anvil devnet
+npx hardhat run scripts/deploy.ts --network baseSepolia    # testnet
 ```
 
 ---
 
-## The two contracts
+## Architecture
+
+```
+              ┌──────────────────────────────┐
+              │  OpenLanceTimelock (owner)    │  OZ TimelockController
+              │  minDelay = 48h in prod       │  48h public window before
+              └──────────────┬───────────────┘  any upgrade / owner call
+                             │ owns (upgrade authority)
+        ┌────────────────────┴────────────────────┐
+        ▼                                          ▼
+┌───────────────────┐    reads     ┌──────────────────────────┐
+│  Escrow (UUPS)    │─────────────►│  ArbiterRegistry (UUPS)   │
+│  ERC1967 proxy    │              │  ERC1967 proxy            │
+│  + Escrow impl    │              │  + ArbiterRegistry impl   │
+└───────────────────┘              └──────────────────────────┘
+```
+
+Every upgrade and owner-only action is routed through the timelock, so users get
+a public warning window before the money logic can change.
 
 ### `Escrow.sol` — milestone state machine + money
 
@@ -29,73 +55,124 @@ forge coverage           # Escrow 100% lines / 97.4% branches · Registry 100% /
                                                     arbiter removed, dispute reassignable
 ```
 
-- **`fund(bytes32 ref, address freelancer)`** — the off-chain milestone uuid travels in the funding tx (`ref`), so the backend indexer maps on-chain ids → database rows deterministically. Fee is **snapshotted per milestone**; later `setFeeBps` changes never touch in-flight work.
-- **`approve`** — fee on released value only (floor: `amount × bps / 10_000`, byte-identical to the backend's `feeOf`).
-- **Dispute coordination, trust-minimized:** either party `nominateArbiter`; the moment both nominate the same registered arbiter, the assignment locks and the 72h SLA clock starts — no platform involvement. `adminAssignArbiter` only unlocks after the 48h agreement window lapses (PRD F10).
-- **`resolveDispute`** — release (fee on full) / refund (no fee) / split (50/50, fee on the freelancer half only, odd wei to the client, exact conservation). Event order is load-bearing and matches the backend mock byte-for-byte: `DisputeResolved` → settlement → `TrustScoreUpdated`.
-- **`slashStaleArbiter`** — permissionless after SLA + 24h grace: deregisters the arbiter, clears the assignment, dispute stays open for reassignment.
-- **CEI + `nonReentrant` on every payout path.** Direct ETH transfers revert (`receive()`), so contract balance always maps 1:1 to tracked liabilities.
+- **UUPS upgradeable** (`initialize` is atomic and one-shot; `_disableInitializers()`
+  in the constructor blocks implementation squatting).
+- **`Ownable2Step`** — ownership transfers require the new owner to accept, so a
+  typo'd timelock/admin address cannot silently brick the contract.
+- **`ReentrancyGuardTransient`** (EIP-1153) + CEI on every payout path.
+- **Fee snapshot per milestone** (funding-time `feeBps`, hard-capped at 5%).
+- **`ref` join key** — the off-chain milestone uuid travels in `fund(ref, …)`.
 
-### `ArbiterRegistry.sol` — soulbound identity + on-chain trust (PRD F11/F12)
+### `ArbiterRegistry.sol` — staked identity + soulbound badge + trust
 
-- ERC-5194 soulbound badges: minted locked, transfers **and** burns revert, `locked()` + `Locked` event per the spec. Deregistration keeps the badge (history); re-registration mints a fresh one.
-- Trust score is a pure function of resolution history, driven only by the escrow: **+1 within SLA, −2 late, floored at zero**. The backend mirror never hand-edits it — it folds `TrustScoreUpdated` events.
-- `recordResolution` / `slash` are escrow-only; registration is platform-vetted (owner).
+- **ETH-collateralised roster.** `registerArbiter() {value: >= minStake}` joins
+  with a locked ERC-5194 soulbound badge. `requestUnstake()` / `withdrawStake()`
+  return the collateral only when the arbiter is idle and healthy.
+- **Trust score (0–100).** New arbiters start at 100. `+5` majority, `−10`
+  minority, `−15` missed deadline, `−25` overturned — applied only by the escrow
+  via `applyScoreChange`. `ScoreChanged(arbiter, old, new, reason)` fires on every
+  mutation.
+- **Score < n (minScoreToWithdraw) → stake LOCKED** and the arbiter is benched
+  from selection until the score recovers.
+- **Score = 0 → full slash to the treasury** and removal from the roster.
+- Enumerable roster (`rosterLength`/`rosterAt`) so the escrow can draw candidates
+  on-chain; `isEligible(a)` is the selection gate.
 
-### The interface contract with the backend
+### `Escrow.sol` — multi-arbiter dispute engine
 
-The backend's indexer (`mini-services/api/src/chain/abi.ts`) decodes exactly these 12 events + `milestoneStatus(uint256)→uint8` (enum ordinals are API — see `ONCHAIN_MILESTONE_STATUS`). **`test/EventSurface.t.sol` locks every topic hash and both enums to the TypeScript ABI**, so a Solidity rename that would break the indexer fails the build instead of production.
-
-## Invariants (the PRD §7.4 core, fuzzed with a ghost-accounting handler)
-
-After every one of ~65k randomized action sequences (512 runs × 128 depth, CI profile), with reverts, wrong actors and time jumps mixed in:
-
-1. **Solvency** — `contract balance ≥ Σ unsettled milestone amounts + accrued fees`.
-2. **Balance is exactly liabilities** — the stronger form this implementation achieves.
-3. **Conservation** — every wei that entered via `fund()` is still in the contract or left via a legitimate payout. Nothing leaks, nothing is created, nothing is paid twice.
-4. **Fee-pot mirror** — `accruedFees` equals the ghost sum of every fee the flows ever accrued.
-5. **No double settle** — settled milestones are terminal forever.
-
-The fuzzer earned its keep twice: the shrinker found a direct-to-contract `fund()` that bypassed the handler's ghost accounting (fixed by excluding the contracts from direct targeting — the handler is the only door), and the CI profile's deeper sequences verified the split path's odd-wei conservation.
-
-## Testing highlights
-
-- **Two-layer reentrancy proof** — an attacker contract reenters mid-payout and *captures the inner revert + the on-chain status it observed*: same-milestone reentry dies on the guard (modifier precedence) while CEI had already flipped the status (a guard bypass would still hit `WrongStatus`); cross-milestone reentry passes every state check and only the guard stops it.
-- **Fee-snapshot semantics** — fund at 250 bps → `setFeeBps(500)` → both milestones settle with their own snapshots.
-- **Fuzz conservation** — release and split math conserve to the wei for any amount ≤ 1e30 and any fee ≤ 500 bps.
-- Gas snapshot in `.gas-snapshot` (approve ≈ 328k, resolve-split ≈ 601k test-gas incl. setup).
-
-## Deploying
-
-```bash
-# local anvil
-anvil --block-time 1 --chain-id 31337
-forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 \
-  --private-key $ANVIL_KEY0 --broadcast
-
-# Base Sepolia (fund from a faucet first)
-forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL \
-  --private-key $DEPLOYER_KEY --broadcast --verify
+```
+openDispute{value: disputeFee}   →   picks up to 3 eligible, non-party arbiters
+        │
+        ├─ commitVote(id, round, hash)     COMMIT phase
+        ▼
+        ├─ revealVote(id, round, outcome, salt)   REVEAL phase
+        ▼
+        ├─ resolveDispute(id)              tally (2-of-3 quorum; tie → Split)
+        ▼
+        ├─ appeal(id){value}                optional, within appealWindow
+        ▼
+        └─ finalizeDispute(id)             payout + majority rewards + penalties
 ```
 
-Deploy order is wired in the script: registry → escrow(registry) → `registry.setEscrow(escrow)`. The deployer becomes admin/owner. Point the backend at the printed addresses:
+- **Selection** — random draw over the registry roster using `prevrandao` +
+  block metadata; parties are always excluded. Reverts if < 2 eligible arbiters.
+- **Commit–reveal** — `keccak256(abi.encode(outcome, salt, arbiter, milestoneId, round))`;
+  reveals open only after the commit deadline, so nobody can copy a vote.
+- **Quorum** — 2 of 3. If a third arbiter never responds, the remaining two decide.
+  If fewer than 2 reveal, a **no-quorum fallback** refunds the opener and returns
+  the milestone to `Submitted`.
+- **Rewards** — the dispute fee funds the majority arbiters' reward; minority and
+  non-revealers are penalised via trust score.
+- **Appeal** — a party may appeal within `appealWindow` by paying another dispute
+  fee; a changed outcome slashes the original majority −25 each.
+- **Money events are frozen** (`MilestoneFunded/Submitted/Released/Refunded/Split/Cancelled`)
+  so the backend money indexer is unaffected; the new dispute events are additive.
 
-```env
-CHAIN_MODE=real  CHAIN_ID=84532
-ESCROW_ADDRESS=0x…  ARBITER_REGISTRY_ADDRESS=0x…
+### `OpenLanceTimelock.sol`
+
+A zero-overhead subclass of OZ `TimelockController` (no extra storage/logic) that
+gives the deployment scripts a project-owned artifact.
+
+## Layout
+
+```
+contracts/            Solidity sources
+  Escrow.sol          milestone escrow (UUPS)
+  ArbiterRegistry.sol soulbound arbiter registry (UUPS)
+  IArbiterRegistry.sol interface the escrow depends on
+  OpenLanceTimelock.sol  OZ TimelockController (owner of both proxies)
+  test/ReentrancyAttacker.sol  test-only probe
+test/                 TypeScript + viem test suite (52 tests)
+scripts/
+  deploy.ts           timelock + both proxies + wiring (Base Sepolia / localhost)
+  execute-timelock.ts execute a queued timelock op
+  handoff-timelock.ts hand control to a Safe multisig
+  export-abi.ts       emit ABI JSON the backend can import
+hardhat.config.ts     networks, solc, fuzz/invariant profiles
+SECURITY.md           review, findings disposition, invariants
+slither.config.json   static-analysis config
 ```
 
-## Anvil end-to-end (the phase-2 demo)
+## The interface contract with the backend
 
-`bun run e2e:anvil` (from `mini-services/api`) spins up the whole stack in one process tree — anvil, a fresh deployment, the API in `CHAIN_MODE=real` against a fresh embedded DB — and replaces every `/dev/chain/*` call from the mock smoke test with a **real wallet transaction**:
+The backend indexer (`src/server/chain/abi.ts`) decodes the **frozen money
+events** plus the new dispute/registry events. `test/event-surface.ts` **locks
+every topic hash and both enum ordinals**, so a Solidity rename that would break
+the indexer fails the build instead of production.
 
-job → proposal → award → `fund` → `submit` → `approve` → **RPC-verified reviews** → dispute → **on-chain mutual nomination** → `resolve(split)` → trust score +1 → fee withdrawal → **live solvency check** (`balance == accrued fees`) → zero-drift reconciliation.
+| Event (frozen money) | Topic hash |
+|---|---|
+| `MilestoneFunded` | `0x6527340e…0ddf` |
+| `MilestoneSubmitted` | `0x90143ae4…39a7` |
+| `MilestoneReleased` | `0x7891dccf…c966` |
+| `DisputeResolved` | `0x0a1a08d0…c12a` |
+| `TrustScoreUpdated` | `0x54807645…03c3` |
+| `ArbiterRegistered` | `0xe4fa94e2…cab6` |
 
-It passes. That's the proof the adapter seam was honest: the backend was built against the mock chain, and the real contracts dropped in without a single change to the indexer, mirror or webhook pipeline.
+New (additive) events: `ArbitersSelected`, `VoteCommitted`, `VoteRevealed`,
+`DisputeFinalized`, `ArbiterRewarded`, `ArbiterPenalized`, `NoQuorumFallback`,
+`AppealOpened`, `AppealResolved`, `ScoreChanged`, `StakeDeposited`, `StakeLocked`,
+`StakeWithdrawn`, `StakeSlashed`.
 
-## Known simplifications (documented, not hidden)
+## Security
 
-- Push payments only (no pull-payment fallback) — a rejecting receiver wallet reverts the settlement. Fine for EOA-based MVP; the upgrade path is pull payments.
-- `withdrawFees` reverts on zero (the mock emits a zero-amount event instead) — error-path divergence only.
-- Arbiter registration is owner-gated (platform-vetted); the PRD's "anyone can register" path is a future governance decision.
-- A deregistered-after-assignment arbiter can still resolve; their (skipped) trust-score update emits no event, keeping the mirror consistent by construction.
+See [`SECURITY.md`](./SECURITY.md). Summary:
+
+- **0 High / 0 Medium** Slither findings on the production contracts.
+- Both implementations pass the OpenZeppelin upgrade-safety validator.
+- Tests cover: UUPS authorization, implementation squatting, storage survival,
+  reentrancy, solvency, wei-exact conservation, soulbound enforcement, one-shot
+  wiring, direct-transfer rejection, fee snapshots, **staking, stake locking,
+  score penalties/rewards, quorum, no-quorum fallback, and stake slashing**.
+
+## Known simplifications
+
+- Push payments (a reverting recipient blocks its own settlement); the upgrade
+  path is a pull-payment fallback.
+- **Arbiter randomness** uses `prevrandao`, which is producer-influenceable.
+  Bounded exposure (only *which eligible* arbiter is drawn; money still gated by
+  the 2-of-3 quorum + staking); migrate to a VRF via upgrade for mainnet.
+- Appeals **do not reverse** an already-executed payout — the appeal window
+  precedes finalization, so the payout happens once, after the window closes.
+- The timelock owner is trusted for fee/parameter changes, treasury, arbiter
+  registry repointing and upgrades — mitigated by the 48h delay + a Safe multisig.

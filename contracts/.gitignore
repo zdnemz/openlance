@@ -1,15 +1,26 @@
-# Compiler output
+# Hardhat 3 build output
+artifacts/
 cache/
-out/
+types/
 
-# Dependencies (installed via `forge install`)
-lib/
+# Dependencies
+node_modules/
 
 # Environment
 .env
 
-# Reports
-gas-snapshots/
+# Test / gas reports
 coverage/
+gas-report.txt
 lcov.info
+
+# Deployment records (addresses are environment-specific; keep base-sepolia only)
+deployments/hardhat.json
+deployments/localhost.json
+
+# Foundry leftovers (kept out of the tree during the Hardhat 3 migration)
+out/
 broadcast/
+lib/
+foundry.toml.bak
+remappings.txt.bak
