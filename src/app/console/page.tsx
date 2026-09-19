@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * EscrowLance — Backend Console.
+ * OpenLance — Backend Console.
  *
  * The product frontend arrives in a later build phase; this page is the live
  * window into the backend-first deliverable (Next.js route handlers on /api): health,
@@ -163,7 +163,7 @@ export default function BackendConsole() {
                 <ShieldCheck className="size-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight">EscrowLance · Backend Console</h1>
+                <h1 className="text-xl font-semibold tracking-tight">OpenLance · Backend Console</h1>
                 <p className="text-sm text-muted-foreground">Milestone escrow marketplace — backend-first build (Hono · Supabase-compatible Postgres · Redis · viem)</p>
               </div>
             </div>
@@ -395,7 +395,7 @@ export default function BackendConsole() {
 
       <footer className="mt-auto border-t bg-muted/30">
         <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
-          <span>EscrowLance — portfolio build, testnet only. On-chain = money + commitments + trust; off-chain = content + velocity.</span>
+          <span>OpenLance — portfolio build, testnet only. On-chain = money + commitments + trust; off-chain = content + velocity.</span>
           <span className="font-mono">Next.js route handlers · /api</span>
         </div>
       </footer>

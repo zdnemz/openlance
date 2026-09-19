@@ -1,5 +1,5 @@
 /**
- * EscrowLance API client.
+ * OpenLance API client.
  *
  * The backend runs in the SAME Next.js app (App Router route handlers under
  * `/api/**`), so every call is same-origin — no gateway port forwarding, no

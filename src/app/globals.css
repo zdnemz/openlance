@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  EscrowLance design tokens — dark premium, Deep Rose accent.
+  OpenLance design tokens — dark premium, Deep Rose accent.
   Dials: DESIGN_VARIANCE 8 · MOTION_INTENSITY 6 (calm app, cinematic landing)
   · VISUAL_DENSITY 4 (gallery-airy).
   Base: zinc-950. ONE accent: #e11d48 (desaturated rose). Emerald and the
@@ -41,7 +41,7 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* EscrowLance semantic palette — faint/dim clear WCAG AA on ink surfaces */
+  /* OpenLance semantic palette — faint/dim clear WCAG AA on ink surfaces */
   --color-rose-accent: #e11d48;
   --color-rose-bright: #f43f5e;
   --color-rose-soft: rgba(225, 29, 72, 0.12);

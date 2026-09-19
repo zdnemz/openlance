@@ -105,7 +105,7 @@ const EscrowCard = memo(function EscrowCard() {
 
       <div className="num mt-4 flex items-center justify-between text-[12px] text-faint">
         <span>tx 0x7f3a…c21e · 12 conf</span>
-        <span>escrowlance · anvil</span>
+        <span>openlance · anvil</span>
       </div>
     </SpotCard>
   );
@@ -130,7 +130,7 @@ export default function LandingPage() {
       {/* nav */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-line/60 bg-ink/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-5 md:px-8">
-          <Link href="/" aria-label="EscrowLance home">
+          <Link href="/" aria-label="OpenLance home">
             <Logo />
           </Link>
           <nav className="hidden items-center gap-8 text-[13.5px] text-dim md:flex">

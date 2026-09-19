@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * EscrowLance design primitives — dark premium, one rose accent, mono numerals.
+ * OpenLance design primitives — dark premium, one rose accent, mono numerals.
  */
 import { ComponentProps, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";

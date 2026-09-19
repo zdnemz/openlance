@@ -23,14 +23,14 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EscrowLance — milestone escrow for freelance work",
+  title: "OpenLance — milestone escrow for freelance work",
   description:
     "Freelance marketplace with smart-contract escrow: fund milestones, release on proof, dispute with SBT-staked arbiters. Base-native, on-chain settlement.",
   keywords: ["escrow", "freelance", "web3", "milestones", "solidity", "Base"],
   openGraph: {
-    title: "EscrowLance",
+    title: "OpenLance",
     description: "Milestone escrow for freelance work — released on proof, not promises.",
-    siteName: "EscrowLance",
+    siteName: "OpenLance",
     type: "website",
   },
 };
