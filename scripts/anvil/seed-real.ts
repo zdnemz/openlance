@@ -83,21 +83,42 @@ const tx = async (key: string, call: Parameters<ReturnType<typeof wallet>['write
  */
 const MIN_STAKE = 100000000000000000n // 0.1 ETH — matches the registry's minStake
 const DISPUTE_FEE = 50000000000000000n // 0.05 ETH — matches the escrow's disputeFee
-const registerViaTimelock = async (arbiter: `0x${string}`) => {
+
+/**
+ * Execute an owner-gated call (registry / escrow) through the TimelockController
+ * — the same authorization path production uses (the proxies' owner is the
+ * timelock, never an EOA). OZ v5 `schedule` is NON-payable (the scheduled value
+ * is carried by the operation and only transferred on `execute`), and the delay
+ * is in SECONDS, so we read the live `minDelay` instead of hard-coding it — a
+ * mismatch silently benches the op in the "Waiting" state.
+ */
+const callViaTimelock = async (
+  target: `0x${string}`,
+  abi: readonly unknown[],
+  functionName: string,
+  args: readonly unknown[] = [],
+  value = 0n,
+) => {
   const { encodeFunctionData } = await import('viem')
-  const data = encodeFunctionData({ abi: REGISTRY_FN, functionName: 'register', args: [arbiter] })
+  const data = encodeFunctionData({ abi: abi as never, functionName, args } as never)
+  const minDelay = await publicClient.readContract({
+    address: TIMELOCK, abi: parseAbi(['function getMinDelay() view returns (uint256)']), functionName: 'getMinDelay',
+  })
   await tx(P.mara.key, {
     address: TIMELOCK, abi: TIMELOCK_FN, functionName: 'schedule',
-    args: [REGISTRY, MIN_STAKE, data, ZERO32, ZERO32, 5000n],
-    value: MIN_STAKE,
+    args: [target, value, data, ZERO32, ZERO32, minDelay],
   })
-  await new Promise((r) => setTimeout(r, 6500))
+  // Wait out the delay with a margin, then execute.
+  await new Promise((r) => setTimeout(r, Number(minDelay) * 1000 + 2500))
   await tx(P.mara.key, {
     address: TIMELOCK, abi: TIMELOCK_FN, functionName: 'execute',
-    args: [REGISTRY, MIN_STAKE, data, ZERO32, ZERO32],
-    value: MIN_STAKE,
+    args: [target, value, data, ZERO32, ZERO32],
+    value,
   })
 }
+
+const registerViaTimelock = (arbiter: `0x${string}`) =>
+  callViaTimelock(REGISTRY, REGISTRY_FN, 'register', [arbiter], MIN_STAKE)
 
 /**
  * Drive a full multi-arbiter commit-reveal round for the personas the contract
@@ -267,6 +288,23 @@ async function main() {
   log('registering arbiters on-chain (Ingrid, Nils, Priya)')
   for (const a of [P.ingrid, P.nils, P.priya]) {
     await registerViaTimelock(a.addr as `0x${string}`)
+  }
+  // Warp chain time past the registry's min-stake-duration so the freshly
+  // registered arbiters are immediately selectable (dev-only convenience; the
+  // rule itself is covered by contracts/test/registry.ts).
+  const minStakeDuration = await publicClient.readContract({
+    address: REGISTRY, abi: parseAbi(['function minStakeDuration() view returns (uint256)']), functionName: 'minStakeDuration',
+  })
+  if (Number(minStakeDuration) > 0) {
+    await fetch(RPC, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'evm_increaseTime', params: [Number(minStakeDuration) + 5], id: 1 }),
+    })
+    await fetch(RPC, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'evm_mine', params: [], id: 1 }),
+    })
+    log(`warped +${minStakeDuration}s so arbiters are selectable`)
   }
 
   // ── Jobs ─────────────────────────────────────────────────────────────────
@@ -481,10 +519,9 @@ async function main() {
     const onchain2 = view.milestones[1]!.onchainId!
     const disputes = await api('GET', '/disputes', undefined, t.junko)
     const disputeC = disputes.find((d: any) => d.milestoneId === m2.id)
-    // Off-chain arbiter proposal trail (kept for the UI record); the on-chain
-    // selection is now random from the staked roster, so this is narrative only.
-    await api('POST', `/disputes/${disputeC.id}/arbiter-proposal`, { arbiterAddress: P.ingrid.addr }, t.junko)
-    await api('POST', `/disputes/${disputeC.id}/arbiter-proposal`, { arbiterAddress: P.ingrid.addr }, t.dario)
+    // NB: the legacy per-dispute arbiter-proposal trail is gone — selection is
+    // now random from the staked roster on-chain, so there is no off-chain
+    // nomination to record here.
 
     log('project C: arbiters run commit-reveal → split')
     // Majority votes Split (2); any third arbiter votes Release (0) to exercise
@@ -504,7 +541,7 @@ async function main() {
   }
 
   log('withdrawing fees (platform housekeeping, funds the admin panel)')
-  await tx(P.mara.key, { address: ESCROW, abi: ESCROW_FN, functionName: 'withdrawFees', args: [P.mara.addr] })
+  await callViaTimelock(ESCROW, ESCROW_FN, 'withdrawFees', [P.mara.addr])
   await sleep(2600) // let the indexer sweep the tail events
 
   const final = await api('GET', '/overview')

@@ -28,7 +28,7 @@ import {
   AddressAvatar, AddressText, EthAmount, HashText, ListHead, Skeleton, EmptyState, press,
   StatusBadge, Copyable,
 } from "@/components/design";
-import { STATE_COLORS, MILESTONE_LABELS, formatEth, shortAddress, timeAgo, timeUntil, feeOn } from "@/lib/format";
+import { STATE_COLORS, MILESTONE_LABELS, formatEth, toWei, shortAddress, timeAgo, timeUntil, feeOn } from "@/lib/format";
 import type { ProjectMilestone, DisputeView } from "@/lib/types";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -122,8 +122,8 @@ function ProjectHeader({ id }: { id: string }) {
   if (!project) return null;
   const escrowed = project.milestones.filter((m) => ["funded", "submitted", "disputed"].includes(m.chainStatus));
   const released = project.milestones.filter((m) => ["released", "resolved_release", "resolved_split"].includes(m.chainStatus));
-  const escrowedWei = escrowed.reduce((a, m) => a + BigInt(m.amountWei), 0n);
-  const releasedWei = released.reduce((a, m) => a + BigInt(m.amountWei), 0n);
+  const escrowedWei = escrowed.reduce((a, m) => a + toWei(m.amountWei), 0n);
+  const releasedWei = released.reduce((a, m) => a + toWei(m.amountWei), 0n);
 
   return (
     <div className="glass rounded-3xl p-7 md:p-8">
@@ -281,7 +281,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         </div>
         <div>
           <div className="num text-[11px] uppercase tracking-wider text-faint">payout</div>
-          <EthAmount wei={BigInt(m.amountWei) - fee} className="mt-1 block text-sm text-state-released" />
+          <EthAmount wei={toWei(m.amountWei) - fee} className="mt-1 block text-sm text-state-released" />
         </div>
       </div>
 
@@ -306,7 +306,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     contract: "escrow",
                     functionName: "fund",
                     args: [m.fund!.ref, project.freelancer.walletAddress],
-                    value: BigInt(m.fund!.amountWei),
+                    value: toWei(m.fund!.amountWei),
                     projectId,
                     expect: wait("funded"),
                     successMessage: "Milestone funded: value locked in escrow",
@@ -367,7 +367,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                         label: "Approve + release",
                         contract: "escrow",
                         functionName: "approve",
-                        args: [BigInt(m.onchainId!)],
+                        args: [toWei(m.onchainId!)],
                         projectId,
                         expect: wait("released"),
                         successMessage: "Released: funds paid out, fee accounted",
@@ -375,7 +375,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     }
                     className="w-full rounded-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
                   >
-                    <PhaseLabel phase={chain.phase} idle={`Approve + release ${formatEth(BigInt(m.amountWei) - fee)} ETH`} />
+                    <PhaseLabel phase={chain.phase} idle={`Approve + release ${formatEth(toWei(m.amountWei) - fee)} ETH`} />
                   </Button>
                   <Button
                     variant="ghost"
@@ -414,7 +414,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                 className="resize-none border-line bg-white/[0.03] text-[13px]"
               />
               <p className="num text-[11px] text-faint">
-                dispute fee {formatEth(BigInt(disputeFeeWei))} ETH · paid to the majority arbiters on resolution
+                dispute fee {formatEth(disputeFeeWei)} ETH · paid to the majority arbiters on resolution
               </p>
               <Button
                 disabled={active || reason.trim().length < 10 || m.onchainId === null}
@@ -426,8 +426,8 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                       label: "Open dispute",
                       contract: "escrow",
                       functionName: "openDispute",
-                      args: [BigInt(m.onchainId!)],
-                      value: BigInt(disputeFeeWei),
+                      args: [toWei(m.onchainId!)],
+                      value: toWei(disputeFeeWei),
                       projectId,
                       expect: wait("disputed"),
                       successMessage: "Dispute opened — arbiters selected on-chain",
@@ -436,7 +436,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                 }
                 className="w-full rounded-full border border-state-disputed/40 bg-state-disputed/10 py-2.5 text-[12.5px] font-medium text-state-disputed hover:bg-state-disputed/20"
               >
-                <PhaseLabel phase={chain.phase} idle={`Write record + openDispute() · ${formatEth(BigInt(disputeFeeWei))} ETH`} />
+                <PhaseLabel phase={chain.phase} idle={`Write record + openDispute() · ${formatEth(disputeFeeWei)} ETH`} />
               </Button>
             </div>
           </details>
@@ -511,7 +511,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
           label: "Submit milestone",
           contract: "escrow",
           functionName: "submit",
-          args: [BigInt(m.onchainId!)],
+          args: [toWei(m.onchainId!)],
           projectId,
           expect: wait("submitted"),
           successMessage: "Submitted on-chain: client review window open",
@@ -641,7 +641,7 @@ function DisputePanel({
                   disabled={active}
                   onClick={async () => {
                     const salt = makeSalt();
-                    const hash = computeCommitHash(DISPUTE_OUTCOME[outcome], salt, address!, BigInt(onchainId), dispute.round ?? 0);
+                    const hash = computeCommitHash(DISPUTE_OUTCOME[outcome], salt, address!, toWei(onchainId), dispute.round ?? 0);
                     const result = await commitVoteAction(chain.run)(onchainId, dispute.round ?? 0, hash, projectId);
                     if (result.ok) {
                       // Stash the salt so the reveal step can find it; losing it
@@ -731,12 +731,12 @@ function DisputePanel({
               <Button
                 disabled={active}
                 onClick={async () => {
-                  const result = await appealDisputeAction(chain.run)(onchainId, BigInt(disputeFeeWei), projectId);
+                  const result = await appealDisputeAction(chain.run)(onchainId, toWei(disputeFeeWei), projectId);
                   if (result.ok) invalidate.disputes();
                 }}
                 className="w-full rounded-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10"
               >
-                Appeal ({formatEth(BigInt(disputeFeeWei))} ETH) — penalises a wrong majority
+                Appeal ({formatEth(disputeFeeWei)} ETH) — penalises a wrong majority
               </Button>
             )}
           </div>
@@ -931,7 +931,7 @@ function ActivityTab({ projectId }: { projectId: string }) {
                     <span className="num ml-2 text-[11px] text-faint">milestone #{e.milestoneOnchainId}</span>
                   )}
                   {payloadAmount && <span className="num ml-2 text-[11px] text-dim">{formatEth(payloadAmount)} ETH</span>}
-                  {payloadFee && BigInt(payloadFee) > 0n && <span className="num ml-2 text-[11px] text-state-split">fee {formatEth(payloadFee)}</span>}
+                  {payloadFee && toWei(payloadFee) > 0n && <span className="num ml-2 text-[11px] text-state-split">fee {formatEth(payloadFee)}</span>}
                 </span>
                 <span className="num text-[11px] text-faint">block {e.blockNumber}</span>
                 <HashText value={e.txHash} size={5} className="text-[11.5px]" />

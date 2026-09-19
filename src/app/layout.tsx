@@ -42,7 +42,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`dark ${instrumentSerif.variable} ${schibstedGrotesk.variable} ${plexMono.variable}`} suppressHydrationWarning>
-      <body className="font-sans antialiased bg-background text-foreground">
+      {/*
+        suppressHydrationWarning on <body>: browser extensions (Bitdefender,
+        Web of Trust, etc.) inject attributes like `bis_skin_checked` and
+        `__processed_*__` into the body and every descendant before React
+        hydrates. That mutation is out of our control and only affects
+        attributes here, never our rendered text — so we silence the noise.
+      */}
+      <body className="font-sans antialiased bg-background text-foreground" suppressHydrationWarning>
         <Providers>{children}</Providers>
         <Toaster
           theme="dark"

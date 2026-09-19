@@ -39,7 +39,8 @@ async function main() {
   const kv = await getKv()
   await kv.del('mockchain:block')
   await execSql(`
-    truncate table webhook_deliveries, webhook_subscriptions, notification_events,
+    truncate table notification_recipients, notification_preferences,
+      webhook_deliveries, webhook_subscriptions, notification_events,
       reconciliation_runs, ledger_events, indexer_state, disputes, reviews,
       submission_attachments, submissions, messages, attachments, project_milestones,
       projects, proposal_milestones, proposals, job_milestones, jobs, arbiters, users

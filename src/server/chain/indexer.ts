@@ -135,6 +135,8 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'StakeWithdrawn': return applyStakeWithdrawn(tx, evt)
     case 'StakeLocked': return applyStakeLocked(tx, evt)
     case 'StakeSlashed': return applyStakeSlashed(tx, evt)
+    case 'UnstakeRequested': return applyUnstakeRequested(tx, evt)
+    case 'UnstakeCancelled': return applyUnstakeCancelled(tx, evt)
     default: return null
   }
 }
@@ -516,11 +518,28 @@ async function applyStakeSlashed(tx: Tx, evt: RawChainLog): Promise<PlannedNotif
   return null
 }
 
+async function applyUnstakeRequested(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  // Benched from selection immediately; the cooldown clock lives on-chain and
+  // is read directly by the UI (unstakeReadyAt).
+  await tx.update(arbiters).set({ unstakeRequested: true, updatedAt: evt.blockTime }).where(eq(arbiters.address, address))
+  return null
+}
+
+async function applyUnstakeCancelled(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  await tx.update(arbiters).set({ unstakeRequested: false, updatedAt: evt.blockTime }).where(eq(arbiters.address, address))
+  return null
+}
+
 async function applyArbiterRegistered(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
   const address = str(evt.args.arbiter).toLowerCase()
   const tokenId = numOrNull(evt.args.sbtTokenId)
+  // New arbiters start at the maximum trust score (ArbiterRegistry._enroll sets
+  // `trustScore = MAX_SCORE` with no event), so seed the mirror at 100 to match
+  // the chain — otherwise the panel shows 0 until the first dispute.
   await tx.insert(arbiters).values({
-    address, registered: true, sbtTokenId: tokenId, trustScore: 0, registeredAt: evt.blockTime,
+    address, registered: true, sbtTokenId: tokenId, trustScore: 100, registeredAt: evt.blockTime,
   }).onConflictDoUpdate({
     target: arbiters.address,
     set: { registered: true, sbtTokenId: tokenId, updatedAt: evt.blockTime },

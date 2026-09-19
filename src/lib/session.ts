@@ -6,6 +6,7 @@
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { useSyncExternalStore } from "react";
 import type { PublicUser } from "@/lib/types";
 
 interface SessionState {
@@ -31,3 +32,19 @@ export const useSession = create<SessionState>()(
     { name: "el:session" },
   ),
 );
+
+/**
+ * True once the persisted session has rehydrated from localStorage.
+ *
+ * The session is null during SSR and the first client render, then flips in —
+ * so any component that branches on `user`/`token` must gate on this to avoid
+ * React hydration mismatches. Starts at `false`; the `persist` API is absent on
+ * the server, so it is only accessed inside the effect.
+ */
+export function useSessionHydrated(): boolean {
+  return useSyncExternalStore(
+    (onChange) => useSession.persist?.onFinishHydration(onChange) ?? (() => {}),
+    () => useSession.persist?.hasHydrated() ?? true,
+    () => false,
+  );
+}

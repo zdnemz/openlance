@@ -301,6 +301,37 @@ export const notificationEvents = pgTable('notification_events', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('notification_events_created_idx').on(t.createdAt)])
 
+/**
+ * Per-user inbox projection of the outbox. One row per (event, recipient) —
+ * written by the emission path so the in-app feed is a simple indexed read.
+ * `readAt` is the read receipt; unread = readAt IS NULL.
+ */
+export const notificationRecipients = pgTable('notification_recipients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: uuid('event_id').notNull().references(() => notificationEvents.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('notification_recipients_event_user_idx').on(t.eventId, t.userId),
+  index('notification_recipients_user_created_idx').on(t.userId, t.createdAt),
+  index('notification_recipients_user_unread_idx').on(t.userId, t.readAt),
+])
+
+/**
+ * Per-user notification preferences (PRD F9). Absence of a row = default
+ * (all types on, webhook delivery on). A row with `muted=true` silences both the
+ * inbox projection and webhook fan-out for that type.
+ */
+export const notificationPreferences = pgTable('notification_preferences', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** '*' is the global default; otherwise a NotificationType. */
+  eventType: text('event_type').notNull(),
+  muted: boolean('muted').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('notification_prefs_user_type_idx').on(t.userId, t.eventType)])
+
 export const webhookSubscriptions = pgTable('webhook_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -349,5 +380,7 @@ export type Dispute = typeof disputes.$inferSelect
 export type LedgerEvent = typeof ledgerEvents.$inferSelect
 export type Arbiter = typeof arbiters.$inferSelect
 export type NotificationEvent = typeof notificationEvents.$inferSelect
+export type NotificationRecipient = typeof notificationRecipients.$inferSelect
+export type NotificationPreference = typeof notificationPreferences.$inferSelect
 export type WebhookSubscription = typeof webhookSubscriptions.$inferSelect
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect

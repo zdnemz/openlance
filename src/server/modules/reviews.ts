@@ -14,7 +14,7 @@ import { Errors } from '../lib/errors'
 import { unlocksReviews } from '../domain/state-machine'
 import { getChainAdapter } from '../chain/adapter'
 import { emitNotification } from './notify'
-import { reviews } from '../db/schema'
+import { reviews, users } from '../db/schema'
 import { loadMilestone } from './helpers'
 
 export async function createReview(request: Request, milestoneId: string) {
@@ -63,12 +63,13 @@ export async function createReview(request: Request, milestoneId: string) {
     txHash: settlementTxHash,
   }).returning()
 
+  const [reviewee] = await db.select({ walletAddress: users.walletAddress }).from(users).where(eq(users.id, revieweeId)).limit(1)
   await emitNotification({
     type: 'review.received',
     actorAddress: user.walletAddress,
     projectId: project.id,
     milestoneId: milestone.id,
-    payload: { rating: body.rating, reviewId: review!.id },
+    payload: { rating: body.rating, reviewId: review!.id, revieweeAddress: reviewee?.walletAddress ?? null },
   })
   return review
 }

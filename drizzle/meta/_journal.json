@@ -15,6 +15,13 @@
       "when": 1789812655555,
       "tag": "0001_illegal_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789857000355,
+      "tag": "0002_cultured_flatman",
+      "breakpoints": true
     }
   ]
 }

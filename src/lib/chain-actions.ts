@@ -16,7 +16,7 @@ import { useRuntime } from "@/lib/runtime";
 import { get } from "@/lib/api";
 import { toast } from "sonner";
 import type { ProjectView } from "@/lib/types";
-import { shortHash } from "@/lib/format";
+import { shortHash, toWei } from "@/lib/format";
 
 export type Phase = "idle" | "signing" | "mining" | "indexing" | "done";
 
@@ -113,7 +113,7 @@ export function fundMilestoneAction(run: ReturnType<typeof useChainAction>["run"
       contract: "escrow",
       functionName: "fund",
       args: [ref, freelancer],
-      value: BigInt(amountWei),
+      value: toWei(amountWei),
       projectId,
       expect,
       successMessage: "Milestone funded — value locked in escrow",
@@ -126,7 +126,7 @@ export function submitMilestoneAction(run: ReturnType<typeof useChainAction>["ru
       label: "Submit milestone",
       contract: "escrow",
       functionName: "submit",
-      args: [BigInt(onchainId)],
+      args: [toWei(onchainId)],
       projectId,
       expect,
       successMessage: "Submitted on-chain — client review window open",
@@ -139,7 +139,7 @@ export function approveMilestoneAction(run: ReturnType<typeof useChainAction>["r
       label: "Approve + release",
       contract: "escrow",
       functionName: "approve",
-      args: [BigInt(onchainId)],
+      args: [toWei(onchainId)],
       projectId,
       expect,
       successMessage: "Released — funds paid out, fee accounted",
@@ -152,7 +152,7 @@ export function cancelMilestoneAction(run: ReturnType<typeof useChainAction>["ru
       label: "Cancel milestone",
       contract: "escrow",
       functionName: "cancel",
-      args: [BigInt(onchainId)],
+      args: [toWei(onchainId)],
       projectId,
       expect,
       successMessage: "Cancelled — full refund issued",
@@ -168,7 +168,7 @@ export function openDisputeAction(run: ReturnType<typeof useChainAction>["run"])
       label: "Open dispute",
       contract: "escrow",
       functionName: "openDispute",
-      args: [BigInt(onchainId)],
+      args: [toWei(onchainId)],
       value: feeWei,
       projectId,
       expect,
@@ -183,7 +183,7 @@ export function commitVoteAction(run: ReturnType<typeof useChainAction>["run"]) 
       label: "Commit vote",
       contract: "escrow",
       functionName: "commitVote",
-      args: [BigInt(onchainId), round, commitHash],
+      args: [toWei(onchainId), round, commitHash],
       projectId,
       expect,
       successMessage: "Vote committed — your choice is hidden until the reveal phase",
@@ -197,7 +197,7 @@ export function revealVoteAction(run: ReturnType<typeof useChainAction>["run"]) 
       label: "Reveal vote",
       contract: "escrow",
       functionName: "revealVote",
-      args: [BigInt(onchainId), round, outcome, salt],
+      args: [toWei(onchainId), round, outcome, salt],
       projectId,
       expect,
       successMessage: "Vote revealed — tally will run at the deadline",
@@ -211,7 +211,7 @@ export function tallyDisputeAction(run: ReturnType<typeof useChainAction>["run"]
       label: "Tally dispute",
       contract: "escrow",
       functionName: round === 0 ? "resolveDispute" : "resolveAppeal",
-      args: [BigInt(onchainId)],
+      args: [toWei(onchainId)],
       projectId,
       expect,
       successMessage: "Round tallied — majority recorded",
@@ -225,7 +225,7 @@ export function finalizeDisputeAction(run: ReturnType<typeof useChainAction>["ru
       label: "Finalize dispute",
       contract: "escrow",
       functionName: "finalizeDispute",
-      args: [BigInt(onchainId)],
+      args: [toWei(onchainId)],
       projectId,
       expect,
       successMessage: "Dispute finalized — funds settled on-chain",
@@ -239,7 +239,7 @@ export function appealDisputeAction(run: ReturnType<typeof useChainAction>["run"
       label: "Appeal dispute",
       contract: "escrow",
       functionName: "appeal",
-      args: [BigInt(onchainId)],
+      args: [toWei(onchainId)],
       value: feeWei,
       projectId,
       expect,

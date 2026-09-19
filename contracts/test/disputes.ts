@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { deployWithEoaOwner, connection, DISPUTE_FEE, getRound, getDispute, MIN_STAKE } from "./fixtures.ts";
+import { deployWithEoaOwner, connection, DISPUTE_FEE, getRound, getDispute, MIN_STAKE, MIN_STAKE_DURATION } from "./fixtures.ts";
 import { commitRevealAll, walletsFor, passRevealWindow, passAppealWindow, tallyAndFinalize } from "./disputeFlow.ts";
 import { parseEther } from "viem";
 
@@ -26,6 +26,8 @@ async function setupDispute(arbitersAvailable = 3) {
   for (const w of arbiterWallets) {
     await registry.write.registerArbiter({ value: MIN_STAKE, account: w.account });
   }
+  // Clear the min-stake-duration clock so the roster is selectable immediately.
+  await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
   await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
   await escrow.write.submit([1n], { account: freelancer.account });
   await escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account });
@@ -254,6 +256,59 @@ describe("Escrow — multi-arbiter disputes", () => {
     assert.equal(await registry.read.trustScoreOf([wallets[2]!.account.address]), 85n);
     // Majority score started at the cap (100) so it stays there.
     assert.equal(await registry.read.trustScoreOf([wallets[0]!.account.address]), 100n);
+  });
+
+  it("splits the reward pot proportionally to the selection-time stake snapshot", async function () {
+    // Two arbiters only, with a large stake gap, so both are always drawn and
+    // their shares are unambiguous: heavy stake = 3/4 of the pot, light = 1/4.
+    const ctx = await deployWithEoaOwner();
+    const { registry, escrow, client, freelancer, arbiters } = ctx;
+    const heavy = arbiters[0]!;
+    const light = arbiters[1]!;
+    const HEAVY_STAKE = parseEther("0.3"); // 3 × MIN_STAKE
+    const LIGHT_STAKE = parseEther("0.1"); // 1 × MIN_STAKE
+    await registry.write.registerArbiter({ value: HEAVY_STAKE, account: heavy.account });
+    await registry.write.registerArbiter({ value: LIGHT_STAKE, account: light.account });
+    // Clear the min-stake-duration clock so both are selectable right away.
+    await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
+
+    await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
+    await escrow.write.submit([1n], { account: freelancer.account });
+    await escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account });
+
+    const r = await getRound(escrow, 1n, 0);
+    if (r.arbiterCount < 2) return; // needs both drawn to compare shares
+
+    const { commitHash } = await import("./fixtures.ts");
+    const saltH = `0x${"90".repeat(32)}` as `0x${string}`;
+    const saltL = `0x${"91".repeat(32)}` as `0x${string}`;
+    await escrow.write.commitVote([1n, 0, commitHash(RELEASE, saltH, heavy.account.address, 1n, 0)], { account: heavy.account });
+    await escrow.write.commitVote([1n, 0, commitHash(RELEASE, saltL, light.account.address, 1n, 0)], { account: light.account });
+    await passCommitDeadline(escrow, 1n);
+    await escrow.write.revealVote([1n, 0, RELEASE, saltH], { account: heavy.account });
+    await escrow.write.revealVote([1n, 0, RELEASE, saltL], { account: light.account });
+    await passRevealWindow(escrow, 1n, 0);
+
+    // Capture balances right before finalization pays out.
+    const pub = await connection.viem.getPublicClient();
+    const heavyBefore = await pub.getBalance({ address: heavy.account.address });
+    const lightBefore = await pub.getBalance({ address: light.account.address });
+
+    await tallyAndFinalize(escrow, 1n, 0, client.account);
+
+    const heavyGain = (await pub.getBalance({ address: heavy.account.address })) - heavyBefore;
+    const lightGain = (await pub.getBalance({ address: light.account.address })) - lightBefore;
+
+    // Expected: pot split by stake weight (0.3 : 0.1 = 3 : 1). Rounding dust
+    // stays in rewardPool, so the pair may sum to slightly less than the pot.
+    const pot = DISPUTE_FEE;
+    const expectedHeavy = (pot * HEAVY_STAKE) / (HEAVY_STAKE + LIGHT_STAKE);
+    const expectedLight = (pot * LIGHT_STAKE) / (HEAVY_STAKE + LIGHT_STAKE);
+
+    assert.equal(heavyGain, expectedHeavy, "heavy arbiter must get the 3/4 share");
+    assert.equal(lightGain, expectedLight, "light arbiter must get the 1/4 share");
+    assert.ok(heavyGain > lightGain, "larger stake must earn strictly more");
+    assert.ok(heavyGain + lightGain <= pot, "payouts never exceed the pot");
   });
 });
 

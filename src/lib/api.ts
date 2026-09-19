@@ -46,6 +46,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 export const get = <T = unknown>(path: string) => api<T>("GET", path);
 export const post = <T = unknown>(path: string, body?: unknown) => api<T>("POST", path, body);
 export const patch = <T = unknown>(path: string, body?: unknown) => api<T>("PATCH", path, body);
+export const del = <T = unknown>(path: string) => api<T>("DELETE", path);
 
 /** Absolute-or-relative upload URLs served by the same app are already same-origin. */
 export function fileUrl(u: string): string {

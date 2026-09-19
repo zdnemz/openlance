@@ -14,6 +14,7 @@
  * ~150 lines wagmi was providing: connect, signMessage, sendTransaction,
  * balance. Smaller graph, faster compiles, same wallet-agnostic UX.
  */
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { encodeFunctionData, decodeFunctionResult, type Abi } from "viem";
@@ -165,6 +166,26 @@ export const useWallet = create<WalletState>()(
     },
   ),
 );
+
+/**
+ * True once the persisted wallet has been rehydrated from localStorage.
+ *
+ * SSR + the first client render both see `address: null`; zustand/persist then
+ * reads localStorage and flips in `address`, which changes rendered markup and
+ * trips React's hydration check. Components that branch on `address` MUST gate
+ * on this hook and render a stable placeholder until it returns true.
+ *
+ * Backed by `useSyncExternalStore` so the server snapshot is `false` (SSR and
+ * the first client render agree) and the value flips reactively when rehydrate
+ * lands. `persist` is absent on the server, so every access is guarded.
+ */
+export function useWalletHydrated(): boolean {
+  return useSyncExternalStore(
+    (onChange) => useWallet.persist?.onFinishHydration(onChange) ?? (() => {}),
+    () => useWallet.persist?.hasHydrated() ?? true,
+    () => false,
+  );
+}
 
 /* ── signing + sending ──────────────────────────────────────────────────── */
 

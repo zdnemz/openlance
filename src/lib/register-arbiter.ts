@@ -15,7 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useWallet, readContract } from "@/lib/wallet";
 import { useRuntime } from "@/lib/runtime";
-import { REGISTRY_ABI } from "@/lib/contracts";
+import { REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
+import { toWei } from "@/lib/format";
 import {
   useChainAction, registerArbiterWithStakeAction, addStakeAction,
   requestUnstakeAction, cancelUnstakeAction, withdrawStakeAction,
@@ -30,12 +31,32 @@ export interface MyArbiterState {
   eligible: boolean;
   minStakeWei: string;
   minScoreToWithdraw: number;
+  /** Seconds of continuous stake required before selection. */
+  minStakeDurationSeconds: number;
+  /** Seconds between requestUnstake and withdrawStake. */
+  unstakeCooldownSeconds: number;
+  /** Unix seconds when the arbiter becomes eligible for selection (0 if unregistered). */
+  eligibleAt: number;
+  /** Unix seconds when a pending unstake may be withdrawn (0 if none pending). */
+  unstakeReadyAt: number;
+  /** On-chain "now" at read time, so the UI can compute countdowns consistently. */
+  chainNow: number;
+  /**
+   * Count of in-flight dispute rounds this arbiter is committed to
+   * (Escrow.activeDisputes). The registry's `_isBusy` gate reverts
+   * requestUnstake/withdrawStake while this is > 0 — the UI mirrors it so a
+   * user never signs a tx that will revert.
+   */
+  activeDisputes: number;
+  /** Convenience: `activeDisputes > 0` (the contract's busy condition). */
+  busy: boolean;
 }
 
 /** Live on-chain state for the connected wallet's arbiter account. */
 export function useMyArbiterState(): { state: MyArbiterState | null; refresh: () => void } {
   const { address } = useWallet();
   const registry = useRuntime((s) => s.registry);
+  const escrow = useRuntime((s) => s.escrow);
   const [state, setState] = useState<MyArbiterState | null>(null);
   const [nonce, setNonce] = useState(0);
 
@@ -51,11 +72,27 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
       });
       const minStakeWei = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStake" });
       const minScore = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minScoreToWithdraw" });
+      const minStakeDuration = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStakeDuration" });
+      const unstakeCooldown = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeCooldown" });
       const eligible = await readContract<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isEligible", args: [address] });
       const locked = await readContract<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isLocked", args: [address] });
+      const eligibleAt = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "eligibleAt", args: [address] });
+      const unstakeReadyAt = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeReadyAt", args: [address] });
+      // The escrow owns the "active dispute" bookkeeping the registry's _isBusy
+      // guard consults; read it directly so the UI matches the revert condition.
+      const activeDisputesRaw = escrow
+        ? await readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "activeDisputes", args: [address] })
+        : null;
+      const activeDisputes = Number(activeDisputesRaw ?? 0n);
+      const chainNow = Math.floor(Date.now() / 1000);
       if (cancelled) return;
       if (!info) {
-        setState({ registered: false, trustScore: 0, stakeWei: "0", locked: false, unstakeRequested: false, eligible: false, minStakeWei: (minStakeWei ?? 0n).toString(), minScoreToWithdraw: Number(minScore ?? 50n) });
+        setState({
+          registered: false, trustScore: 0, stakeWei: "0", locked: false, unstakeRequested: false, eligible: false,
+          minStakeWei: (minStakeWei ?? 0n).toString(), minScoreToWithdraw: Number(minScore ?? 50n),
+          minStakeDurationSeconds: Number(minStakeDuration ?? 0n), unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
+          eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false,
+        });
         return;
       }
       setState({
@@ -67,10 +104,17 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         eligible: Boolean(eligible),
         minStakeWei: (minStakeWei ?? 0n).toString(),
         minScoreToWithdraw: Number(minScore ?? 50n),
+        minStakeDurationSeconds: Number(minStakeDuration ?? 0n),
+        unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
+        eligibleAt: Number(eligibleAt ?? 0n),
+        unstakeReadyAt: Number(unstakeReadyAt ?? 0n),
+        chainNow,
+        activeDisputes,
+        busy: activeDisputes > 0,
       });
     })();
     return () => { cancelled = true; };
-  }, [registry, address, nonce]);
+  }, [registry, escrow, address, nonce]);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
   return { state, refresh };
@@ -83,7 +127,7 @@ export function useArbiterStaking() {
   const { address } = useWallet();
 
   const register = useCallback(async (stakeWei: bigint) => {
-    const min = BigInt(state?.minStakeWei ?? "0");
+    const min = toWei(state?.minStakeWei ?? "0");
     if (stakeWei < min) {
       toast.error("Stake below minimum", { description: `At least ${min.toString()} wei is required.` });
       return { ok: false };

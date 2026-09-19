@@ -71,6 +71,10 @@ export async function createProposal(request: Request, jobId: string) {
     .where(and(eq(proposals.jobId, job.id), eq(proposals.freelancerId, user.id))).limit(1)
   if (existing.length) throw Errors.conflict('duplicate_proposal', 'You already proposed on this job')
 
+  const [poster] = await db.select({ walletAddress: users.walletAddress }).from(users)
+    .where(eq(users.id, job.posterId)).limit(1)
+  const posterAddress = poster?.walletAddress ?? null
+
   const created = await db.transaction(async (tx) => {
     const bidTotal = body.milestones.reduce((acc, m) => acc + BigInt(toWei(m.amount)), 0n).toString()
     const [p] = await tx.insert(proposals).values({
@@ -86,7 +90,7 @@ export async function createProposal(request: Request, jobId: string) {
   await emitNotification({
     type: 'proposal.received',
     actorAddress: user.walletAddress,
-    payload: { jobId: job.id, jobTitle: job.title, proposalId: created.id, bidTotalWei: created.bidTotalWei },
+    payload: { jobId: job.id, jobTitle: job.title, proposalId: created.id, bidTotalWei: created.bidTotalWei, posterAddress: posterAddress ?? null },
   })
   return proposalView(created, await proposalMilestonesFor(created.id))
 }

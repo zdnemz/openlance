@@ -209,6 +209,21 @@ export interface ArbiterView {
   soulbound: boolean;
 }
 
+/** Resolved storage system configuration (mirrors the server's `storageConfig()`). */
+export interface StorageRuntimeConfig {
+  driver: "supabase" | "local";
+  configured: boolean;
+  bucket: string;
+  visibility: "private" | "public";
+  prefix: string;
+  projectRef: string | null;
+  supabaseUrl: string | null;
+  localDir: string;
+  maxUploadBytes: number;
+  signedUrlTtlSeconds: number;
+  allowedMime: string[];
+}
+
 export interface RuntimeConfig {
   chainMode: string;
   chainId: number;
@@ -219,6 +234,15 @@ export interface RuntimeConfig {
   minStakeWei: string;
   /** Trust score n below which a stake locks. */
   minScoreToWithdraw: number;
+  /** Seconds of continuous stake required before an arbiter is selectable. */
+  minStakeDurationSeconds: number;
+  /** Seconds between requestUnstake and withdrawStake. */
+  unstakeCooldownSeconds: number;
+  dbDriver: string;
+  storageDriver: string;
+  queueMode: string;
+  /** Full storage system config (bucket, limits, signed-URL TTL, …). */
+  storage?: StorageRuntimeConfig;
   contracts: { escrow: string | null; arbiterRegistry: string | null; timelock: string | null };
 }
 
@@ -229,4 +253,95 @@ export interface Overview {
   milestoneHistogram: Record<string, number>;
   arbiters: ArbiterView[];
   latestLedger: LedgerEntry[];
+}
+
+// ── Notifications & webhooks (PRD F9) ───────────────────────────────────────
+
+/** Canonical notification types — mirrors src/server/domain/notifications.ts. */
+export const NOTIFICATION_TYPES = [
+  "proposal.received",
+  "proposal.accepted",
+  "proposal.rejected",
+  "project.created",
+  "milestone.funded",
+  "submission.received",
+  "milestone.changes_requested",
+  "dispute.opened",
+  "dispute.arbiters_selected",
+  "dispute.vote_committed",
+  "dispute.vote_revealed",
+  "dispute.finalized",
+  "dispute.no_quorum",
+  "dispute.tally_due",
+  "dispute.appealed",
+  "dispute.arbiter_agreed",
+  "dispute.arbiter_assigned",
+  "dispute.resolved",
+  "milestone.released",
+  "milestone.refunded",
+  "milestone.split",
+  "project.completed",
+  "review.received",
+] as const;
+
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export interface InboxItem {
+  id: string;
+  eventId: string;
+  type: string;
+  actorAddress: string | null;
+  projectId: string | null;
+  milestoneId: string | null;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface InboxResponse {
+  items: InboxItem[];
+  unread: number;
+}
+
+export interface NotificationPreference {
+  eventType: string;
+  muted: boolean;
+}
+
+export interface PreferencesResponse {
+  types: readonly string[];
+  preferences: NotificationPreference[];
+}
+
+export type DeliveryStatus = "pending" | "success" | "failed";
+
+export interface WebhookStats {
+  pending: number;
+  success: number;
+  failed: number;
+  total: number;
+}
+
+export interface WebhookSubscription {
+  id: string;
+  userId: string;
+  url: string;
+  secret: string;
+  eventTypes: string[];
+  active: boolean;
+  createdAt: string;
+  stats?: WebhookStats;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  subscriptionId: string;
+  eventId: string;
+  envelope: { id: string; type: string; ts: string; actor: string | null; payload: Record<string, unknown> };
+  status: DeliveryStatus;
+  attempts: number;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
 }

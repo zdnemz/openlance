@@ -1,0 +1,7 @@
+{
+  "escrow": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+  "arbiterRegistry": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  "timelock": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+  "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "chainId": 31337
+}

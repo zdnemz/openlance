@@ -21,6 +21,9 @@ export const DISPUTE_FEE = parseEther("0.05");
 export const COMMIT_WINDOW = 120n;
 export const REVEAL_WINDOW = 120n;
 export const APPEAL_WINDOW = 600n;
+/** Time-based staking rules (seconds) — short so tests can warp time cheaply. */
+export const MIN_STAKE_DURATION = 3600n; // 1h
+export const UNSTAKE_COOLDOWN = 1800n; // 30m
 
 // One shared connection for the whole test run. Creating a new connection per
 // fixture (or per call) spawns an independent EDR instance, so reads against a
@@ -43,7 +46,7 @@ export async function deployWithEoaOwner() {
   const up = await upgradesApi();
   const registry = await up.deployProxy(
     "ArbiterRegistry",
-    ["OpenLance Arbiter", "OLANCE", owner, MIN_STAKE, MIN_SCORE, treasury],
+    ["OpenLance Arbiter", "OLANCE", owner, MIN_STAKE, MIN_SCORE, treasury, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN],
     { kind: "uups" },
   );
   const escrow = await up.deployProxy(
@@ -82,7 +85,7 @@ export async function deployWithTimelockOwner() {
   const up = await upgradesApi();
   const registry = await up.deployProxy(
     "ArbiterRegistry",
-    ["OpenLance Arbiter", "OLANCE", timelock.address, MIN_STAKE, MIN_SCORE, treasury],
+    ["OpenLance Arbiter", "OLANCE", timelock.address, MIN_STAKE, MIN_SCORE, treasury, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN],
     { kind: "uups" },
   );
   const escrow = await up.deployProxy(
@@ -129,12 +132,16 @@ export async function viaTimelock(
   await timelock.write.execute([target, 0n, calldata, ZERO32, ZERO32]);
 }
 
-/** Register `n` arbiters (self-register with stake) and return their addresses. */
+/** Register `n` arbiters (self-register with stake) and return their addresses.
+ *  Also advances chain time past `minStakeDuration` so the freshly-registered
+ *  arbiters are immediately selectable — most tests care about dispute flows,
+ *  not the cooldown delay itself (that has dedicated coverage in registry.ts). */
 export async function registerArbiters(
   registry: any,
   wallets: { account: { address: `0x${string}` } }[],
   n: number,
   stake: bigint = MIN_STAKE,
+  { warp = true }: { warp?: boolean } = {},
 ): Promise<`0x${string}`[]> {
   const addrs: `0x${string}`[] = [];
   for (let i = 0; i < n; i++) {
@@ -142,6 +149,7 @@ export async function registerArbiters(
     await registry.write.registerArbiter({ value: stake, account: w.account });
     addrs.push(w.account.address);
   }
+  if (warp && n > 0) await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
   return addrs;
 }
 

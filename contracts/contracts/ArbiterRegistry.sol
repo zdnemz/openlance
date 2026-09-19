@@ -73,6 +73,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event MinStakeUpdated(uint256 oldMinStake, uint256 newMinStake);
     event MinScoreToWithdrawUpdated(uint256 oldScore, uint256 newScore);
+    event MinStakeDurationUpdated(uint256 oldSeconds, uint256 newSeconds);
+    event UnstakeCooldownUpdated(uint256 oldSeconds, uint256 newSeconds);
 
     // ── Admin/ops events ───────────────────────────────────────────────────────
     event EscrowSet(address indexed escrow);
@@ -88,6 +90,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         uint256 trustScore;
         uint256 stake; // wei currently deposited as collateral
         uint256 resolutions;
+        uint256 stakedAt; // when the current continuous stake began (min-stake-duration clock)
+        uint256 unstakeRequestedAt; // when requestUnstake was called (cooldown clock)
     }
 
     // ── Errors ─────────────────────────────────────────────────────────────────
@@ -106,6 +110,10 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     error UnstakeAlreadyRequested();
     error StillHandlingDispute(address arbiter);
     error TransferFailed();
+    /// @notice Selection blocked: not staked for at least `minStakeDuration` yet.
+    error StakeTooRecent(uint256 stakedAt, uint256 minStakeDuration);
+    /// @notice Withdrawal blocked: the `unstakeCooldown` has not elapsed yet.
+    error UnstakeCooldownActive(uint256 readyAt);
 
     /// @notice The escrow contract allowed to score/slash. Set once.
     address public escrow;
@@ -123,10 +131,15 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     uint256 public minScoreToWithdraw;
     /// @notice Receives slashed collateral.
     address public treasury;
+    /// @notice Minimum continuous stake time (seconds) before an arbiter may be
+    ///         selected for a new dispute — blocks join-and-leave sniping.
+    uint256 public minStakeDuration;
+    /// @notice Delay (seconds) between `requestUnstake` and `withdrawStake`.
+    uint256 public unstakeCooldown;
 
     /// @dev Reserved storage for future upgrades. Shrink only by the number of
     ///      slots added above it.
-    uint256[40] private __gap;
+    uint256[38] private __gap;
 
     modifier onlyEscrow() {
         if (msg.sender != escrow) revert NotEscrow();
@@ -146,6 +159,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      * @param minStake_           minimum collateral in wei (e.g. 0.1 ether)
      * @param minScoreToWithdraw_ score threshold n below which the stake locks
      * @param treasury_           receives slashed collateral (defaults to owner if zero)
+     * @param minStakeDuration_   seconds of continuous stake required before selection
+     * @param unstakeCooldown_    seconds between requestUnstake and withdrawStake
      */
     function initialize(
         string memory name_,
@@ -153,7 +168,9 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         address owner_,
         uint256 minStake_,
         uint256 minScoreToWithdraw_,
-        address treasury_
+        address treasury_,
+        uint256 minStakeDuration_,
+        uint256 unstakeCooldown_
     ) external initializer {
         if (owner_ == address(0)) revert ZeroAddress();
         if (minScoreToWithdraw_ > MAX_SCORE) revert ScoreOutOfRange(minScoreToWithdraw_);
@@ -164,6 +181,10 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         minStake = minStake_;
         minScoreToWithdraw = minScoreToWithdraw_;
         treasury = treasury_ == address(0) ? owner_ : treasury_;
+        minStakeDuration = minStakeDuration_;
+        unstakeCooldown = unstakeCooldown_;
+        emit MinStakeDurationUpdated(0, minStakeDuration_);
+        emit UnstakeCooldownUpdated(0, unstakeCooldown_);
     }
 
     error ScoreOutOfRange(uint256 score);
@@ -234,6 +255,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         }
 
         info.unstakeRequested = true;
+        info.unstakeRequestedAt = block.timestamp; // starts the withdraw cooldown
         emit UnstakeRequested(msg.sender, info.stake);
     }
 
@@ -242,6 +264,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         ArbiterInfo storage info = arbiters[msg.sender];
         if (!info.unstakeRequested) revert UnstakeNotRequested();
         info.unstakeRequested = false;
+        info.unstakeRequestedAt = 0; // clear the cooldown clock
         emit UnstakeCancelled(msg.sender);
     }
 
@@ -258,6 +281,10 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         if (!info.registered) revert NotRegistered(msg.sender);
         if (!info.unstakeRequested) revert UnstakeNotRequested();
         if (_isBusy(msg.sender)) revert StillHandlingDispute(msg.sender);
+        // Enforce the unstake cooldown: the request must have aged at least
+        // `unstakeCooldown` seconds before the collateral is released.
+        uint256 readyAt = info.unstakeRequestedAt + unstakeCooldown;
+        if (block.timestamp < readyAt) revert UnstakeCooldownActive(readyAt);
         if (info.trustScore < minScoreToWithdraw) {
             emit StakeLocked(msg.sender, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
@@ -268,6 +295,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         // EFFECTS before INTERACTION.
         info.stake = 0;
         info.unstakeRequested = false;
+        info.unstakeRequestedAt = 0;
         info.registered = false; // leaves the roster; badge (SBT) stays as history
         _rosterRemove(msg.sender);
 
@@ -331,11 +359,16 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     /**
      * @notice Whether an arbiter may be selected for a NEW dispute: registered,
      *         score at/above the withdrawal floor (i.e. not benched), not mid
-     *         unstake, and currently staked at least the minimum.
+     *         unstake, currently staked at least the minimum, and staked for at
+     *         least `minStakeDuration` (the skin-in-the-game clock).
      */
     function isEligible(address arbiter) external view returns (bool) {
         ArbiterInfo storage info = arbiters[arbiter];
-        return info.registered && !info.unstakeRequested && info.trustScore >= minScoreToWithdraw && info.stake >= minStake;
+        return info.registered
+            && !info.unstakeRequested
+            && info.trustScore >= minScoreToWithdraw
+            && info.stake >= minStake
+            && block.timestamp >= info.stakedAt + minStakeDuration;
     }
 
     function trustScoreOf(address arbiter) external view returns (uint256) {
@@ -357,6 +390,18 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
 
     function arbiterInfo(address arbiter) external view returns (ArbiterInfo memory) {
         return arbiters[arbiter];
+    }
+
+    /// @notice Unix time at which `arbiter` first becomes eligible (stakedAt + minStakeDuration).
+    function eligibleAt(address arbiter) external view returns (uint256) {
+        return arbiters[arbiter].stakedAt + minStakeDuration;
+    }
+
+    /// @notice Unix time at which a pending unstake may be withdrawn (0 if none pending).
+    function unstakeReadyAt(address arbiter) external view returns (uint256) {
+        ArbiterInfo storage info = arbiters[arbiter];
+        if (!info.unstakeRequested) return 0;
+        return info.unstakeRequestedAt + unstakeCooldown;
     }
 
     /// @notice Number of arbiters currently on the roster (enumerable candidate set).
@@ -396,6 +441,20 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         emit MinScoreToWithdrawUpdated(old, newScore);
     }
 
+    /// @notice Set the minimum continuous stake time (seconds) required before selection.
+    function setMinStakeDuration(uint256 newSeconds) external onlyOwner {
+        uint256 old = minStakeDuration;
+        minStakeDuration = newSeconds;
+        emit MinStakeDurationUpdated(old, newSeconds);
+    }
+
+    /// @notice Set the delay (seconds) between requestUnstake and withdrawStake.
+    function setUnstakeCooldown(uint256 newSeconds) external onlyOwner {
+        uint256 old = unstakeCooldown;
+        unstakeCooldown = newSeconds;
+        emit UnstakeCooldownUpdated(old, newSeconds);
+    }
+
     /// @notice Redirect slashed collateral.
     function setTreasury(address newTreasury) external onlyOwner {
         if (newTreasury == address(0)) revert ZeroAddress();
@@ -421,6 +480,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         info.trustScore = MAX_SCORE; // new arbiters start perfect
         info.stake = value;
         info.unstakeRequested = false;
+        info.stakedAt = block.timestamp; // starts the min-stake-duration clock
+        info.unstakeRequestedAt = 0;
 
         _rosterAdd(arbiter);
         _mint(arbiter, tokenId);

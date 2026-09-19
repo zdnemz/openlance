@@ -34,12 +34,21 @@ const schema = z.object({
 
   // ── Supabase (Storage + Realtime + JWT secret). ────────────────────────
   SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_JWT_SECRET: z.string().min(16).default('openlance-dev-jwt-secret-do-not-use-in-prod'),
+  /** Project ref (subdomain of SUPABASE_URL) — inferred when omitted. */
+  SUPABASE_PROJECT_REF: z.string().optional(),
 
   // ── File storage ────────────────────────────────────────────────────────
   STORAGE_DRIVER: z.enum(['supabase', 'local']).optional(), // auto: supabase when configured
   STORAGE_BUCKET: z.string().default('project-files'),
+  /** 'private' → signed URLs only; 'public' → unauth reads via public URL. */
+  STORAGE_BUCKET_VISIBILITY: z.enum(['private', 'public']).default('private'),
+  /** Object-key prefix applied to every upload (e.g. an env/tenant namespace). */
+  STORAGE_PREFIX: z.string().default(''),
+  /** Comma-separated MIME allowlist; empty → built-in default list. */
+  STORAGE_ALLOWED_MIME: z.string().default(''),
   STORAGE_LOCAL_DIR: z.string().default('./data/uploads'),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
   SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().default(120),
@@ -63,6 +72,13 @@ const schema = z.object({
   MIN_STAKE_WEI: z.string().regex(/^\d+$/).default('100000000000000000'), // 0.1 ETH
   /** Minimum trust score n below which a stake locks (mirrors the registry). */
   MIN_SCORE_TO_WITHDRAW: z.coerce.number().int().min(0).max(100).default(50),
+  /**
+   * Display-only mirrors of the registry's time-based staking rules (seconds).
+   * The contract reads are authoritative; these seed the UI copy before the
+   * first RPC read and back the /overview config.
+   */
+  MIN_STAKE_DURATION_SECONDS: z.coerce.number().int().nonnegative().default(7 * 24 * 60 * 60), // 7 days
+  UNSTAKE_COOLDOWN_SECONDS: z.coerce.number().int().nonnegative().default(3 * 24 * 60 * 60), // 3 days
   ARBITER_FEE_SHARE_BPS: z.coerce.number().int().min(0).max(10_000).default(2000), // 20% of the fee
   INDEXER_POLL_MS: z.coerce.number().int().positive().default(10_000),
   INDEXER_CONFIRMATIONS: z.coerce.number().int().positive().default(5),
@@ -81,6 +97,12 @@ const schema = z.object({
   // ── Webhooks ────────────────────────────────────────────────────────────
   WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
   WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  /**
+   * Shared secret for the inbound event endpoint (POST /api/internal/inbound).
+   * Unset → the endpoint is disabled (404). Senders sign the raw body with
+   * HMAC-SHA256 and pass it as `X-OpenLance-Signature: sha256=<hex>`.
+   */
+  INBOUND_WEBHOOK_SECRET: z.string().min(16).optional(),
 
   // ── Rate limits (per minute) ───────────────────────────────────────────
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(20),
@@ -105,9 +127,20 @@ const appUrl = new URL(raw.APP_URI)
 
 const isPostgresUrl = !!raw.DATABASE_URL && /^postgres(ql)?:\/\//.test(raw.DATABASE_URL)
 const databaseDriver: 'postgres' | 'unconfigured' = isPostgresUrl ? 'postgres' : 'unconfigured'
-const storageDriver = raw.STORAGE_DRIVER ?? (raw.SUPABASE_URL && raw.SUPABASE_SERVICE_ROLE_KEY ? 'supabase' : 'local')
+const hasSupabaseStorage = !!(raw.SUPABASE_URL && raw.SUPABASE_SERVICE_ROLE_KEY)
+const storageDriver = raw.STORAGE_DRIVER ?? (hasSupabaseStorage ? 'supabase' : 'local')
 const hasUpstash = !!(raw.UPSTASH_REDIS_REST_URL && raw.UPSTASH_REDIS_REST_TOKEN)
 const queueMode: 'redis' | 'inline' = hasUpstash ? 'redis' : 'inline'
+
+// Supabase project ref: explicit env wins, else inferred from the URL host
+// (https://<ref>.supabase.co). Used for host allowlisting + logs.
+const projectRef = raw.SUPABASE_PROJECT_REF
+  ?? (raw.SUPABASE_URL ? new URL(raw.SUPABASE_URL).hostname.split('.')[0] ?? null : null)
+
+// Fail fast in production if supabase was explicitly requested but unconfigured.
+if (raw.NODE_ENV === 'production' && raw.STORAGE_DRIVER === 'supabase' && !hasSupabaseStorage) {
+  console.error('[config] STORAGE_DRIVER=supabase requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY')
+}
 
 let chainMode = raw.CHAIN_MODE
 if (chainMode === 'real' && (!raw.ESCROW_ADDRESS || !raw.ARBITER_REGISTRY_ADDRESS)) {
@@ -127,6 +160,25 @@ export const env = {
   queueMode,
   appDomain: appUrl.host,
   adminWallets: raw.ADMIN_WALLETS.split(',').map((w) => w.trim().toLowerCase()).filter(Boolean),
+  /**
+   * Resolved storage system config — one place every consumer reads from.
+   * `configured` reflects whether the selected driver has real credentials.
+   */
+  storage: {
+    driver: storageDriver,
+    configured: storageDriver === 'supabase' ? hasSupabaseStorage : true,
+    bucket: raw.STORAGE_BUCKET,
+    visibility: raw.STORAGE_BUCKET_VISIBILITY,
+    prefix: raw.STORAGE_PREFIX.replace(/^\/+|\/+$/g, ''),
+    projectRef,
+    supabaseUrl: raw.SUPABASE_URL ?? null,
+    hasServiceRoleKey: !!raw.SUPABASE_SERVICE_ROLE_KEY,
+    allowedMime: raw.STORAGE_ALLOWED_MIME.split(',').map((m) => m.trim()).filter(Boolean),
+    localDir: raw.STORAGE_LOCAL_DIR,
+    maxUploadBytes: raw.MAX_UPLOAD_BYTES,
+    signedUrlTtlSeconds: raw.SIGNED_URL_TTL_SECONDS,
+  },
 } as const
 
 export type Env = typeof env
+export type StorageConfig = typeof env.storage

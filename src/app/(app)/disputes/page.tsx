@@ -20,7 +20,7 @@ import { useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt }
 import { DISPUTE_OUTCOME, QUORUM } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import { ListHead, Skeleton, EmptyState, StatusBadge, press, AddressText } from "@/components/design";
-import { timeAgo, timeUntil, shortAddress, formatEth } from "@/lib/format";
+import { timeAgo, timeUntil, shortAddress, formatEth, toWei } from "@/lib/format";
 import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
 import { HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
@@ -179,8 +179,8 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
                 disabled={active}
                 onClick={async () => {
                   const salt = makeSalt();
-                  const hash = computeCommitHash(DISPUTE_OUTCOME[outcome], salt, address!, BigInt(milestone.onchainId!), dispute.round ?? 0);
-                  const r = await chain.run({ label: "Commit vote", contract: "escrow", functionName: "commitVote", args: [BigInt(milestone.onchainId!), dispute.round ?? 0, hash] });
+                  const hash = computeCommitHash(DISPUTE_OUTCOME[outcome], salt, address!, toWei(milestone.onchainId!), dispute.round ?? 0);
+                  const r = await chain.run({ label: "Commit vote", contract: "escrow", functionName: "commitVote", args: [toWei(milestone.onchainId!), dispute.round ?? 0, hash] });
                   if (r.ok) {
                     try { sessionStorage.setItem(`commit:${dispute.id}:${dispute.round}`, `${outcome}:${salt}`); } catch { /* noop */ }
                     invalidate.disputes();
@@ -211,8 +211,8 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
             </Button>
           </div>
           {isParticipant && round?.resolved && !dispute.finalized && (
-            <Button disabled={active} onClick={async () => { const r = await appealDisputeAction(chain.run)(milestone!.onchainId!, BigInt(disputeFeeWei), dispute.projectId); if (r.ok) invalidate.disputes(); }} className="mt-2 w-full rounded-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10">
-              Appeal ({formatEth(BigInt(disputeFeeWei))} ETH)
+            <Button disabled={active} onClick={async () => { const r = await appealDisputeAction(chain.run)(milestone!.onchainId!, toWei(disputeFeeWei), dispute.projectId); if (r.ok) invalidate.disputes(); }} className="mt-2 w-full rounded-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10">
+              Appeal ({formatEth(disputeFeeWei)} ETH)
             </Button>
           )}
         </div>
@@ -252,7 +252,7 @@ function RevealControls({ dispute, onchainId, outcome, setOutcome, onDone }: {
       <Button
         disabled={active || !salt}
         onClick={async () => {
-          const r = await chain.run({ label: "Reveal vote", contract: "escrow", functionName: "revealVote", args: [BigInt(onchainId), dispute.round ?? 0, DISPUTE_OUTCOME[outcome], salt] });
+          const r = await chain.run({ label: "Reveal vote", contract: "escrow", functionName: "revealVote", args: [toWei(onchainId), dispute.round ?? 0, DISPUTE_OUTCOME[outcome], salt] });
           if (r.ok) {
             try { sessionStorage.removeItem(`commit:${dispute.id}:${dispute.round}`); } catch { /* noop */ }
             onDone();

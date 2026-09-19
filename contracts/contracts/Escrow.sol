@@ -112,6 +112,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         mapping(address => bytes32) commits; // arbiter => commit hash
         mapping(address => bool) revealed; // arbiter => revealed?
         mapping(address => uint8) votes; // arbiter => revealed outcome
+        // Stake snapshot captured at selection time (ArbitersSelected), used to
+        // weight the reward pot proportionally. Snapshotting — rather than
+        // reading stakeOf() at finalize — blocks the attack where an arbiter
+        // tops up their stake AFTER being drawn to seize a larger share.
+        mapping(address => uint256) stakeWeights;
         uint8 commitCount;
         uint8 revealCount;
         uint8[3] tally; // votes per Outcome ordinal
@@ -376,6 +381,12 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
         for (uint8 i = 0; i < count; i++) {
             activeDisputes[picked[i]] += 1;
+            // Snapshot the stake weight at selection so a late top-up cannot
+            // inflate this round's reward share. A zero read (registry absent,
+            // or arbiter deregistered between read and select) falls back to 1
+            // so a valid arbiter is never silently dropped from the split.
+            uint256 w = arbiterRegistry.stakeOf(picked[i]);
+            r.stakeWeights[picked[i]] = w == 0 ? 1 : w;
         }
 
         emit ArbitersSelected(milestoneId, round, picked, count);
@@ -605,35 +616,41 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     }
 
     /**
-     * @dev Majority arbiters split the reward pot (dispute fee + rewardPool draw,
-     *      if any); minority arbiters take −10; non-revealers take −15.
+     * @dev Majority arbiters split the reward pot proportionally to the stake
+     *      snapshot captured at selection; minority arbiters take −10;
+     *      non-revealers take −15.
+     *
+     *      Reward_i = pot × weight_i / Σ weight_majority, where weight_i is the
+     *      arbiter's staked collateral at the time they were drawn. Rounding
+     *      dust is retained in rewardPool rather than lost (same policy as the
+     *      former flat split).
      */
     function _distributeRewards(uint256 milestoneId, Dispute storage d, Round storage r, uint8 winner) private {
-        // Count majority vs minority among revealers.
-        uint8 majorityCount;
+        // Pass 1 — total stake weight of the winning (revealed-majority) set.
+        uint256 totalWeight;
         for (uint8 i = 0; i < r.arbiterCount; i++) {
             address a = r.arbiters[i];
-            if (r.revealed[a] && r.votes[a] == winner) majorityCount++;
+            if (r.revealed[a] && r.votes[a] == winner) totalWeight += r.stakeWeights[a];
         }
-        if (majorityCount == 0) majorityCount = 1; // defensive; cannot happen with quorum
+        if (totalWeight == 0) totalWeight = 1; // defensive; cannot happen with quorum
 
-        // Reward pot = dispute fee. If it cannot be split evenly, dust stays in
-        // the contract (tracked by rewardPool) rather than being lost.
+        // Reward pot = dispute fee. Distributed pro-rata by stake weight; any
+        // rounding dust stays in the contract (tracked by rewardPool).
         uint256 pot = d.fee;
-        uint256 perArbiter = pot / majorityCount;
-        uint256 used = perArbiter * majorityCount;
-        uint256 dust = pot - used;
-        if (dust > 0) rewardPool += dust;
+        uint256 used;
 
+        // Pass 2 — apply score changes and pay each arbiter its weighted share.
         for (uint8 i = 0; i < r.arbiterCount; i++) {
             address a = r.arbiters[i];
             if (!_isRegistered(a)) continue;
 
             if (r.revealed[a] && r.votes[a] == winner) {
                 arbiterRegistry.applyScoreChange(a, int256(_deltaMajority()), _reasonMajority());
-                if (perArbiter > 0) {
-                    emit ArbiterRewarded(milestoneId, a, perArbiter);
-                    _pay(a, perArbiter);
+                uint256 amount = (pot * r.stakeWeights[a]) / totalWeight;
+                if (amount > 0) {
+                    used += amount;
+                    emit ArbiterRewarded(milestoneId, a, amount);
+                    _pay(a, amount);
                 }
             } else if (!r.revealed[a]) {
                 arbiterRegistry.applyScoreChange(a, int256(_deltaMissed()), _reasonMissed());
@@ -643,6 +660,9 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
                 emit ArbiterPenalized(milestoneId, a, _reasonMinority());
             }
         }
+
+        uint256 dust = pot - used;
+        if (dust > 0) rewardPool += dust;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

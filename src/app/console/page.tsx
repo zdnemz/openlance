@@ -120,7 +120,12 @@ const API_GROUPS: { title: string; icon: typeof ServerCog; rows: [string, string
     ['GET /ledger · GET /arbiters', 'event-sourced cache + SBT scores'],
   ] },
   { title: 'Platform (F9)', icon: Radio, rows: [
+    ['GET /notifications', 'in-app inbox feed + unread count'],
+    ['POST /notifications/read · PATCH /preferences', 'read receipts + per-type mutes'],
     ['POST /webhooks', 'HMAC-signed, 5-attempt backoff'],
+    ['POST /webhooks/:id/test · POST …/rotate', 'signed test ping + secret rotation'],
+    ['POST …/deliveries/:id/redeliver', 're-queue a terminal delivery'],
+    ['POST /internal/inbound', 'signature-verified inbound event → outbox'],
     ['POST /admin/reconcile', 'mirror-vs-chain drift report'],
     ['/dev/chain/*', 'mock chain (drives the real indexer; dev only)'],
   ] },

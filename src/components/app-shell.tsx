@@ -8,8 +8,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { WalletButton } from "@/components/wallet/wallet-button";
-import { useSession } from "@/lib/session";
-import { useDisputes, useProjects } from "@/lib/queries";
+import { NotificationBell } from "@/components/notification-bell";
+import { useSession, useSessionHydrated } from "@/lib/session";
+import { useDisputes, useProjects, useNotifications } from "@/lib/queries";
 import { AddressAvatar, StatusDot } from "@/components/design";
 import { shortAddress } from "@/lib/format";
 import { personaForAddress } from "@/lib/wallet";
@@ -21,6 +22,7 @@ import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
 import { ShieldStar } from "@phosphor-icons/react/dist/csr/ShieldStar";
 import { TerminalWindow } from "@phosphor-icons/react/dist/csr/TerminalWindow";
 import { ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
 
 export function Logo({ size = "md", withMark = true }: { size?: "sm" | "md"; withMark?: boolean }) {
   return (
@@ -39,13 +41,14 @@ export function Logo({ size = "md", withMark = true }: { size?: "sm" | "md"; wit
   );
 }
 
-function railItems(admin: boolean, disputesCount: number) {
+function railItems(admin: boolean, disputesCount: number, unread: number) {
   return [
     { href: "/jobs", label: "Explore", icon: Compass },
     { href: "/jobs/new", label: "Post a job", icon: SquaresFour },
     { href: "/dashboard", label: "Dashboard", icon: Layout },
     { href: "/disputes", label: "Disputes", icon: Gavel, badge: disputesCount || undefined },
     { href: "/arbiters", label: "Arbiters", icon: Scales },
+    { href: "/settings/notifications", label: "Notifications", icon: Bell, badge: unread || undefined },
     ...(admin ? [{ href: "/admin", label: "Admin", icon: ShieldStar }] : []),
   ];
 }
@@ -53,11 +56,16 @@ function railItems(admin: boolean, disputesCount: number) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const session = useSession();
-  const isAdmin = session.user?.walletAddress === "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+  const sessionHydrated = useSessionHydrated();
+  const isAdmin = sessionHydrated && session.user?.walletAddress === "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
   const { data: disputes } = useDisputes();
   const openDisputes = (disputes ?? []).filter((d) => d.status !== "resolved").length;
-  const items = railItems(isAdmin, openDisputes);
-  const address = session.user?.walletAddress;
+  const { data: notifications } = useNotifications();
+  const unread = notifications?.unread ?? 0;
+  const items = railItems(isAdmin, openDisputes, unread);
+  // Gate the persisted-session-derived chip: the server always sees an empty
+  // session, so rendering it before localStorage rehydrates would mismatch.
+  const address = sessionHydrated ? session.user?.walletAddress : undefined;
   const persona = personaForAddress(address);
   const isBackable = pathname !== "/dashboard" && pathname !== "/jobs";
 
@@ -130,7 +138,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Logo size="sm" />
           </Link>
         )}
-        <WalletButton compact />
+        <div className="flex items-center gap-2">
+          {sessionHydrated && session.token && <NotificationBell compact />}
+          <WalletButton compact />
+        </div>
       </header>
 
       {/* ── content ──────────────────────────────────────────────────── */}
@@ -141,6 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <StatusDot color="#34d399" pulse />
               <span className="num">anvil devnet · 31337</span>
             </span>
+            {sessionHydrated && session.token && <NotificationBell />}
             <WalletButton />
           </div>
         </div>

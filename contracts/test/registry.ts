@@ -3,10 +3,10 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { deployWithEoaOwner, connection, MIN_STAKE } from "./fixtures.ts";
+import { deployWithEoaOwner, connection, MIN_STAKE, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN } from "./fixtures.ts";
 import { parseEther } from "viem";
 
-const { viem } = connection;
+const { viem, networkHelpers } = connection;
 
 describe("ArbiterRegistry — registration & staking", () => {
   it("self-registers with a stake, score 100, locked badge", async function () {
@@ -18,6 +18,10 @@ describe("ArbiterRegistry — registration & staking", () => {
     assert.equal(await registry.read.trustScoreOf([a.account.address]), 100n);
     assert.equal(await registry.read.stakeOf([a.account.address]), MIN_STAKE);
     assert.equal(await registry.read.locked([1n]), true);
+    // Freshly staked: not yet eligible — the min-stake-duration clock is running.
+    assert.equal(await registry.read.isEligible([a.account.address]), false);
+    // …and flips to eligible once the duration has elapsed.
+    await networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
     assert.equal(await registry.read.isEligible([a.account.address]), true);
   });
 
@@ -66,6 +70,75 @@ describe("ArbiterRegistry — registration & staking", () => {
   });
 });
 
+describe("ArbiterRegistry — time-based staking rules", () => {
+  it("an arbiter is NOT eligible until minStakeDuration has elapsed", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+
+    assert.equal(await registry.read.minStakeDuration(), MIN_STAKE_DURATION);
+    assert.equal(await registry.read.isEligible([a.account.address]), false);
+
+    // Just short of the window — still benched.
+    await networkHelpers.time.increase(Number(MIN_STAKE_DURATION) - 10);
+    assert.equal(await registry.read.isEligible([a.account.address]), false);
+
+    // Cross the threshold — eligible.
+    await networkHelpers.time.increase(11);
+    assert.equal(await registry.read.isEligible([a.account.address]), true);
+    assert.ok(
+      (await registry.read.eligibleAt([a.account.address])) > 0n,
+      "eligibleAt should be a concrete timestamp",
+    );
+  });
+
+  it("withdraw is blocked until the unstake cooldown elapses", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+    await registry.write.requestUnstake({ account: a.account });
+
+    // Cooldown not yet elapsed → withdraw reverts.
+    await assert.rejects(registry.write.withdrawStake({ account: a.account }), /UnstakeCooldownActive/);
+    const readyAt = await registry.read.unstakeReadyAt([a.account.address]);
+    assert.ok(readyAt > 0n, "unstakeReadyAt should be set while a request is pending");
+
+    // Still blocked right before the window closes.
+    await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) - 10);
+    await assert.rejects(registry.write.withdrawStake({ account: a.account }), /UnstakeCooldownActive/);
+
+    // After the cooldown → withdraw succeeds.
+    await networkHelpers.time.increase(11);
+    await registry.write.withdrawStake({ account: a.account });
+    assert.equal(await registry.read.isRegistered([a.account.address]), false);
+  });
+
+  it("cancelUnstake clears the cooldown clock", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+    await registry.write.requestUnstake({ account: a.account });
+    assert.ok((await registry.read.unstakeReadyAt([a.account.address])) > 0n);
+
+    await registry.write.cancelUnstake({ account: a.account });
+    assert.equal(await registry.read.unstakeReadyAt([a.account.address]), 0n);
+  });
+
+  it("only the owner can retune the duration / cooldown", async function () {
+    const { registry, owner, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await assert.rejects(
+      registry.write.setMinStakeDuration([7200n], { account: a.account }),
+      /OwnableUnauthorizedAccount/,
+    );
+    await registry.write.setMinStakeDuration([7200n], { account: (await viem.getWalletClients())[0]!.account });
+    assert.equal(await registry.read.minStakeDuration(), 7200n);
+    await registry.write.setUnstakeCooldown([900n], { account: (await viem.getWalletClients())[0]!.account });
+    assert.equal(await registry.read.unstakeCooldown(), 900n);
+    void owner;
+  });
+});
+
 describe("ArbiterRegistry — unstake / withdraw / lock", () => {
   it("requestUnstake + withdrawStake returns the collateral", async function () {
     const { registry, arbiters } = await deployWithEoaOwner();
@@ -74,6 +147,8 @@ describe("ArbiterRegistry — unstake / withdraw / lock", () => {
 
     const pc = await viem.getPublicClient();
     await registry.write.requestUnstake({ account: a.account });
+    // Wait out the unstake cooldown before the collateral is released.
+    await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) + 1);
     const before = await pc.getBalance({ address: a.account.address });
     await registry.write.withdrawStake({ account: a.account });
     const after = await pc.getBalance({ address: a.account.address });
@@ -94,6 +169,7 @@ describe("ArbiterRegistry — unstake / withdraw / lock", () => {
     const { registry, arbiters } = await deployWithEoaOwner();
     const a = arbiters[0]!;
     await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+    await networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1); // clear the min-stake clock
     await registry.write.requestUnstake({ account: a.account });
     assert.equal(await registry.read.isEligible([a.account.address]), false);
     await registry.write.cancelUnstake({ account: a.account });
@@ -188,6 +264,7 @@ describe("ArbiterRegistry — scoring, locking, slashing (via escrow hooks)", ()
   it("cannot unstake while handling an active dispute", async function () {
     const { registry, escrow, client, freelancer, arbiters } = await deployWithEoaOwner();
     for (const w of arbiters.slice(0, 3)) await registry.write.registerArbiter({ value: MIN_STAKE, account: w.account });
+    await networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1); // make the roster selectable
     await escrow.write.fund([`0x${"aa".repeat(32)}`, freelancer.account.address], { value: parseEther("1"), account: client.account });
     await escrow.write.submit([1n], { account: freelancer.account });
     await escrow.write.openDispute([1n], { value: parseEther("0.05"), account: client.account });

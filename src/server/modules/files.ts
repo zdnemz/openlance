@@ -17,39 +17,25 @@ import { requireAuth } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { attachments } from '../db/schema'
 import { requireParticipant } from './helpers'
-
-/** Allowlist (PRD F7): pdf / images / zip / docs / code. */
-const MIME_ALLOWLIST = new Set([
-  'application/pdf', 'application/zip', 'application/x-zip-compressed',
-  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
-  'text/plain', 'text/markdown', 'text/csv', 'application/json',
-  'text/x-typescript', 'text/javascript', 'application/typescript',
-  'text/x-python', 'text/x-rust', 'text/x-go', 'text/x-sol', 'text/x-sql',
-  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-])
+import { isMimeAllowed, storageConfig, storageKey, supabaseAdmin } from '../storage'
 
 // ── Supabase Storage driver ─────────────────────────────────────────────────
-async function supabaseClient() {
-  const { createClient } = await import('@supabase/supabase-js')
-  return createClient(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
-}
-
 async function supabaseUploadUrl(path: string): Promise<{ url: string; token: string; path: string }> {
-  const sb = await supabaseClient()
+  const sb = await supabaseAdmin()
   const { data, error } = await sb.storage.from(env.STORAGE_BUCKET).createSignedUploadUrl(path)
   if (error || !data) throw Errors.internal(`Storage error: ${error?.message ?? 'no signed url'}`)
   return { url: data.signedUrl, token: data.token, path: data.path }
 }
 
 async function supabaseDownloadUrl(path: string, ttl: number): Promise<string> {
-  const sb = await supabaseClient()
+  const sb = await supabaseAdmin()
   const { data, error } = await sb.storage.from(env.STORAGE_BUCKET).createSignedUrl(path, ttl)
   if (error || !data) throw Errors.internal(`Storage error: ${error?.message ?? 'no signed url'}`)
   return data.signedUrl
 }
 
 async function supabaseExists(path: string): Promise<boolean> {
-  const sb = await supabaseClient()
+  const sb = await supabaseAdmin()
   const dir = dirname(path)
   const base = path.split('/').pop()!
   const { data } = await sb.storage.from(env.STORAGE_BUCKET).list(dir, { search: base, limit: 1 })
@@ -60,11 +46,11 @@ async function supabaseExists(path: string): Promise<boolean> {
 const hmac = (payload: string) => createHmac('sha256', env.SUPABASE_JWT_SECRET).update(payload).digest('base64url')
 
 function localPath(storagePath: string) {
-  return join(env.STORAGE_LOCAL_DIR, storagePath)
+  return join(storageConfig().localDir, storagePath)
 }
 
 function signedLocalUrl(attachmentId: string): string {
-  const exp = Date.now() + env.SIGNED_URL_TTL_SECONDS * 1000
+  const exp = Date.now() + storageConfig().signedUrlTtlSeconds * 1000
   const sig = hmac(`${attachmentId}.${exp}`)
   return `${env.API_URI}/api/files/${attachmentId}/raw?exp=${exp}&sig=${encodeURIComponent(sig)}`
 }
@@ -76,13 +62,14 @@ export async function initAttachment(request: Request, projectId: string) {
   const body = await validate(request, z.object({
     filename: z.string().min(1).max(200).regex(/^[\w\-. ()]+$/, 'Filename contains forbidden characters'),
     mimeType: z.string().min(3).max(100),
-    sizeBytes: z.number().int().min(1).max(env.MAX_UPLOAD_BYTES),
+    sizeBytes: z.number().int().min(1).max(storageConfig().maxUploadBytes),
   }).strict())
 
-  if (!MIME_ALLOWLIST.has(body.mimeType)) {
+  if (!isMimeAllowed(body.mimeType)) {
     throw Errors.badRequest('mime_not_allowed', `MIME type not allowed: ${body.mimeType}. Allowed: pdf, images, zip, docs, text/code files.`)
   }
 
+  const cfg = storageConfig()
   const db = getDb()
   const [att] = await db.insert(attachments).values({
     projectId: project.id,
@@ -90,17 +77,17 @@ export async function initAttachment(request: Request, projectId: string) {
     filename: body.filename,
     mimeType: body.mimeType,
     sizeBytes: body.sizeBytes,
-    storageDriver: env.storageDriver,
+    storageDriver: cfg.driver,
     storagePath: '', // set below
   }).returning()
 
-  const storagePath = `${project.id}/${att!.id}/${body.filename}`
+  const storagePath = storageKey(`${project.id}/${att!.id}/${body.filename}`)
   await db.update(attachments).set({ storagePath }).where(eq(attachments.id, att!.id))
 
-  if (env.storageDriver === 'supabase') {
+  if (cfg.driver === 'supabase') {
     const target = await supabaseUploadUrl(storagePath)
     return {
-      attachmentId: att!.id, driver: 'supabase', bucket: env.STORAGE_BUCKET,
+      attachmentId: att!.id, driver: 'supabase', bucket: cfg.bucket,
       path: target.path, token: target.token, uploadUrl: target.url,
       note: 'POST the file to uploadUrl (or use supabase-js uploadToSignedUrl)',
     }
@@ -122,7 +109,7 @@ export async function confirmAttachment(request: Request, attachmentId: string) 
   if (att.uploaderId !== user.id) throw Errors.forbidden('Not your attachment')
   if (att.status === 'confirmed') return att
 
-  const exists = env.storageDriver === 'supabase'
+  const exists = storageConfig().driver === 'supabase'
     ? await supabaseExists(att.storagePath)
     : await stat(localPath(att.storagePath)).then(() => true).catch(() => false)
   if (!exists) throw Errors.badRequest('upload_missing', 'No bytes found at the storage path — upload first')
@@ -140,10 +127,11 @@ export async function attachmentUrl(request: Request, attachmentId: string) {
   if (!att) throw Errors.notFound('Attachment')
   await requireParticipant(att.projectId, user)
   if (att.status !== 'confirmed') throw Errors.badRequest('upload_missing', 'Attachment not uploaded yet')
-  const url = env.storageDriver === 'supabase'
-    ? await supabaseDownloadUrl(att.storagePath, env.SIGNED_URL_TTL_SECONDS)
+  const cfg = storageConfig()
+  const url = cfg.driver === 'supabase'
+    ? await supabaseDownloadUrl(att.storagePath, cfg.signedUrlTtlSeconds)
     : signedLocalUrl(att.id)
-  return { url, expiresInSeconds: env.SIGNED_URL_TTL_SECONDS, filename: att.filename, mimeType: att.mimeType, sizeBytes: att.sizeBytes }
+  return { url, expiresInSeconds: cfg.signedUrlTtlSeconds, filename: att.filename, mimeType: att.mimeType, sizeBytes: att.sizeBytes }
 }
 
 /** Local-driver upload (Bearer auth, size-capped). */
@@ -153,9 +141,9 @@ export async function putAttachmentRaw(request: Request, attachmentId: string) {
   const [att] = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1)
   if (!att) throw Errors.notFound('Attachment')
   if (att.uploaderId !== user.id) throw Errors.forbidden('Not your attachment')
-  if (env.storageDriver === 'supabase') throw Errors.badRequest('local_driver_only', 'This route exists only in local storage mode')
+  if (storageConfig().driver === 'supabase') throw Errors.badRequest('local_driver_only', 'This route exists only in local storage mode')
   const buf = await request.arrayBuffer()
-  if (buf.byteLength > env.MAX_UPLOAD_BYTES) throw Errors.badRequest('too_large', 'File exceeds size limit')
+  if (buf.byteLength > storageConfig().maxUploadBytes) throw Errors.badRequest('too_large', 'File exceeds size limit')
   if (buf.byteLength === 0) throw Errors.badRequest('empty_upload', 'No bytes received')
   const dest = localPath(att.storagePath)
   await mkdir(dirname(dest), { recursive: true })
@@ -174,7 +162,7 @@ export async function getAttachmentRaw(attachmentId: string, url: URL): Promise<
   if (!exp || Date.now() > exp || hmac(`${attachmentId}.${exp}`) !== sig) {
     throw Errors.unauthorized('Invalid or expired download signature')
   }
-  if (env.storageDriver === 'supabase') throw Errors.badRequest('local_driver_only', 'This route exists only in local storage mode')
+  if (storageConfig().driver === 'supabase') throw Errors.badRequest('local_driver_only', 'This route exists only in local storage mode')
   const path = localPath(att.storagePath)
   const exists = await stat(path).then(() => true).catch(() => false)
   if (!exists) throw Errors.notFound('File bytes')

@@ -34,6 +34,12 @@ interface IArbiterRegistry {
     /// @notice Score threshold n below which the stake is locked.
     function minScoreToWithdraw() external view returns (uint256);
 
+    /// @notice Minimum continuous stake time (seconds) before an arbiter may be selected.
+    function minStakeDuration() external view returns (uint256);
+
+    /// @notice Delay (seconds) between requestUnstake and withdrawStake.
+    function unstakeCooldown() external view returns (uint256);
+
     /// @notice Number of arbiters currently on the roster.
     function rosterLength() external view returns (uint256);
 

@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { AppError, Errors } from './errors'
 import { logger } from './logger'
 import { created, fail, ok } from './http'
+import { bootstrapWorkers } from '../workers/bootstrap'
 
 export type Handler<P = Record<string, string>> = (
   request: Request,
@@ -25,6 +26,9 @@ export function route<P extends Record<string, string> = Record<string, string>>
     const requestId = crypto.randomUUID()
     const url = new URL(request.url)
     const start = Date.now()
+    // Idempotent, process-scoped: starts the chain indexer + periodic crons on
+    // the first request (usually already booted, so this is a no-op).
+    void bootstrapWorkers()
     try {
       const params = ((await ctx?.params) ?? {}) as P
       const result = await handler(request, { requestId, url, params })

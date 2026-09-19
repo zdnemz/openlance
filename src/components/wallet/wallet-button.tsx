@@ -2,7 +2,7 @@
 
 /** Header wallet control: connect → sign-in → session chip with menu. */
 import { useEffect, useState } from "react";
-import { useWallet, fetchBalance, personaForAddress } from "@/lib/wallet";
+import { useWallet, useWalletHydrated, fetchBalance, personaForAddress } from "@/lib/wallet";
 import { useSession } from "@/lib/session";
 import { loginWithWallet, logout } from "@/lib/siwe";
 import { ConnectPanel } from "@/components/wallet/connect-panel";
@@ -26,6 +26,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
   const [copied, setCopied] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const { address, disconnect } = useWallet();
+  const hydrated = useWalletHydrated();
   const session = useSession();
 
   const persona = personaForAddress(address);
@@ -59,6 +60,14 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
       setSigning(false);
     }
   };
+
+  // Persisted wallet: stable placeholder until localStorage rehydrates, so the
+  // server-rendered markup matches the first client render.
+  if (!hydrated) {
+    return (
+      <span className="inline-flex h-[38px] w-[128px] animate-pulse rounded-full border border-line bg-white/[0.03]" aria-hidden />
+    );
+  }
 
   if (!address) {
     return (

@@ -1,5 +1,23 @@
 /** Formatting: wei/ETH, addresses, dates — mono-numeric presentation rules. */
 
+/**
+ * Safe wei parser. API payloads are typed as strings but can arrive as
+ * `undefined`/`null`/garbage (partial responses, older records). `BigInt()`
+ * throws on those, and several call sites run during render — so everything
+ * that turns a wei-ish value into a bigint goes through here. Invalid input
+ * collapses to 0n; presentation helpers (`formatEth`) render it as "—".
+ */
+export function toWei(value: string | bigint | number | null | undefined): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? BigInt(Math.trunc(value)) : 0n;
+  if (typeof value !== "string" || value.length === 0) return 0n;
+  try {
+    return BigInt(value);
+  } catch {
+    return 0n;
+  }
+}
+
 export function formatEth(wei: string | bigint | null | undefined, maxDecimals = 3): string {
   if (wei === null || wei === undefined) return "—";
   try {
@@ -90,9 +108,5 @@ export const STATE_COLORS: Record<string, string> = {
 };
 
 export function feeOn(amountWei: string, feeBps: number): bigint {
-  try {
-    return (BigInt(amountWei) * BigInt(feeBps)) / 10000n;
-  } catch {
-    return 0n;
-  }
+  return (toWei(amountWei) * BigInt(feeBps)) / 10000n;
 }

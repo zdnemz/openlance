@@ -61,6 +61,10 @@ async function main() {
   // ── Multi-arbiter parameters ───────────────────────────────────────────────
   const minStake = BigInt(process.env.MIN_STAKE_WEI ?? (local ? parseEther("0.1") : parseEther("0.1")));
   const minScoreToWithdraw = BigInt(process.env.MIN_SCORE_TO_WITHDRAW ?? "50");
+  // Time-based staking rules. Local devnet defaults short so the rules are
+  // observable without warping days of chain time; production defaults 7d/3d.
+  const minStakeDuration = BigInt(process.env.MIN_STAKE_DURATION_SECONDS ?? (local ? "60" : String(7 * 86400)));
+  const unstakeCooldown = BigInt(process.env.UNSTAKE_COOLDOWN_SECONDS ?? (local ? "60" : String(3 * 86400)));
   const treasury = (process.env.TREASURY ?? finalAdmin) as `0x${string}`;
   const disputeFee = BigInt(process.env.DISPUTE_FEE_WEI ?? parseEther("0.05"));
   const commitWindow = BigInt(process.env.COMMIT_WINDOW_SECONDS ?? (local ? "120" : "86400")); // 24h
@@ -78,6 +82,8 @@ async function main() {
   console.log(`  fee:            ${feeBps} bps`);
   console.log(`  min stake:      ${formatEther(minStake)} ETH`);
   console.log(`  min score:      ${minScoreToWithdraw}`);
+  console.log(`  min stake time: ${minStakeDuration}s`);
+  console.log(`  unstake cooldown: ${unstakeCooldown}s`);
   console.log(`  dispute fee:    ${formatEther(disputeFee)} ETH`);
   console.log(`  windows (c/r/a): ${commitWindow}s / ${revealWindow}s / ${appealWindow}s`);
   console.log(`  treasury:       ${treasury}`);
@@ -110,6 +116,8 @@ async function main() {
       minStake, // minStake
       minScoreToWithdraw, // minScoreToWithdraw
       treasury, // treasury
+      minStakeDuration, // minStakeDuration (seconds)
+      unstakeCooldown, // unstakeCooldown (seconds)
     ],
     { kind: "uups" },
   );

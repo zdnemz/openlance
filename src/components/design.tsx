@@ -66,15 +66,17 @@ export function EthAmount({ wei, className, suffix = true }: { wei: string | big
 
 /** Deterministic address avatar — hue pair + geometry from the hash bits. */
 export function AddressAvatar({ address, size = 36, className }: { address: string | null | undefined; size?: number; className?: string }) {
-  const { hue1, hue2, shape } = useMemo(() => {
+  const { hue1, hue2, shape, id } = useMemo(() => {
     const a = (address ?? "0x0").toLowerCase();
     const h1 = parseInt(a.slice(2, 6) || "0", 16) % 360;
     const h2 = (h1 + 130 + (parseInt(a.slice(6, 8) || "0", 16) % 80)) % 360;
     const shape = parseInt(a.slice(9, 11) || "0", 16) % 4;
-    return { hue1: h1, hue2: h2, shape };
+    // Deterministic gradient id derived from the address — MUST be identical on
+    // the server and the client. `Math.random()` here caused a hydration
+    // mismatch (different `id`/`fill` attributes on each render).
+    const id = `av-${a.slice(2, 10) || "default"}-${h1}-${h2}`;
+    return { hue1: h1, hue2: h2, shape, id };
   }, [address]);
-
-  const id = useMemo(() => `av-${Math.random().toString(36).slice(2, 8)}`, []);
   if (!address) return <span className={cn("inline-block rounded-full bg-white/5", className)} style={{ width: size, height: size }} />;
 
   const shapes = [

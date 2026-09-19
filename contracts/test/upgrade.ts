@@ -92,6 +92,8 @@ describe("UUPS upgrade authorization", () => {
         100000000000000000n, // minStake
         50n, // minScoreToWithdraw
         owner, // treasury
+        604800n, // minStakeDuration (7d)
+        259200n, // unstakeCooldown (3d)
       ], { account: owner }),
       /InvalidInitialization/,
     );

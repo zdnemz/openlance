@@ -5,8 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, patch } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type {
-  ArbiterView, DisputeView, JobView, LedgerEntry, MessageView, Overview,
-  ProjectView, ProposalView, PublicUser, ReviewView, SubmissionView,
+  ArbiterView, DisputeView, InboxResponse, JobView, LedgerEntry, MessageView, Overview,
+  PreferencesResponse, ProjectView, ProposalView, PublicUser, ReviewView, SubmissionView,
+  WebhookDelivery, WebhookSubscription,
 } from "@/lib/types";
 
 export const qk = {
@@ -27,6 +28,10 @@ export const qk = {
   user: (address: string) => ["user", address] as const,
   userReviews: (address: string) => ["user-reviews", address] as const,
   me: ["me"] as const,
+  notifications: (unreadOnly?: boolean) => ["notifications", unreadOnly ?? false] as const,
+  notificationPreferences: ["notification-preferences"] as const,
+  webhooks: ["webhooks"] as const,
+  webhookDeliveries: (id: string) => ["webhook-deliveries", id] as const,
 };
 
 export function useOverview() {
@@ -163,6 +168,47 @@ export function useLedger(filters?: Record<string, string>) {
   });
 }
 
+// ── Notifications & webhooks (PRD F9) ───────────────────────────────────────
+
+/** Inbox feed + unread count; polls so the bell stays live. */
+export function useNotifications(unreadOnly = false) {
+  const token = useSession((s) => s.token);
+  return useQuery({
+    queryKey: qk.notifications(unreadOnly),
+    queryFn: () => get<InboxResponse>(`/notifications${unreadOnly ? "?unread=true" : ""}`),
+    enabled: !!token,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useNotificationPreferences() {
+  const token = useSession((s) => s.token);
+  return useQuery({
+    queryKey: qk.notificationPreferences,
+    queryFn: () => get<PreferencesResponse>("/notifications/preferences"),
+    enabled: !!token,
+  });
+}
+
+export function useWebhooks() {
+  const token = useSession((s) => s.token);
+  return useQuery({
+    queryKey: qk.webhooks,
+    queryFn: () => get<WebhookSubscription[]>("/webhooks"),
+    enabled: !!token,
+  });
+}
+
+export function useWebhookDeliveries(id: string) {
+  const token = useSession((s) => s.token);
+  return useQuery({
+    queryKey: qk.webhookDeliveries(id),
+    queryFn: () => get<{ items: WebhookDelivery[]; total: number }>(`/webhooks/${id}/deliveries?limit=50`),
+    enabled: !!id && !!token,
+    refetchInterval: 8_000,
+  });
+}
+
 /** Mutation helpers with cache surgery kept next to their shapes. */
 export function useInvalidate() {
   const qc = useQueryClient();
@@ -182,6 +228,10 @@ export function useInvalidate() {
     disputes: () => void qc.invalidateQueries({ queryKey: qk.disputes }),
     overview: () => void qc.invalidateQueries({ queryKey: qk.overview }),
     user: (address: string) => void qc.invalidateQueries({ queryKey: qk.user(address) }),
+    notifications: () => void qc.invalidateQueries({ queryKey: ["notifications"] }),
+    webhooks: () => void qc.invalidateQueries({ queryKey: qk.webhooks }),
+    webhookDeliveries: (id: string) => void qc.invalidateQueries({ queryKey: qk.webhookDeliveries(id) }),
+    notificationPreferences: () => void qc.invalidateQueries({ queryKey: qk.notificationPreferences }),
   };
 }
 

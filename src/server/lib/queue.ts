@@ -14,7 +14,7 @@
 import { env } from '../config'
 import { logger } from './logger'
 
-export type CronName = 'reconcile' | 'sla-scan'
+export type CronName = 'reconcile' | 'sla-scan' | 'indexer'
 
 export interface DeliveryOutcome {
   /** true when the delivery is terminal (delivered, or permanently failed) */
