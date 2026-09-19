@@ -1,6 +1,7 @@
 /** /arbiters — read model over the on-chain ArbiterRegistry mirror (PRD F11/F12). */
 import { desc, eq } from 'drizzle-orm'
 import { getDb } from '../db'
+import { cached } from '../lib/cache'
 import { arbiters, users } from '../db/schema'
 import { Errors } from '../lib/errors'
 
@@ -21,12 +22,14 @@ function view(a: typeof arbiters.$inferSelect, profile?: typeof users.$inferSele
 }
 
 export async function listArbiters() {
-  const db = getDb()
-  const rows = await db.select().from(arbiters).orderBy(desc(arbiters.trustScore))
-  return Promise.all(rows.map(async (a) => {
-    const [u] = await db.select().from(users).where(eq(users.walletAddress, a.address)).limit(1)
-    return view(a, u)
-  }))
+  return cached('arbiters:list', { ttlSeconds: 20, namespace: 'read' }, async () => {
+    const db = getDb()
+    const rows = await db.select().from(arbiters).orderBy(desc(arbiters.trustScore))
+    return Promise.all(rows.map(async (a) => {
+      const [u] = await db.select().from(users).where(eq(users.walletAddress, a.address)).limit(1)
+      return view(a, u)
+    }))
+  })
 }
 
 export async function getArbiter(address: string) {

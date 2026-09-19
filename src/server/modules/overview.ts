@@ -6,6 +6,7 @@
 import { count, desc, eq } from 'drizzle-orm'
 import { env } from '../config'
 import { execSql, getDb } from '../db'
+import { cached } from '../lib/cache'
 import { getKv } from '../lib/kv'
 import { getChainAdapter } from '../chain/adapter'
 import {
@@ -43,6 +44,10 @@ export async function ready() {
 }
 
 export async function overview() {
+  return cached('overview', { ttlSeconds: 10, namespace: 'read' }, loadOverview)
+}
+
+async function loadOverview() {
   const db = getDb()
   const [[{ total: userCount }], [{ total: jobCount }], [{ total: projectCount }], [{ total: proposalCount }], [{ total: messageCount }], [{ total: reviewCount }], [{ total: ledgerCount }]] = await Promise.all([
     db.select({ total: count() }).from(users),
