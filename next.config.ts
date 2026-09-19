@@ -6,12 +6,10 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // 4GB sandbox: cap Turbopack so compiling the wagmi/viem client graph
-  // GCs instead of ballooning into an OOM kill.
+  // Sandbox: cap Turbopack memory so compiling the viem client graph GCs
+  // instead of ballooning into an OOM kill.
   experimental: {
-    turbo: {
-      memoryLimit: 2200,
-    },
+    turbopackMemoryLimit: 2200,
   },
 };
 
