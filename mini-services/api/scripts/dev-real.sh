@@ -4,7 +4,8 @@
 #   anvil (:8545, chain 31337)  →  deploy Escrow+Registry  →  fresh PGlite DB
 #   →  API :3030 in CHAIN_MODE=real (hot reload)  →  demo seed (real txs)
 #
-# Invoked by .zscripts/dev.sh via `bun run dev`. Safe to re-run: it reuses a
+# Invoked by the Next.js /api/dev/stack babysitter route, or manually via
+# `bun run dev` from mini-services/api. Safe to re-run: it reuses a
 # live anvil, always deploys fresh contracts, and the seed is idempotent.
 set -uo pipefail
 

@@ -10,7 +10,7 @@
 export const dynamic = "force-dynamic";
 
 import { spawn } from "node:child_process";
-import { openSync, existsSync, readFileSync } from "node:fs";
+import { openSync, existsSync, readFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = process.cwd();
@@ -61,7 +61,8 @@ export async function POST(req: Request) {
       killer.on("exit", () => resolve());
     });
   }
-  const logPath = resolve(ROOT, "scripts/stack.log");
+  const logPath = resolve(API_DIR, "data", "stack.log");
+  mkdirSync(resolve(API_DIR, "data"), { recursive: true });
   const out = openSync(logPath, "a");
   const child = spawn("bash", [resolve(API_DIR, "scripts/dev-real.sh")], {
     cwd: API_DIR,

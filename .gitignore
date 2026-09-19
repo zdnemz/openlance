@@ -1,14 +1,7 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 node_modules
 /.pnp
 .pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
 # testing
 /coverage
@@ -16,6 +9,7 @@ node_modules
 # next.js
 /.next/
 /out/
+next-env.d.ts
 
 # production
 /build
@@ -24,31 +18,35 @@ node_modules
 .DS_Store
 *.pem
 
-# debug
+# logs
+*.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# typescript
+*.tsbuildinfo
+
+# env files (opt-in via .env.example)
 .env*
+!.env.example
+
+# local/platform dirs
+/local-*
+/prompt
+.claude
+.z-ai-config
+/skills/
+/upload/
+/download/
+.zscripts/
+.foundry/
+
+# agent session log (kept on disk, not part of the product)
+worklog.md
 
 # vercel
 .vercel
 
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-local-*
-.claude
-.z-ai-config
-*.log
-dev.log
-dev.out.log
-test
-prompt
-
-server.log
-# Skills directory
-/skills/
+# backend runtime state (live devnet data, regenerated per boot)
+mini-services/api/data/
+mini-services/api/.anvil-deployment.json

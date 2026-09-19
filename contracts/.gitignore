@@ -1,0 +1,15 @@
+# Compiler output
+cache/
+out/
+
+# Dependencies (installed via `forge install`)
+lib/
+
+# Environment
+.env
+
+# Reports
+gas-snapshots/
+coverage/
+lcov.info
+broadcast/

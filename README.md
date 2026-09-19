@@ -34,7 +34,7 @@ browser ──────► Next.js :3000 ──────► Hono API :3030
 - **State split enforced in the UI**: money-relevant views poll the API
   mirror, and every wallet action waits through three honest phases —
   *signing → mining → indexer mirroring* — before declaring success.
-- **Boot self-healing**: `.zscripts/dev.sh` boots the stack through
+- **Boot self-healing**: the Next.js server babysits the chain stack through
   `mini-services/api`'s `dev` script (`scripts/dev-real.sh`): anvil → deploy
   (viem, from `contracts/out` artifacts) → fresh DB → API (real mode) → demo
   seed (idempotent). `POST /api/dev/stack?force=1` restarts it on demand.
