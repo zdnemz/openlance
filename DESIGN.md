@@ -1,5 +1,5 @@
 ---
-name: EscrowLance Ledger
+name: OpenLance Ledger
 kind: dark-premium-fintech
 updated: 2026-09-19
 fonts:
@@ -21,7 +21,7 @@ motion:
   reduced-motion: MotionConfig reducedMotion="user" on landing + CSS kill for breathe/shimmer
 ---
 
-# EscrowLance design system — "the ledger"
+# OpenLance design system — "the ledger"
 
 ## World
 

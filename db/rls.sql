@@ -1,4 +1,4 @@
--- EscrowLance RLS bootstrap (idempotent — safe to re-run).
+-- OpenLance RLS bootstrap (idempotent — safe to re-run).
 --
 -- Posture: the Hono API is THE write path (service-role credentials, which
 -- bypass RLS). These policies constrain direct `authenticated` reads through

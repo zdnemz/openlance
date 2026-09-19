@@ -1,6 +1,6 @@
-# EscrowLance — milestone escrow for freelance work
+# OpenLance — milestone escrow for freelance work
 
-A portfolio-grade implementation of the EscrowLance PRD: a freelance
+A portfolio-grade implementation of the OpenLance PRD: a freelance
 marketplace where every milestone's value is locked in a smart-contract
 escrow **before** the work starts, released on proof, and arbitrated by
 SBT-staked arbiters when parties disagree.

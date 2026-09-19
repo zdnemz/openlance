@@ -20,7 +20,7 @@ Next.js 16 (App Router, Turbopack) + Tailwind CSS v4 + TanStack Query + viem (no
 
 ## Product Purpose
 
-EscrowLance is a milestone-escrow freelance marketplace: value locks in a smart contract before work starts, releases on on-chain proof (not promises), and disputes resolve through SBT-staked arbiters. Success means a visitor can see, in seconds, that the money moves by contract state machine — fund → submit → approve/dispute → release/split — with real tx hashes everywhere.
+OpenLance is a milestone-escrow freelance marketplace: value locks in a smart contract before work starts, releases on on-chain proof (not promises), and disputes resolve through SBT-staked arbiters. Success means a visitor can see, in seconds, that the money moves by contract state machine — fund → submit → approve/dispute → release/split — with real tx hashes everywhere.
 
 ## Positioning
 
@@ -42,7 +42,7 @@ The contract is the source of truth: the off-chain layer is a mirror, and every 
 
 ## Brand Commitments
 
-- Name: EscrowLance. Voice: precise, dry, engineering-forward; controls name their action; no marketing fluff.
+- Name: OpenLance. Voice: precise, dry, engineering-forward; controls name their action; no marketing fluff.
 - Dark premium interior; the landing may be cinematic, the app interior stays calm.
 - Typography committed 2026-09-19 (impeccable refactor): Instrument Serif (display), Schibsted Grotesk (UI), IBM Plex Mono (ledger data) — replaces Geist, then Instrument Sans (both detector-flagged as AI-convergent). One accent, structure over glow.
 
