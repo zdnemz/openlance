@@ -12,9 +12,9 @@ export function signPayload(body: string, secret: string): string {
 export function webhookHeaders(signature: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'X-EscrowLance-Signature': `sha256=${signature}`,
-    'X-EscrowLance-Event': 'delivery',
-    'User-Agent': 'EscrowLance-Webhooks/1.0',
+    'X-OpenLance-Signature': `sha256=${signature}`,
+    'X-OpenLance-Event': 'delivery',
+    'User-Agent': 'OpenLance-Webhooks/1.0',
   }
 }
 

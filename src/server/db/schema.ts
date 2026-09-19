@@ -1,5 +1,5 @@
 /**
- * EscrowLance off-chain schema (Drizzle / Postgres — Supabase compatible).
+ * OpenLance off-chain schema (Drizzle / Postgres — Supabase compatible).
  *
  * THE STATE SPLIT (PRD §7.3): money + commitments + trust facts are
  * authoritative ON-CHAIN. Everything here that mirrors chain state

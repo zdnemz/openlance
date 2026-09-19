@@ -16,7 +16,7 @@ import {
 export function health() {
   return {
     status: 'ok',
-    service: 'escrowlance-api',
+    service: 'openlance-api',
     version: '0.1.0',
     time: new Date().toISOString(),
   }
@@ -89,7 +89,7 @@ async function loadOverview() {
 
   const adapter = getChainAdapter()
   return {
-    service: 'escrowlance-api',
+    service: 'openlance-api',
     config: {
       chainMode: adapter.mode,
       chainId: env.CHAIN_ID,

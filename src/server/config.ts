@@ -1,5 +1,5 @@
 /**
- * EscrowLance API — environment configuration (Next.js server runtime).
+ * OpenLance API — environment configuration (Next.js server runtime).
  *
  * Migrated from the standalone Hono service. Supabase Postgres is the only
  * database driver; Upstash Redis backs the KV/rate-limit/queue layers (with an
@@ -35,7 +35,7 @@ const schema = z.object({
   // ── Supabase (Storage + Realtime + JWT secret). ────────────────────────
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  SUPABASE_JWT_SECRET: z.string().min(16).default('escrowlance-dev-jwt-secret-do-not-use-in-prod'),
+  SUPABASE_JWT_SECRET: z.string().min(16).default('openlance-dev-jwt-secret-do-not-use-in-prod'),
 
   // ── File storage ────────────────────────────────────────────────────────
   STORAGE_DRIVER: z.enum(['supabase', 'local']).optional(), // auto: supabase when configured

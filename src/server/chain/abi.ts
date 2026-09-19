@@ -1,5 +1,5 @@
 /**
- * The on-chain event surface EscrowLance's indexer depends on.
+ * The on-chain event surface OpenLance's indexer depends on.
  *
  * These ABIs are the *interface contract* between the Solidity work (build
  * phase 2) and the off-chain backend: the deployed Escrow + ArbiterRegistry

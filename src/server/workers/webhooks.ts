@@ -1,7 +1,7 @@
 /**
  * Webhook delivery executor — ONE attempt per call (PRD F9).
  * Retry policy lives in the queue layer (BullMQ backoff or inline setTimeout).
- * Signatures: X-EscrowLance-Signature: sha256=<hmac of body>.
+ * Signatures: X-OpenLance-Signature: sha256=<hmac of body>.
  */
 import { eq } from 'drizzle-orm'
 import { env } from '../config'
@@ -37,9 +37,9 @@ export async function attemptDelivery(deliveryId: string): Promise<DeliveryOutco
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-EscrowLance-Signature': `sha256=${signature}`,
-        'X-EscrowLance-Event': String((delivery.envelope as { type?: string }).type ?? ''),
-        'User-Agent': 'EscrowLance-Webhooks/1.0',
+        'X-OpenLance-Signature': `sha256=${signature}`,
+        'X-OpenLance-Event': String((delivery.envelope as { type?: string }).type ?? ''),
+        'User-Agent': 'OpenLance-Webhooks/1.0',
       },
       body,
       signal: controller.signal,

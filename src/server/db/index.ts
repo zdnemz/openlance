@@ -16,8 +16,8 @@ export type Db = PostgresJsDatabase<typeof schema>
 export type { schema }
 
 const globalForDb = globalThis as unknown as {
-  __escrowlance_db?: Db
-  __escrowlance_pg?: import('postgres').Sql
+  __openlance_db?: Db
+  __openlance_pg?: import('postgres').Sql
 }
 
 function requireUrl(): string {
@@ -28,26 +28,26 @@ function requireUrl(): string {
 }
 
 export function getDb(): Db {
-  if (globalForDb.__escrowlance_db) return globalForDb.__escrowlance_db
+  if (globalForDb.__openlance_db) return globalForDb.__openlance_db
   const client = postgres(requireUrl(), { max: env.DATABASE_POOL_MAX, prepare: false })
-  globalForDb.__escrowlance_pg = client
+  globalForDb.__openlance_pg = client
   const db = drizzle(client, { schema }) as unknown as Db
-  globalForDb.__escrowlance_db = db
+  globalForDb.__openlance_db = db
   logger.info('DB: postgres (supabase)', { url: requireUrl().replace(/:\/\/.*@/, '://***@') })
   return db
 }
 
 /** Raw SQL execution (migrations, RLS bootstrap, report queries). */
 export async function execSql(sqlText: string): Promise<unknown> {
-  const client = globalForDb.__escrowlance_pg
+  const client = globalForDb.__openlance_pg
   if (!client) {
     getDb() // initialise
   }
-  return globalForDb.__escrowlance_pg!.unsafe(sqlText)
+  return globalForDb.__openlance_pg!.unsafe(sqlText)
 }
 
 export async function closeDb(): Promise<void> {
-  if (globalForDb.__escrowlance_pg) await globalForDb.__escrowlance_pg.end({ timeout: 5 }).catch(() => {})
-  globalForDb.__escrowlance_db = undefined
-  globalForDb.__escrowlance_pg = undefined
+  if (globalForDb.__openlance_pg) await globalForDb.__openlance_pg.end({ timeout: 5 }).catch(() => {})
+  globalForDb.__openlance_db = undefined
+  globalForDb.__openlance_pg = undefined
 }

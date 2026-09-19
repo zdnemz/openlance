@@ -109,11 +109,11 @@ class RedisQueues implements JobQueues {
   }
 }
 
-const globalForQueues = globalThis as unknown as { __escrowlance_queues?: JobQueues }
+const globalForQueues = globalThis as unknown as { __openlance_queues?: JobQueues }
 
 export async function getQueues(): Promise<JobQueues> {
-  if (globalForQueues.__escrowlance_queues) return globalForQueues.__escrowlance_queues
+  if (globalForQueues.__openlance_queues) return globalForQueues.__openlance_queues
   const { attemptDelivery } = await import('../workers/webhooks')
-  globalForQueues.__escrowlance_queues = env.queueMode === 'redis' ? new RedisQueues(attemptDelivery) : new InlineQueues(attemptDelivery)
-  return globalForQueues.__escrowlance_queues
+  globalForQueues.__openlance_queues = env.queueMode === 'redis' ? new RedisQueues(attemptDelivery) : new InlineQueues(attemptDelivery)
+  return globalForQueues.__openlance_queues
 }

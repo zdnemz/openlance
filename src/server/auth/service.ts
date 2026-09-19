@@ -40,7 +40,7 @@ export async function getNonce() {
     siwe: {
       domain: env.appDomain,
       chainId: env.CHAIN_ID,
-      statement: 'Sign in to EscrowLance - milestone escrow for freelance work.',
+      statement: 'Sign in to OpenLance - milestone escrow for freelance work.',
     },
   }
 }
