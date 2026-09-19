@@ -120,7 +120,7 @@ contract Handler is Test {
     uint256 constant RING = 96;
 
     constructor() {
-        ArbiterRegistry reg = new ArbiterRegistry("EscrowLance Arbiter", "ELARB", admin);
+        ArbiterRegistry reg = new ArbiterRegistry("OpenLance Arbiter", "OLANCE", admin);
         Escrow esc = new Escrow(reg, admin);
         vm.prank(admin);
         reg.setEscrow(address(esc));

@@ -1,5 +1,5 @@
 #!/bin/bash
-# EscrowLance dev chain stack — anvil + contracts + real-chain seed.
+# OpenLance dev chain stack — anvil + contracts + real-chain seed.
 #
 #   anvil (:8545, chain 31337)  →  deploy Escrow+Registry  →  write contract
 #   addresses to .env.local  →  migrate Supabase Postgres  →  demo seed (real txs)

@@ -65,7 +65,7 @@ async function siweLogin(p: { key: string; addr: string }) {
     `localhost:3000 wants you to sign in with your Ethereum account:`,
     account.address,
     '',
-    'Sign in to EscrowLance - milestone escrow for freelance work.',
+    'Sign in to OpenLance - milestone escrow for freelance work.',
     '',
     'URI: http://localhost:3000',
     'Version: 1',

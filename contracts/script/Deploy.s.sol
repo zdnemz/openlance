@@ -25,7 +25,7 @@ contract Deploy is Script {
     function run() external returns (ArbiterRegistry registry, Escrow escrow) {
         vm.startBroadcast();
 
-        registry = new ArbiterRegistry("EscrowLance Arbiter", "ELARB", msg.sender);
+        registry = new ArbiterRegistry("OpenLance Arbiter", "OLANCE", msg.sender);
         escrow = new Escrow(registry, msg.sender);
         registry.setEscrow(address(escrow));
 

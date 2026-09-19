@@ -21,7 +21,7 @@ contract ArbiterRegistryTest is Test {
     address rando = makeAddr("rando");
 
     function setUp() public {
-        registry = new ArbiterRegistry("EscrowLance Arbiter", "ELARB", admin);
+        registry = new ArbiterRegistry("OpenLance Arbiter", "OLANCE", admin);
         escrow = new Escrow(registry, admin);
         vm.prank(admin);
         registry.setEscrow(address(escrow));

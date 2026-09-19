@@ -59,7 +59,7 @@ async function main() {
     displayName: 'Ines (Arbiter)', bio: 'Independent arbiter. 72h SLA or my score pays for it.', role: 'both',
     skills: ['arbitration', 'defi'],
   })
-  await upsertUser(WALLETS.admin, { displayName: 'EscrowLance Admin', role: 'both' })
+  await upsertUser(WALLETS.admin, { displayName: 'OpenLance Admin', role: 'both' })
   console.log('[seed] users seeded')
 
   // job with 2-milestone template

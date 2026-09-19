@@ -6,7 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title Escrow — the money authority of EscrowLance (PRD §7.2, F4/F5/F10)
+ * @title Escrow — the money authority of OpenLance (PRD §7.2, F4/F5/F10)
  * @notice ONE contract holding every milestone (not a factory of per-project
  *         clones): dispute, arbiter, fee and settlement logic is cross-project,
  *         and a single accounting surface is what the invariant tests protect.

@@ -40,7 +40,7 @@ async function main() {
   const registryHash = await walletClient.deployContract({
     ...registryArt,
     functionName: 'constructor',
-    args: ['EscrowLance Arbiter', 'ELARB', account.address],
+    args: ['OpenLance Arbiter', 'OLANCE', account.address],
     account,
   })
   const registryReceipt = await publicClient.waitForTransactionReceipt({ hash: registryHash })

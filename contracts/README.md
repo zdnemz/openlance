@@ -1,6 +1,6 @@
-# EscrowLance — Contracts
+# OpenLance — Contracts
 
-The on-chain money authority of EscrowLance (PRD build phase 2): **one escrow contract** holding every milestone — not a factory of per-project clones, because dispute/arbiter/fee/settlement logic is cross-project and a single accounting surface is what the invariant suite protects (PRD §7.2).
+The on-chain money authority of OpenLance (PRD build phase 2): **one escrow contract** holding every milestone — not a factory of per-project clones, because dispute/arbiter/fee/settlement logic is cross-project and a single accounting surface is what the invariant suite protects (PRD §7.2).
 
 **Stack:** Solidity 0.8.28 · Foundry (forge test / fuzz / invariants) · OpenZeppelin 5.7 (ERC-721, ERC-5194, Ownable, ReentrancyGuard) · native ETH (ERC-20 is upgrade Tier 3).
 

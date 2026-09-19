@@ -31,7 +31,7 @@ contract EscrowTest is Test {
     bytes32 constant REF = bytes32(uint256(0xdeadbeef));
 
     function setUp() public {
-        registry = new ArbiterRegistry("EscrowLance Arbiter", "ELARB", admin);
+        registry = new ArbiterRegistry("OpenLance Arbiter", "OLANCE", admin);
         escrow = new Escrow(registry, admin);
         vm.prank(admin);
         registry.setEscrow(address(escrow));

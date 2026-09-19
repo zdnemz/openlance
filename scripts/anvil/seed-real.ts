@@ -83,7 +83,7 @@ async function siweLogin(p: { key: string; addr: string }) {
     `localhost:3000 wants you to sign in with your Ethereum account:`,
     account.address,
     '',
-    'Sign in to EscrowLance - milestone escrow for freelance work.',
+    'Sign in to OpenLance - milestone escrow for freelance work.',
     '',
     'URI: http://localhost:3000',
     'Version: 1',
@@ -139,7 +139,7 @@ async function main() {
     skills: ['react', 'nextjs', 'canvas', 'websockets', 'tailwind'],
   }, t.rhys)
   await api('PATCH', '/users/me', {
-    displayName: 'Ingrid Salm', role: 'freelancer', bio: 'Security researcher and EscrowLance arbiter. 40+ peer reviews, MEV-adjacent by day. I resolve disputes on the evidence, not the vibes.',
+    displayName: 'Ingrid Salm', role: 'freelancer', bio: 'Security researcher and OpenLance arbiter. 40+ peer reviews, MEV-adjacent by day. I resolve disputes on the evidence, not the vibes.',
     skills: ['security', 'auditing', 'solidity'],
   }, t.ingrid)
 
