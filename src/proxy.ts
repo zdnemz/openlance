@@ -1,5 +1,5 @@
 /**
- * Next.js edge middleware — CORS for the API surface.
+ * Next.js proxy (formerly middleware) — CORS for the API surface.
  *
  * Same-origin frontend calls need no CORS, but existing clients (and the
  * preview gateway) may call cross-origin; keep the Hono service's behaviour:
@@ -20,7 +20,7 @@ function corsHeaders(origin: string | null): HeadersInit {
   }
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const origin = request.headers.get('origin')
   if (request.method === 'OPTIONS') {
     return new NextResponse(null, { status: 204, headers: corsHeaders(origin) })

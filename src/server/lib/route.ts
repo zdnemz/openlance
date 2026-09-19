@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server'
 import { AppError, Errors } from './errors'
 import { logger } from './logger'
-import { fail, ok } from './http'
+import { created, fail, ok } from './http'
 
 export type Handler<P = Record<string, string>> = (
   request: Request,
@@ -44,3 +44,4 @@ export function route<P extends Record<string, string> = Record<string, string>>
 }
 
 export { Errors }
+export { created, fail, ok }

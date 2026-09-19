@@ -388,10 +388,16 @@ export class MockChainAdapter implements ChainAdapter {
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let adapter: ChainAdapter | undefined
+const globalForAdapter = globalThis as unknown as { __escrowlance_adapter?: ChainAdapter }
 
 export function getChainAdapter(): ChainAdapter {
   if (adapter) return adapter
+  if (globalForAdapter.__escrowlance_adapter) {
+    adapter = globalForAdapter.__escrowlance_adapter
+    return adapter
+  }
   adapter = env.chainMode === 'real' ? new RealChainAdapter() : new MockChainAdapter()
+  globalForAdapter.__escrowlance_adapter = adapter
   logger.info(`chain adapter: ${adapter.mode} (chainId ${adapter.chainId})`)
   return adapter
 }

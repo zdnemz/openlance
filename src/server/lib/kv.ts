@@ -96,8 +96,17 @@ class UpstashKv implements Kv {
 
 let kvInstance: Kv | undefined
 
+// Next.js dev/Turbopack re-evaluates modules per request, so a module-scoped
+// singleton is not enough for the in-process fallback — anchor it on
+// globalThis so nonces, rate-limit windows and the JWT denylist survive.
+const globalForKv = globalThis as unknown as { __escrowlance_kv?: Kv }
+
 export async function getKv(): Promise<Kv> {
   if (kvInstance) return kvInstance
+  if (globalForKv.__escrowlance_kv) {
+    kvInstance = globalForKv.__escrowlance_kv
+    return kvInstance
+  }
   if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
     const { Redis } = await import('@upstash/redis')
     const redis = new Redis({ url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN })
@@ -107,5 +116,6 @@ export async function getKv(): Promise<Kv> {
     kvInstance = new MemoryKv()
     logger.info('KV: in-process memory (no Upstash credentials)')
   }
+  globalForKv.__escrowlance_kv = kvInstance
   return kvInstance
 }

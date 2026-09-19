@@ -1,5 +1,5 @@
 /** GET/POST /api/webhooks */
-import { route } from '@/server/lib/route'
+import { route, created } from '@/server/lib/route'
 import { readRateLimit, writeRateLimit } from '@/server/lib/rate-limit'
 import { requireAuth } from '@/server/auth/middleware'
 import { createWebhook, listWebhooks } from '@/server/modules/webhooks'
@@ -15,5 +15,5 @@ export const GET = route(async (request) => {
 export const POST = route(async (request) => {
   const user = await requireAuth(request)
   await writeRateLimit(request, user.id)
-  return createWebhook(request)
+  return created(await createWebhook(request))
 })

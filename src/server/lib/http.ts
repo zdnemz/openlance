@@ -22,6 +22,11 @@ export function ok<T>(data: T, status = 200, init?: ResponseInit): NextResponse 
   return NextResponse.json({ data }, { status, ...init })
 }
 
+/** 201 Created envelope — parity with the original Hono routes. */
+export function created<T>(data: T): NextResponse {
+  return ok(data, 201)
+}
+
 export function fail(err: unknown, requestId?: string): NextResponse {
   if (err instanceof AppError) {
     return NextResponse.json(
