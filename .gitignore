@@ -44,6 +44,9 @@ yarn-debug.log*
 # agent session log (kept on disk, not part of the product)
 worklog.md
 
+# codegraph indexes (local tooling cache)
+.codegraph/
+
 # vercel
 .vercel
 
