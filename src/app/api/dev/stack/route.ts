@@ -1,25 +1,22 @@
 /**
- * Dev-only stack control: status + (re)spawn. Keeps the anvil stack alive
- * through the sandbox's process reaper by spawning it as a child of this
- * Next.js server (the one process tree the environment keeps alive).
+ * Dev-only stack control: status + (re)spawn of the anvil chain stack.
  *
- * Self-contained on purpose: route files hot-reload in dev, so the spawn
- * logic lives inline instead of behind an imported module that might be
- * cached in the server's module registry.
+ * The API now runs inside this Next.js process (route handlers under /api),
+ * so this route no longer supervises a separate API process — it only reports
+ * API/chain health and can (re)spawn the anvil + contracts + seed stack that
+ * lives in mini-services/api/scripts/dev-real.sh.
  */
 export const dynamic = "force-dynamic";
 
 import { spawn } from "node:child_process";
-import { openSync, existsSync, readFileSync, mkdirSync } from "node:fs";
+import { openSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = process.cwd();
 const API_DIR = resolve(ROOT, "mini-services/api");
 
 async function status() {
-  const api = await fetch("http://localhost:3030/health", { signal: AbortSignal.timeout(1500) })
-    .then((r) => r.ok)
-    .catch(() => false);
+  // API health is this very process — resolve the origin from the request.
   const chain = await fetch("http://127.0.0.1:8545", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -28,36 +25,23 @@ async function status() {
   })
     .then((r) => r.ok)
     .catch(() => false);
-  return { api, chain };
-}
-
-function lockAlive() {
-  try {
-    const lockPath = resolve(API_DIR, "data", "stack.lock");
-    if (!existsSync(lockPath)) return false;
-    const pid = Number(readFileSync(lockPath, "utf8").trim());
-    if (!Number.isFinite(pid) || pid <= 0) return false;
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+  return { api: true, chain };
 }
 
 export async function GET() {
-  return Response.json({ ...(await status()), lock: lockAlive() });
+  return Response.json(await status());
 }
 
 export async function POST(req: Request) {
   const force = new URL(req.url).searchParams.get("force") === "1";
   const current = await status();
-  if (!force && (current.api || lockAlive())) {
-    return Response.json({ ...current, spawned: false, reason: current.api ? "healthy" : "locked" });
+  if (!force && current.chain) {
+    return Response.json({ ...current, spawned: false, reason: "chain healthy" });
   }
   if (force) {
     // Authoritative teardown first: concurrent orchestrators crossfire pkills.
     await new Promise<void>((resolve) => {
-      const killer = spawn("bash", ["-c", "pkill -f 'dev-real.sh' 2>/dev/null; pkill -f 'src/server.ts' 2>/dev/null; sleep 2; true"], { stdio: "ignore" });
+      const killer = spawn("bash", ["-c", "pkill -f 'dev-real.sh' 2>/dev/null; sleep 2; true"], { stdio: "ignore" });
       killer.on("exit", () => resolve());
     });
   }
@@ -68,8 +52,8 @@ export async function POST(req: Request) {
     cwd: API_DIR,
     detached: true,
     stdio: ["ignore", out, out],
-    env: { ...process.env, PORT: "3030", PATH: `${resolve(ROOT, ".foundry/bin")}:${process.env.PATH ?? ""}` },
+    env: { ...process.env, PATH: `${resolve(ROOT, ".foundry/bin")}:${process.env.PATH ?? ""}` },
   });
   child.unref();
-  return Response.json({ spawned: true, pid: child.pid });
+  return Response.json({ spawned: true, pid: child.pid, note: "anvil chain stack only — API is in-process" });
 }

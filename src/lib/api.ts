@@ -1,20 +1,13 @@
 /**
- * EscrowLance API client — gateway-aware dual path.
+ * EscrowLance API client.
  *
- * · Through the preview gateway (any non-localhost origin): every request is
- *   a RELATIVE path plus `?XTransformPort=3030`; Caddy forwards to the API.
- * · Direct dev (localhost:3000): talk to the API origin itself (CORS allow-
- *   listed server-side).
+ * The backend runs in the SAME Next.js app (App Router route handlers under
+ * `/api/**`), so every call is same-origin — no gateway port forwarding, no
+ * CORS. `apiBase()` allows an optional absolute override for split deploys.
  */
 import { useSession } from "@/lib/session";
 
-const API_PORT = process.env.NEXT_PUBLIC_API_PORT ?? "3030";
-
-/** true when the page itself is the dev server (localhost:3000, no gateway) */
-function isDirect(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.location.hostname === "localhost" && window.location.port === "3000";
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 export class ApiError extends Error {
   code: string;
@@ -29,9 +22,7 @@ export class ApiError extends Error {
 }
 
 function buildUrl(path: string): string {
-  if (isDirect()) return `http://localhost:${API_PORT}${path}`;
-  const sep = path.includes("?") ? "&" : "?";
-  return `${path}${sep}XTransformPort=${API_PORT}`;
+  return `${API_BASE}/api${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
@@ -56,13 +47,12 @@ export const get = <T = unknown>(path: string) => api<T>("GET", path);
 export const post = <T = unknown>(path: string, body?: unknown) => api<T>("POST", path, body);
 export const patch = <T = unknown>(path: string, body?: unknown) => api<T>("PATCH", path, body);
 
-/** Rewrite API-served absolute upload URLs into gateway-safe relative ones. */
+/** Absolute-or-relative upload URLs served by the same app are already same-origin. */
 export function fileUrl(u: string): string {
-  if (!u || isDirect()) return u;
+  if (!u || !API_BASE) return u;
   try {
     const parsed = new URL(u);
-    const target = parsed.port || "3030";
-    return `${parsed.pathname}${parsed.search ? parsed.search + "&" : "?"}XTransformPort=${target}`;
+    return parsed.pathname + parsed.search;
   } catch {
     return u;
   }

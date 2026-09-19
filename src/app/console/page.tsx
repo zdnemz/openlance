@@ -4,10 +4,10 @@
  * EscrowLance — Backend Console.
  *
  * The product frontend arrives in a later build phase; this page is the live
- * window into the backend-first deliverable (Hono API on :3030): health,
+ * window into the backend-first deliverable (Next.js route handlers on /api): health,
  * adapter modes, seeded demo project, the on-chain ledger mirror, arbiter
- * trust scores, and the API surface. All requests go through the gateway
- * using relative paths + XTransformPort (sandbox rule).
+ * trust scores, and the API surface. All requests are same-origin `/api` calls
+ * served by this Next.js app's route handlers.
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -21,18 +21,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const API_PORT = 3030
-/** Gateway path (works through the preview proxy) + direct local fallback. */
-const GW = (path: string) => `/${path}${path.includes('?') ? '&' : '?'}XTransformPort=${API_PORT}`
-const DIRECT = (path: string) => `http://localhost:${API_PORT}/${path.replace(/^\//, '')}`
+/** Backend now runs in the same Next.js app under /api (same-origin). */
+const GW = (path: string) => `/api/${path.replace(/^\//, '')}`
 
 async function fetchApi(path: string): Promise<Response> {
-  try {
-    const viaGateway = await fetch(GW(path), { cache: 'no-store' })
-    if (viaGateway.ok) return viaGateway
-  } catch {
-    // gateway not in the path (direct localhost access) — fall through
-  }
-  return fetch(DIRECT(path), { cache: 'no-store' })
+  return fetch(GW(path), { cache: 'no-store' })
 }
 
 // ── Types (mirror the API's /overview response) ────────────────────────────
@@ -175,7 +168,7 @@ export default function BackendConsole() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <StatusPill ok={online} label={online ? 'API :3030 online' : 'API offline'} />
+              <StatusPill ok={online} label={online ? 'API online' : 'API offline'} />
               {data ? (
                 <>
                   <Badge variant="outline" className="font-mono">chain {data.config.chainMode}</Badge>
@@ -403,7 +396,7 @@ export default function BackendConsole() {
       <footer className="mt-auto border-t bg-muted/30">
         <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
           <span>EscrowLance — portfolio build, testnet only. On-chain = money + commitments + trust; off-chain = content + velocity.</span>
-          <span className="font-mono">mini-services/api · Hono :3030</span>
+          <span className="font-mono">Next.js route handlers · /api</span>
         </div>
       </footer>
     </div>
