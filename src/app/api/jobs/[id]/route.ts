@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export const GET = route<{ id: string }>(async (request, { params }) => {
   const user = await optionalAuth(request)
   await readRateLimit(request, user?.id)
-  return getJob(params.id)
+  return getJob(params.id, request)
 })
 
 export const PATCH = route<{ id: string }>(async (request, { params }) => {

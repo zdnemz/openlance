@@ -1,6 +1,6 @@
 /** API shape contracts (mirrors src/server modules). */
 
-export type JobStatus = "open" | "in_progress" | "completed" | "cancelled";
+export type JobStatus = "draft" | "open" | "in_progress" | "completed" | "cancelled";
 export type MilestoneChainStatus =
   | "pending_funding"
   | "funded"
@@ -71,6 +71,8 @@ export interface JobView {
   };
   milestones: MilestoneTemplate[];
   templateTotalWei: string;
+  deposit: { amountWei: string; txHash: string | null; depositedAt: string | null } | null;
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -103,6 +105,8 @@ export interface ProjectMilestone {
   submittedAt: string | null;
   settledAt: string | null;
   settlementTxHash: string | null;
+  withdrawnAt: string | null;
+  withdrawTxHash: string | null;
   fund?: { contract: string; chainId: number; ref: string; amountWei: string };
 }
 
@@ -114,6 +118,9 @@ export interface ProjectView {
   client: { id: string; walletAddress: string; displayName: string | null };
   freelancer: { id: string; walletAddress: string; displayName: string | null };
   milestones: ProjectMilestone[];
+  chosenArbiters: string[];
+  arbiterProposal: { proposerId: string; addresses: string[] } | null;
+  arbitersLockedAt: string | null;
   createdAt: string;
   [key: string]: unknown;
 }
