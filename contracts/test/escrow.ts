@@ -58,10 +58,27 @@ describe("Escrow", function () {
     await escrow.write.approve([1n], { account: deployer.account });
     assert.equal(await escrow.read.milestoneStatus([1n]), 4); // Released
 
-    // Fee = 2.5% of 10 ETH = 0.25 ETH retained; the rest leaves the escrow.
+    // Fee = 2.5% of 10 ETH = 0.25 ETH retained; principal stays claimable —
+    // approve no longer pushes. The freelancer pulls via withdrawMilestone.
     assert.equal(await escrow.read.accruedFees(), parseEther("0.25"));
+    assert.equal(await escrow.read.claimable([1n]), amount - parseEther("0.25"));
+    assert.equal(await publicClient.getBalance({ address: escrow.address }), escrowBefore);
+
+    await escrow.write.withdrawMilestone([1n], { account: freelancer.account });
+    assert.equal(await escrow.read.claimable([1n]), 0n);
     const escrowAfter = await publicClient.getBalance({ address: escrow.address });
     assert.equal(escrowBefore - escrowAfter, amount - parseEther("0.25"));
+  });
+
+  it("withdrawMilestone is freelancer-only and needs a claimable balance", async function () {
+    const { escrow, deployer, freelancer, outsider } = await deployWithEoaOwner();
+    await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("1"), account: deployer.account });
+    await escrow.write.submit([1n], { account: freelancer.account });
+    await assert.rejects(escrow.write.withdrawMilestone([1n], { account: freelancer.account }), /WrongStatus/);
+    await escrow.write.approve([1n], { account: deployer.account });
+    await assert.rejects(escrow.write.withdrawMilestone([1n], { account: outsider.account }), /NotFreelancer/);
+    await escrow.write.withdrawMilestone([1n], { account: freelancer.account });
+    await assert.rejects(escrow.write.withdrawMilestone([1n], { account: freelancer.account }), /NothingToWithdraw/);
   });
 
   it("only the client can approve and only in Submitted state", async function () {

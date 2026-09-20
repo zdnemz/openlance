@@ -23,13 +23,19 @@ describe("Escrow — reentrancy & accounting", () => {
     await escrow.write.fund([REF, attacker.address], { value: parseEther("10"), account: client.account });
     await attacker.write.submitWork([1n]);
 
-    // approve triggers _pay -> attacker.receive -> reenter approve -> must revert.
-    await assert.rejects(escrow.write.approve([1n], { account: client.account }));
+    // Approve only marks claimable (no payout to reenter through).
+    await escrow.write.approve([1n], { account: client.account });
+    assert.equal(await escrow.read.milestoneStatus([1n]), 4); // Released
+    assert.equal(await escrow.read.claimable([1n]), parseEther("9.75"));
 
-    // The whole settlement reverted: status is still Submitted, no fee accrued,
-    // and the escrow still holds the full amount.
-    assert.equal(await escrow.read.milestoneStatus([1n]), 2); // Submitted
-    assert.equal(await escrow.read.accruedFees(), 0n);
+    // withdrawMilestone triggers _pay -> attacker.receive -> reenter withdraw
+    // -> guard reverts -> outer _pay bubbles TransferFailed: all reverted.
+    await assert.rejects(attacker.write.pull([1n]), /TransferFailed/);
+
+    // Nothing moved: still Released + claimable, fee accrued, escrow whole.
+    assert.equal(await escrow.read.milestoneStatus([1n]), 4); // Released
+    assert.equal(await escrow.read.claimable([1n]), parseEther("9.75"));
+    assert.equal(await escrow.read.accruedFees(), parseEther("0.25"));
     assert.equal(await publicClient.getBalance({ address: escrow.address }), parseEther("10"));
   });
 
@@ -42,17 +48,22 @@ describe("Escrow — reentrancy & accounting", () => {
     await escrow.write.fund([`0x${"cd".repeat(32)}`, freelancer.account.address], { value: parseEther("6"), account: client.account });
     assert.equal(await publicClient.getBalance({ address: escrow.address }), parseEther("10"));
 
-    // Settle the first: 4 ETH - 2.5% fee.
+    // Settle the first: 4 ETH - 2.5% fee. Approve marks claimable (no payout),
+    // so the escrow still holds the full 10 until the freelancer pulls.
     await escrow.write.submit([1n], { account: freelancer.account });
     await escrow.write.approve([1n], { account: client.account });
     const fee = parseEther("0.1"); // 2.5% of 4
     assert.equal(await escrow.read.accruedFees(), fee);
-    // Remaining escrow = 6 (unsettled) + 0.1 (fee pot) = 6.1
-    assert.equal(await publicClient.getBalance({ address: escrow.address }), parseEther("6.1"));
+    assert.equal(await escrow.read.claimable([1n]), parseEther("3.9"));
+    assert.equal(await publicClient.getBalance({ address: escrow.address }), parseEther("10"));
 
-    // Withdraw fees: accruedFees -> 0, escrow holds exactly the unsettled 6.
+    // Withdraw fees: accruedFees -> 0, escrow holds unsettled 6 + claimable 3.9.
     await escrow.write.withdrawFees([deployer.account.address], { account: deployer.account });
     assert.equal(await escrow.read.accruedFees(), 0n);
+    assert.equal(await publicClient.getBalance({ address: escrow.address }), parseEther("9.9"));
+
+    // Freelancer pulls: escrow holds exactly the unsettled 6.
+    await escrow.write.withdrawMilestone([1n], { account: freelancer.account });
     assert.equal(await publicClient.getBalance({ address: escrow.address }), parseEther("6"));
   });
 

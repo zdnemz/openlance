@@ -146,6 +146,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     event MilestoneRefunded(uint256 indexed milestoneId, address client, uint256 amount, bool viaDisputeResolution);
     event MilestoneSplit(uint256 indexed milestoneId, uint256 clientAmount, uint256 freelancerAmount, uint256 fee);
     event MilestoneCancelled(uint256 indexed milestoneId, address client, uint256 amount);
+    event FundsWithdrawn(uint256 indexed milestoneId, address indexed freelancer, uint256 amount);
     event FeeWithdrawn(address indexed to, uint256 amount);
 
     // ── Dispute events (spec §5) ──────────────────────────────────────────────
@@ -227,9 +228,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     uint256 public nextMilestoneId; // id 0 is never used
     uint256 public accruedFees; // unwithdrawn platform fees (solvency invariant)
     uint256 public rewardPool; // protocol-subsidised arbiter rewards
+    /// @dev Pull payouts: approved principal the freelancer has not withdrawn yet.
+    mapping(uint256 => uint256) public claimable;
 
     /// @dev Reserved storage for future upgrades.
-    uint256[38] private __gap;
+    uint256[37] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -315,7 +318,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         emit MilestoneSubmitted(milestoneId, freelancer);
     }
 
-    /// @notice Client approves delivered work: fee is taken, principal released.
+    /// @notice Client approves delivered work: fee is taken, principal becomes
+    ///         claimable — the freelancer pulls it via `withdrawMilestone`.
     function approve(uint256 milestoneId) external nonReentrant {
         Milestone storage m = _m(milestoneId);
         if (_msgSender() != m.client) revert NotClient();
@@ -325,9 +329,26 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         uint256 fee = _feeOn(m.amount, m.feeBps);
         uint256 principal = m.amount - fee;
         accruedFees += fee;
+        claimable[milestoneId] = principal;
 
         emit MilestoneReleased(milestoneId, m.freelancer, principal, fee, false);
-        _pay(m.freelancer, principal);
+    }
+
+    /// @notice Freelancer pulls approved principal (happy path or dispute award).
+    function withdrawMilestone(uint256 milestoneId) external nonReentrant {
+        Milestone storage m = _m(milestoneId);
+        if (_msgSender() != m.freelancer) revert NotFreelancer();
+        if (
+            m.status != Status.Released &&
+            m.status != Status.ResolvedRelease &&
+            m.status != Status.ResolvedSplit
+        ) revert WrongStatus(Status.Released, m.status);
+        uint256 amount = claimable[milestoneId];
+        if (amount == 0) revert NothingToWithdraw();
+
+        claimable[milestoneId] = 0; // EFFECT before INTERACTION (CEI)
+        emit FundsWithdrawn(milestoneId, m.freelancer, amount);
+        _pay(m.freelancer, amount);
     }
 
     /// @notice Client cancels a funded (not yet submitted) milestone: full refund.
@@ -600,15 +621,16 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         emit DisputeFinalized(milestoneId, round, winner, reveals, true);
     }
 
-    /// @dev Apply the winning outcome to the milestone and push payments.
+    /// @dev Apply the winning outcome: freelancer-bound value becomes claimable
+    ///      (pulled via `withdrawMilestone`); client refunds stay push.
     function _settleMilestone(uint256 milestoneId, Milestone storage m, uint8 winner) private {
         if (winner == uint8(Outcome.Release)) {
             m.status = Status.ResolvedRelease;
             uint256 fee = _feeOn(m.amount, m.feeBps);
             uint256 principal = m.amount - fee;
             accruedFees += fee;
+            claimable[milestoneId] = principal;
             emit MilestoneReleased(milestoneId, m.freelancer, principal, fee, true);
-            _pay(m.freelancer, principal);
         } else if (winner == uint8(Outcome.Refund)) {
             m.status = Status.ResolvedRefund;
             emit MilestoneRefunded(milestoneId, m.client, m.amount, true);
@@ -620,8 +642,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
             uint256 freelancerAmount = half - fee;
             uint256 clientAmount = m.amount - half;
             accruedFees += fee;
+            claimable[milestoneId] = freelancerAmount;
             emit MilestoneSplit(milestoneId, clientAmount, freelancerAmount, fee);
-            _pay(m.freelancer, freelancerAmount);
             _pay(m.client, clientAmount);
         }
     }

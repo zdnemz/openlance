@@ -15,6 +15,7 @@ pragma solidity ^0.8.28;
 interface IEscrowAttackerTarget {
     function submit(uint256 milestoneId) external;
     function approve(uint256 milestoneId) external;
+    function withdrawMilestone(uint256 milestoneId) external;
     function cancel(uint256 milestoneId) external;
     function milestoneStatus(uint256 milestoneId) external view returns (uint8);
 }
@@ -34,6 +35,11 @@ contract ReentrancyAttacker {
         escrow.submit(milestoneId);
     }
 
+    /// @notice Act as the freelancer: pull approved principal.
+    function pull(uint256 milestoneId) external {
+        escrow.withdrawMilestone(milestoneId);
+    }
+
     function attack(uint256 milestoneId) external {
         reentryCount++;
         try escrow.approve(milestoneId) {
@@ -46,9 +52,9 @@ contract ReentrancyAttacker {
     }
 
     receive() external payable {
-        // Reenter the payout path. The guard must make this revert; the outer
-        // `_pay` then bubbles TransferFailed and reverts the whole settlement.
+        // Reenter the payout path (pull). The guard must make this revert; the
+        // outer `_pay` then bubbles TransferFailed and reverts the withdrawal.
         reentryCount++;
-        escrow.approve(1);
+        escrow.withdrawMilestone(1);
     }
 }

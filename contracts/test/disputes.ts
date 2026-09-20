@@ -95,7 +95,7 @@ describe("Escrow — multi-arbiter disputes", () => {
   });
 
   it("conserve wei on a Split majority", async function () {
-    const { escrow, arbiters, client } = await setupDispute(3);
+    const { escrow, arbiters, client, freelancer } = await setupDispute(3);
     const r = await getRound(escrow, 1n, 0);
     const wallets = walletsFor(r, arbiters.slice(0, 3));
     const overrides: Record<string, number> = { [wallets[2]!.account.address.toLowerCase()]: RELEASE };
@@ -111,9 +111,13 @@ describe("Escrow — multi-arbiter disputes", () => {
     const half = parseEther("5");
     const fee = (half * 250n) / 10000n;
     assert.equal(await escrow.read.accruedFees(), fee);
-    // The escrow only retains the platform fee (dispute fee was paid out to majority).
-    assert.equal(after, fee);
-    void before;
+    // Freelancer half stays claimable (pull); client half pushed; dispute fee
+    // paid out to majority. Escrow retains fee + claimable freelancer half.
+    assert.equal(await escrow.read.claimable([1n]), half - fee);
+    assert.equal(after, before - half - DISPUTE_FEE);
+    // Pull completes conservation: only the platform fee remains.
+    await escrow.write.withdrawMilestone([1n], { account: freelancer.account });
+    assert.equal(await pc.getBalance({ address: escrow.address }), fee);
   });
 
   it("rejects commits after the commit deadline and reveals before it", async function () {
