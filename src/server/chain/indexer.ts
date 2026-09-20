@@ -503,9 +503,9 @@ async function currentThresholds(): Promise<{ silver: string; gold: string }> {
   try {
     const kv = await getKv()
     const [s, g] = await Promise.all([kv.get('registry:tierSilver'), kv.get('registry:tierGold')])
-    return { silver: s ?? (min * 2n).toString(), gold: g ?? (min * 5n).toString() }
+    return { silver: s ?? (min * 10n).toString(), gold: g ?? (min * 100n).toString() }
   } catch {
-    return { silver: (min * 2n).toString(), gold: (min * 5n).toString() }
+    return { silver: (min * 10n).toString(), gold: (min * 100n).toString() }
   }
 }
 

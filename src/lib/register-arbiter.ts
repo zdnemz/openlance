@@ -141,11 +141,12 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         const activeDisputes = activeDisputesRaw === null ? 0 : num(activeDisputesRaw);
       const chainNow = Math.floor(Date.now() / 1000);
       if (cancelled) return;
-      // tierSilver/Gold default to minStake*2/*5 (registry initialize) when the
-      // view call is unavailable — never collapse them onto minStake.
+      // tierSilver/Gold default to minStake*10/*100 (registry initialize:
+      // Silver 1 ETH, Gold 10 ETH) when the view call is unavailable — never
+      // collapse them onto minStake.
       const min = minStakeWei ?? 0n;
-      const silverFallback = tierSilver ?? (min ? min * 2n : 0n);
-      const goldFallback = tierGold ?? (min ? min * 5n : 0n);
+      const silverFallback = tierSilver ?? (min ? min * 10n : 0n);
+      const goldFallback = tierGold ?? (min ? min * 100n : 0n);
       if (!info) {
         setState({
           registered: false, trustScore: 0, stakeWei: "0", tier: 0,

@@ -10,17 +10,17 @@ import { Errors } from '../lib/errors'
 const TIER_SILVER_KEY = 'registry:tierSilver'
 const TIER_GOLD_KEY = 'registry:tierGold'
 
-/** Resolve tier floors: indexer-synced KV override, else minStake*2 / minStake*5 (contract defaults). */
+/** Resolve tier floors: indexer-synced KV override, else minStake*10 / minStake*100 (contract defaults: 1 / 10 ETH). */
 async function tierThresholds(): Promise<{ silver: bigint; gold: bigint }> {
   const min = BigInt(env.MIN_STAKE_WEI)
   try {
     const kv = await getKv()
     const [s, g] = await Promise.all([kv.get(TIER_SILVER_KEY), kv.get(TIER_GOLD_KEY)])
-    const silver = s ? BigInt(s) : min * 2n
-    const gold = g ? BigInt(g) : min * 5n
+    const silver = s ? BigInt(s) : min * 10n
+    const gold = g ? BigInt(g) : min * 100n
     return { silver, gold }
   } catch {
-    return { silver: min * 2n, gold: min * 5n }
+    return { silver: min * 10n, gold: min * 100n }
   }
 }
 

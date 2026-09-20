@@ -62,8 +62,8 @@ export function runtimeConfig() {
   let tierSilverWei = '0'
   let tierGoldWei = '0'
   try {
-    tierSilverWei = (BigInt(minStakeWei) * 2n).toString()
-    tierGoldWei = (BigInt(minStakeWei) * 5n).toString()
+    tierSilverWei = (BigInt(minStakeWei) * 10n).toString()
+    tierGoldWei = (BigInt(minStakeWei) * 100n).toString()
   } catch { /* env guard rails on malformed wei */ }
   return {
     chainMode: adapter.mode,
