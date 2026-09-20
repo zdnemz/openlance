@@ -21,7 +21,7 @@ import {
 export const userRole = pgEnum('user_role', ['client', 'freelancer', 'arbiter'])
 /** Mock-KYC lifecycle for every role (simulated, never a real provider). */
 export const kycStatus = pgEnum('kyc_status', ['none', 'pending', 'verified', 'rejected'])
-export const jobStatus = pgEnum('job_status', ['open', 'in_progress', 'completed', 'cancelled'])
+export const jobStatus = pgEnum('job_status', ['draft', 'open', 'in_progress', 'completed', 'cancelled'])
 export const proposalStatus = pgEnum('proposal_status', ['submitted', 'accepted', 'rejected', 'withdrawn'])
 export const projectStatus = pgEnum('project_status', ['active', 'completed', 'cancelled'])
 /** Mirror of the on-chain milestone state machine (PRD F4/F5). */
@@ -114,7 +114,16 @@ export const jobs = pgTable('jobs', {
   skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
   budgetMinWei: wei('budget_min_wei').notNull(),
   budgetMaxWei: wei('budget_max_wei').notNull(),
-  status: jobStatus('status').notNull().default('open'),
+  status: jobStatus('status').notNull().default('draft'),
+  // ── Publish vault (agreed flow: draft → deposit budgetMax → publish) ─────
+  // ponytail: off-chain vault ledger (amount + tx hash); on-chain JobVault
+  // contract later if custodial trust demands it.
+  /** Amount locked at publish (always == budgetMaxWei at publish time). */
+  depositAmountWei: wei('deposit_amount_wei'),
+  /** Deposit tx hash anchoring the lock (verified by amount, not by contract yet). */
+  depositTxHash: text('deposit_tx_hash'),
+  depositedAt: timestamp('deposited_at', { withTimezone: true }),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('jobs_status_idx').on(t.status), index('jobs_category_idx').on(t.category)])
@@ -158,6 +167,12 @@ export const projects = pgTable('projects', {
   clientId: uuid('client_id').notNull().references(() => users.id),
   freelancerId: uuid('freelancer_id').notNull().references(() => users.id),
   status: projectStatus('status').notNull().default('active'),
+  // ── Mutual arbiter lock (propose → approve → lock, max 3; fallback auto) ─
+  /** Pending proposal: { proposerId, addresses[] } until the other side approves. */
+  arbiterProposal: jsonb('arbiter_proposal'),
+  /** Locked 1–3 lowercase registry addresses, used at dispute open. */
+  chosenArbiters: jsonb('chosen_arbiters').notNull().default(sql`'[]'::jsonb`),
+  arbitersLockedAt: timestamp('arbiters_locked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -185,6 +200,9 @@ export const projectMilestones = pgTable('project_milestones', {
   // Off-chain soft state: latest submission request-changes flag (PRD F8)
   softStatus: submissionSoftStatus('soft_status'),
   softStatusNote: text('soft_status_note'),
+  // ── Pull payout (approved → claimable → freelancer withdraws) ────────────
+  withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+  withdrawTxHash: text('withdraw_tx_hash'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('project_milestones_position_idx').on(t.projectId, t.position)])
