@@ -11,7 +11,7 @@
  */
 import { useArbiters } from "@/lib/queries";
 import { AddressAvatar, Skeleton, EmptyState, press } from "@/components/design";
-import { ArbiterStakePanel } from "@/components/arbiter-stake-panel";
+import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
 import { shortAddress, dateLabel, formatEth } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
 import Link from "next/link";
@@ -67,7 +67,7 @@ export default function ArbitersPage() {
         )}
       </div>
 
-      <ArbiterStakePanel />
+      <ArbiterStakeSummary />
 
       {isLoading ? (
         <div className="space-y-3">

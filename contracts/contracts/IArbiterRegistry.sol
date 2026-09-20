@@ -31,6 +31,9 @@ interface IArbiterRegistry {
     /// @notice Current ETH collateral held for `arbiter`.
     function stakeOf(address arbiter) external view returns (uint256);
 
+    /// @notice Arbiter tier by collateral: 0 = none, 1 = bronze, 2 = silver, 3 = gold.
+    function tierOf(address arbiter) external view returns (uint8);
+
     /// @notice Score threshold n below which the stake is locked.
     function minScoreToWithdraw() external view returns (uint256);
 

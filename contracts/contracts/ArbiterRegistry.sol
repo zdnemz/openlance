@@ -72,6 +72,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     event StakeSlashed(address indexed arbiter, address indexed treasury, uint256 amount);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event MinStakeUpdated(uint256 oldMinStake, uint256 newMinStake);
+    event TierThresholdsUpdated(uint256 silverStake, uint256 goldStake);
     event MinScoreToWithdrawUpdated(uint256 oldScore, uint256 newScore);
     event MinStakeDurationUpdated(uint256 oldSeconds, uint256 newSeconds);
     event UnstakeCooldownUpdated(uint256 oldSeconds, uint256 newSeconds);
@@ -110,6 +111,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     error UnstakeAlreadyRequested();
     error StillHandlingDispute(address arbiter);
     error TransferFailed();
+    error BadTierThresholds(uint256 silver, uint256 gold, uint256 minStake);
     /// @notice Selection blocked: not staked for at least `minStakeDuration` yet.
     error StakeTooRecent(uint256 stakedAt, uint256 minStakeDuration);
     /// @notice Withdrawal blocked: the `unstakeCooldown` has not elapsed yet.
@@ -136,10 +138,14 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     uint256 public minStakeDuration;
     /// @notice Delay (seconds) between `requestUnstake` and `withdrawStake`.
     uint256 public unstakeCooldown;
+    /// @notice Tier floors (wei): bronze = minStake, silver/gold upgrade selection
+    ///         weight + fee share. Invariant: minStake <= tierSilver <= tierGold.
+    uint256 public tierSilver;
+    uint256 public tierGold;
 
     /// @dev Reserved storage for future upgrades. Shrink only by the number of
     ///      slots added above it.
-    uint256[38] private __gap;
+    uint256[36] private __gap;
 
     modifier onlyEscrow() {
         if (msg.sender != escrow) revert NotEscrow();
@@ -183,6 +189,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         treasury = treasury_ == address(0) ? owner_ : treasury_;
         minStakeDuration = minStakeDuration_;
         unstakeCooldown = unstakeCooldown_;
+        tierSilver = minStake_ * 2;
+        tierGold = minStake_ * 5;
         emit MinStakeDurationUpdated(0, minStakeDuration_);
         emit UnstakeCooldownUpdated(0, unstakeCooldown_);
     }
@@ -379,6 +387,16 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         return arbiters[arbiter].stake;
     }
 
+    /// @notice Arbiter tier by collateral: 0 = none, 1 = bronze, 2 = silver, 3 = gold.
+    /// @dev Pure stake read — selection weight already scales with stakeOf in Escrow.
+    function tierOf(address arbiter) external view returns (uint8) {
+        uint256 s = arbiters[arbiter].stake;
+        if (!arbiters[arbiter].registered || s < minStake) return 0;
+        if (tierGold > 0 && s >= tierGold) return 3;
+        if (tierSilver > 0 && s >= tierSilver) return 2;
+        return 1;
+    }
+
     function isLocked(address arbiter) external view returns (bool) {
         ArbiterInfo storage info = arbiters[arbiter];
         return info.registered && info.trustScore < minScoreToWithdraw;
@@ -430,7 +448,18 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     function setMinStake(uint256 newMinStake) external onlyOwner {
         uint256 old = minStake;
         minStake = newMinStake;
+        // Keep the tier invariant: silver/gold never sit below the floor.
+        if (tierSilver < newMinStake) tierSilver = newMinStake;
+        if (tierGold < newMinStake) tierGold = newMinStake;
         emit MinStakeUpdated(old, newMinStake);
+    }
+
+    /// @notice Set tier floors. Must satisfy minStake <= silver <= gold.
+    function setTierThresholds(uint256 silverStake, uint256 goldStake) external onlyOwner {
+        if (silverStake < minStake || goldStake < silverStake) revert BadTierThresholds(silverStake, goldStake, minStake);
+        tierSilver = silverStake;
+        tierGold = goldStake;
+        emit TierThresholdsUpdated(silverStake, goldStake);
     }
 
     /// @notice Set the score threshold n below which stakes lock.

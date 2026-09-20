@@ -26,6 +26,10 @@ export interface MyArbiterState {
   registered: boolean;
   trustScore: number;
   stakeWei: string;
+  /** 0 none · 1 bronze · 2 silver · 3 gold (mirrors Registry.tierOf). */
+  tier: number;
+  tierSilverWei: string;
+  tierGoldWei: string;
   locked: boolean;
   unstakeRequested: boolean;
   eligible: boolean;
@@ -78,6 +82,9 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
       const locked = await readContract<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isLocked", args: [address] });
       const eligibleAt = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "eligibleAt", args: [address] });
       const unstakeReadyAt = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeReadyAt", args: [address] });
+      const tier = await readContract<number>({ to: registry, abi: REGISTRY_ABI, functionName: "tierOf", args: [address] }).catch(() => 0);
+      const tierSilver = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierSilver" }).catch(() => null);
+      const tierGold = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierGold" }).catch(() => null);
       // The escrow owns the "active dispute" bookkeeping the registry's _isBusy
       // guard consults; read it directly so the UI matches the revert condition.
       const activeDisputesRaw = escrow
@@ -88,7 +95,9 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
       if (cancelled) return;
       if (!info) {
         setState({
-          registered: false, trustScore: 0, stakeWei: "0", locked: false, unstakeRequested: false, eligible: false,
+          registered: false, trustScore: 0, stakeWei: "0", tier: 0,
+          tierSilverWei: (tierSilver ?? minStakeWei ?? 0n).toString(),
+          tierGoldWei: (tierGold ?? minStakeWei ?? 0n).toString(), locked: false, unstakeRequested: false, eligible: false,
           minStakeWei: (minStakeWei ?? 0n).toString(), minScoreToWithdraw: Number(minScore ?? 50n),
           minStakeDurationSeconds: Number(minStakeDuration ?? 0n), unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
           eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false,
@@ -100,6 +109,9 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         unstakeRequested: Boolean(info[1]),
         trustScore: Number(info[3]),
         stakeWei: (info[4] as bigint).toString(),
+        tier: Number(tier ?? 0),
+        tierSilverWei: (tierSilver ?? minStakeWei ?? 0n).toString(),
+        tierGoldWei: (tierGold ?? minStakeWei ?? 0n).toString(),
         locked: Boolean(locked),
         eligible: Boolean(eligible),
         minStakeWei: (minStakeWei ?? 0n).toString(),

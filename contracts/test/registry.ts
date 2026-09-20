@@ -277,3 +277,36 @@ describe("ArbiterRegistry — scoring, locking, slashing (via escrow hooks)", ()
     await assert.rejects(registry.write.requestUnstake({ account: busy.account }), /StillHandlingDispute/);
   });
 });
+
+describe("ArbiterRegistry — stake tiers", () => {
+  it("defaults silver=2x and gold=5x minStake; tierOf gates on collateral", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const [a, b, c] = [arbiters[0]!, arbiters[1]!, arbiters[2]!];
+    assert.equal(await registry.read.tierSilver(), MIN_STAKE * 2n);
+    assert.equal(await registry.read.tierGold(), MIN_STAKE * 5n);
+
+    await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+    assert.equal(await registry.read.tierOf([a.account.address]), 1); // bronze
+    await registry.write.registerArbiter({ value: MIN_STAKE * 2n, account: b.account });
+    assert.equal(await registry.read.tierOf([b.account.address]), 2); // silver
+    await registry.write.registerArbiter({ value: MIN_STAKE * 5n, account: c.account });
+    assert.equal(await registry.read.tierOf([c.account.address]), 3); // gold
+  });
+
+  it("top-up crosses tiers; owner can retune thresholds", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+    assert.equal(await registry.read.tierOf([a.account.address]), 1);
+    await registry.write.addStake({ value: MIN_STAKE, account: a.account }); // 2x → silver
+    assert.equal(await registry.read.tierOf([a.account.address]), 2);
+
+    const owner = (await viem.getWalletClients())[0]!;
+    await registry.write.setTierThresholds([MIN_STAKE * 3n, MIN_STAKE * 6n], { account: owner.account });
+    assert.equal(await registry.read.tierOf([a.account.address]), 1); // back to bronze
+    await assert.rejects(
+      registry.write.setTierThresholds([MIN_STAKE - 1n, MIN_STAKE * 6n], { account: owner.account }),
+      /BadTierThresholds/,
+    );
+  });
+});
