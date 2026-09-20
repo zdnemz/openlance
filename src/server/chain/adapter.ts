@@ -465,6 +465,18 @@ export class MockChainAdapter implements ChainAdapter {
     }, s.block)
   }
 
+  async withdraw(onchainId: number, by: string): Promise<RawChainLog> {
+    const s = await this.state()
+    const m = this.milestone(s, onchainId)
+    if (m.status !== 'released' && m.status !== 'resolved_release' && m.status !== 'resolved_split') {
+      throw new Error(`mock: milestone ${onchainId} is ${m.status}, nothing claimable`)
+    }
+    if (m.freelancer !== by.toLowerCase()) throw new Error('mock: only the freelancer may withdraw')
+    const fee = feeOf(m.amount, env.PLATFORM_FEE_BPS)
+    const principal = (BigInt(m.amount) - BigInt(fee)).toString()
+    return this.emit('FundsWithdrawn', { milestoneId: onchainId, freelancer: m.freelancer, amount: principal }, s.block)
+  }
+
   async cancel(onchainId: number, by: string): Promise<RawChainLog> {
     const s = await this.state()
     const m = this.milestone(s, onchainId)

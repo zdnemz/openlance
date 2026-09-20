@@ -100,6 +100,15 @@ export async function devCancel(request: Request) {
   return { txHash: log.txHash, block: log.blockNumber }
 }
 
+export async function devWithdraw(request: Request) {
+  assertDevChainEnabled()
+  const body = await validate(request, z.object({ milestoneId: z.string().uuid(), by: ADDRESS.optional() }).strict())
+  const { milestone } = await loadMilestone(body.milestoneId)
+  const { freelancer } = await walletsFor(milestone)
+  const log = await getMockAdapter().withdraw(requireOnchainId(milestone), body.by ?? freelancer.walletAddress)
+  return { txHash: log.txHash, block: log.blockNumber }
+}
+
 export async function devDispute(request: Request) {
   assertDevChainEnabled()
   const body = await validate(request, z.object({ milestoneId: z.string().uuid(), by: ADDRESS }).strict())

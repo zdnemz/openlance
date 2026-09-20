@@ -16,6 +16,7 @@ export type MilestoneStatus =
 export type ChainEventName =
   | 'MilestoneFunded' | 'MilestoneSubmitted' | 'MilestoneReleased'
   | 'MilestoneRefunded' | 'MilestoneSplit' | 'MilestoneCancelled'
+  | 'FundsWithdrawn' // receipt-only: status already terminal, no transition
   | 'DisputeOpened' | 'DisputeResolved'
   | 'ArbitersSelected' | 'VoteCommitted' | 'VoteRevealed' | 'DisputeFinalized'
   | 'AppealOpened' | 'AppealResolved' | 'ArbiterRewarded' | 'ArbiterPenalized'

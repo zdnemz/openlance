@@ -27,6 +27,7 @@ export const ESCROW_ABI = parseAbi([
   'event MilestoneRefunded(uint256 indexed milestoneId, address indexed client, uint256 amount, bool viaDisputeResolution)',
   'event MilestoneSplit(uint256 indexed milestoneId, uint256 clientAmount, uint256 freelancerAmount, uint256 fee)',
   'event MilestoneCancelled(uint256 indexed milestoneId, address indexed client, uint256 amount)',
+  'event FundsWithdrawn(uint256 indexed milestoneId, address indexed freelancer, uint256 amount)',
   'event FeeWithdrawn(address indexed to, uint256 amount)',
   // ── Multi-arbiter disputes (new) ────────────────────────────────────────
   'event DisputeOpened(uint256 indexed milestoneId, address indexed by, uint256 lockedAmount)',
@@ -59,6 +60,7 @@ export const ESCROW_ABI = parseAbi([
   'event UnstakeCooldownUpdated(uint256 oldSeconds, uint256 newSeconds)',
   // RPC read surface — readContract cannot encode calls from an events-only ABI.
   'function milestoneStatus(uint256 milestoneId) view returns (uint8)',
+  'function claimable(uint256 milestoneId) view returns (uint256)',
   'function accruedFees() view returns (uint256)',
   'function disputeFee() view returns (uint256)',
   'function feeBps() view returns (uint16)',

@@ -48,6 +48,7 @@ const ESCROW_EVENT_NAMES = [
   "MilestoneRefunded",
   "MilestoneSplit",
   "MilestoneCancelled",
+  "FundsWithdrawn",
   "DisputeOpened",
   "DisputeResolved",
   "FeeWithdrawn",
@@ -83,7 +84,7 @@ describe("Event-surface lock", () => {
       .filter((x) => x.type === "function")
       .map((x) => x.name);
     // Money lifecycle is frozen for the backend indexer.
-    for (const required of ["milestoneStatus", "getMilestone", "accruedFees", "fund", "submit", "approve", "cancel"]) {
+    for (const required of ["milestoneStatus", "getMilestone", "accruedFees", "claimable", "fund", "submit", "approve", "withdrawMilestone", "cancel"]) {
       assert.ok(fns.includes(required), `Escrow missing required function ${required}`);
     }
     // Multi-arbiter dispute surface.

@@ -9,6 +9,7 @@ export const ESCROW_ABI = [
   { type: "function", name: "fund", stateMutability: "payable", inputs: [{ name: "ref", type: "bytes32" }, { name: "freelancer", type: "address" }], outputs: [] },
   { type: "function", name: "submit", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },
   { type: "function", name: "approve", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },
+  { type: "function", name: "withdrawMilestone", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },
   { type: "function", name: "cancel", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },
   // Multi-arbiter dispute lifecycle.
   { type: "function", name: "openDispute", stateMutability: "payable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },
@@ -20,6 +21,7 @@ export const ESCROW_ABI = [
   { type: "function", name: "resolveAppeal", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },
   { type: "function", name: "withdrawFees", stateMutability: "nonpayable", inputs: [{ name: "to", type: "address" }], outputs: [] },
   { type: "function", name: "accruedFees", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
+  { type: "function", name: "claimable", stateMutability: "view", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] },
   { type: "function", name: "disputeFee", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
   { type: "function", name: "activeDisputes", stateMutability: "view", inputs: [{ name: "arbiter", type: "address" }], outputs: [{ name: "", type: "uint256" }] },
   { type: "function", name: "appealWindow", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint64" }] },

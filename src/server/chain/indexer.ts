@@ -133,6 +133,7 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'ArbiterRewarded':
     case 'ArbiterPenalized': return null // ledger-only; scores live on-chain
     case 'FeeWithdrawn': return null // ledger-only
+    case 'FundsWithdrawn': return applyWithdrawn(tx, evt)
     // ── Registry events: NO off-chain arbiter table to mirror. Scores, stakes
     //    and the roster are read live from the contract. Only the registry's
     //    *tuning knobs* are cached in KV so tier/eligibility math stays in sync.
@@ -329,6 +330,21 @@ async function applyCancelled(tx: Tx, evt: RawChainLog): Promise<PlannedNotifica
   await markSettled(tx, m.id, evt.txHash, evt.blockTime)
   await completeProjectIfDone(tx, m.projectId)
   return null // client-side cancel: no review unlock, no celebratory ping
+}
+
+/**
+ * Pull receipt: the freelancer withdrew claimable principal. Status is
+ * already terminal (Released / Resolved*) — this only stamps the receipt.
+ * No stats move here: value was credited at release/split time.
+ */
+async function applyWithdrawn(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const id = numOrNull(evt.args.milestoneId)!
+  const m = await loadMilestoneByOnchainId(tx, id)
+  if (!m) return drift('FundsWithdrawn', id, evt.txHash)
+  await tx.update(projectMilestones)
+    .set({ withdrawnAt: evt.blockTime, withdrawTxHash: evt.txHash, updatedAt: evt.blockTime })
+    .where(eq(projectMilestones.id, m.id))
+  return null // the withdrawer's own receipt is the confirmation
 }
 
 async function applyDisputeOpened(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
