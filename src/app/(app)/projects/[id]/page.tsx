@@ -356,7 +356,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
             <ActionBlock
               icon={<CheckCircle className="h-4 w-4" />}
               title={isClient ? "Review window open" : "Submitted · awaiting client review"}
-              body={isClient ? "Approve to release the escrowed value instantly (fee withheld). Not right yet? Request changes off-chain, or lock it into dispute." : "The client can approve, request changes, or dispute. You keep the delivery notes as evidence."}
+              body={isClient ? "Approve to make the payout claimable — the freelancer then withdraws it with one click. Not right yet? Request changes off-chain, or lock it into dispute." : "The client can approve, request changes, or dispute. You keep the delivery notes as evidence."}
             >
               {isClient && m.onchainId !== null && (
                 <div className="space-y-2.5">
@@ -364,18 +364,18 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     disabled={active}
                     onClick={() =>
                       chain.run({
-                        label: "Approve + release",
+                        label: "Approve milestone",
                         contract: "escrow",
                         functionName: "approve",
                         args: [toWei(m.onchainId!)],
                         projectId,
                         expect: wait("released"),
-                        successMessage: "Released: funds paid out, fee accounted",
+                        successMessage: "Approved: payout is claimable for the freelancer",
                       })
                     }
                     className="w-full rounded-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
                   >
-                    <PhaseLabel phase={chain.phase} idle={`Approve + release ${formatEth(toWei(m.amountWei) - fee)} ETH`} />
+                    <PhaseLabel phase={chain.phase} idle={`Approve · ${formatEth(toWei(m.amountWei) - fee)} ETH claimable`} />
                   </Button>
                   <Button
                     variant="ghost"
@@ -393,6 +393,45 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
               )}
             </ActionBlock>
           </>
+        )}
+
+        {["released", "resolved_release", "resolved_split"].includes(m.chainStatus) && !m.withdrawnAt && (
+          <ActionBlock
+            icon={<HandCoins className="h-4 w-4" />}
+            title={isFreelancer ? "Payout ready — withdraw it" : "Payout claimable"}
+            body={
+              isFreelancer
+                ? "The client approved this milestone. One click pulls the principal (minus the platform fee) into your wallet."
+                : "Approved and waiting on the freelancer's withdrawal — nothing is required from you."
+            }
+          >
+            {isFreelancer && m.onchainId !== null && (
+              <Button
+                disabled={active}
+                onClick={() =>
+                  chain.run({
+                    label: "Withdraw payout",
+                    contract: "escrow",
+                    functionName: "withdrawMilestone",
+                    args: [toWei(m.onchainId!)],
+                    projectId,
+                    expect: (p) => !!p.milestones.find((x) => x.id === m.id)?.withdrawnAt,
+                    successMessage: "Withdrawn: payout is in your wallet",
+                  })
+                }
+                className="w-full rounded-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
+              >
+                <PhaseLabel phase={chain.phase} idle={`Withdraw ${formatEth(toWei(m.amountWei) - fee)} ETH`} />
+              </Button>
+            )}
+          </ActionBlock>
+        )}
+
+        {m.withdrawTxHash && (
+          <div className="mt-1 flex items-center justify-between border-t border-line pt-3.5">
+            <span className="num text-[11px] uppercase tracking-wider text-faint">withdrawal tx</span>
+            <HashText value={m.withdrawTxHash} size={8} className="text-[12px] text-state-released" />
+          </div>
         )}
 
         {["funded", "submitted"].includes(m.chainStatus) && (isClient || isFreelancer) && (
