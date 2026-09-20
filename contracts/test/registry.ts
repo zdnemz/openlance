@@ -178,6 +178,76 @@ describe("ArbiterRegistry — unstake / withdraw / lock", () => {
   });
 });
 
+describe("ArbiterRegistry — partial exit (reduceStake)", () => {
+  it("reduces the position and stays registered (tier drops with it)", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE * 10n, account: a.account });
+    assert.equal(await registry.read.tierOf([a.account.address]), 2); // silver
+    await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) + 1); // age past the request gate
+
+    const pc = await viem.getPublicClient();
+    const before = await pc.getBalance({ address: a.account.address });
+    await registry.write.reduceStake([MIN_STAKE * 5n], { account: a.account });
+    const after = await pc.getBalance({ address: a.account.address });
+
+    assert.ok(after - before > MIN_STAKE * 5n - parseEther("0.01"), "reduced amount returned");
+    assert.equal(await registry.read.stakeOf([a.account.address]), MIN_STAKE * 5n);
+    assert.equal(await registry.read.isRegistered([a.account.address]), true); // still on the roster
+    assert.equal(await registry.read.tierOf([a.account.address]), 1); // back to bronze
+  });
+
+  it("rejects zero, full and below-minimum reductions", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE * 5n, account: a.account });
+    await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) + 1);
+    await assert.rejects(registry.write.reduceStake([0n], { account: a.account }), /NoStake/);
+    await assert.rejects(
+      registry.write.reduceStake([MIN_STAKE * 5n], { account: a.account }),
+      /FullExitRequired/, // emptying needs requestUnstake + withdrawStake
+    );
+    await assert.rejects(
+      registry.write.reduceStake([MIN_STAKE * 5n - MIN_STAKE + 1n], { account: a.account }),
+      /RemainingBelowMinimum/, // remainder would be MIN_STAKE - 1
+    );
+  });
+
+  it("reverts before the stake has aged", async function () {
+    const { registry, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE * 5n, account: a.account });
+    await assert.rejects(registry.write.reduceStake([MIN_STAKE], { account: a.account }), /UnstakeTooEarly/);
+  });
+
+  it("reverts when locked or serving", async function () {
+    const { registry, escrow, client, freelancer, arbiters } = await deployWithEoaOwner();
+    const [a, b, c] = [arbiters[0]!, arbiters[1]!, arbiters[2]!];
+    for (const w of [a, b, c]) await registry.write.registerArbiter({ value: MIN_STAKE * 5n, account: w.account });
+
+    // Locked (score < floor) → StakeIsLocked, no warp needed (score gate first).
+    await connection.networkHelpers.impersonateAccount(escrow.address);
+    await connection.networkHelpers.setBalance(escrow.address, parseEther("100"));
+    for (let i = 0; i < 4; i++) {
+      await registry.write.applyScoreChange([a.account.address, -15n, 3], { account: escrow.address });
+    }
+    await connection.networkHelpers.stopImpersonatingAccount(escrow.address);
+    await assert.rejects(registry.write.reduceStake([MIN_STAKE], { account: a.account }), /StakeIsLocked/);
+
+    // Serving a dispute → StillHandlingDispute (b/c stay eligible: warped past both clocks).
+    await networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1); // selectable + aged
+    await escrow.write.fund([`0x${"bb".repeat(32)}`, freelancer.account.address], { value: parseEther("1"), account: client.account });
+    await escrow.write.submit([1n], { account: freelancer.account });
+    await escrow.write.openDispute([1n], { value: parseEther("0.05"), account: client.account });
+    const r = (await escrow.read.getRound([1n, 0])) as readonly unknown[];
+    const selected = (r[0] as `0x${string}`[]).slice(0, Number(r[1]));
+    assert.ok(selected.length >= 2, "quorum selected from the healthy pair");
+    const map = new Map([b, c].map((w) => [w.account.address.toLowerCase(), w]));
+    const busy = map.get(selected[0]!.toLowerCase())!;
+    await assert.rejects(registry.write.reduceStake([MIN_STAKE], { account: busy.account }), /StillHandlingDispute/);
+  });
+});
+
 describe("ArbiterRegistry — scoring, locking, slashing (via escrow hooks)", () => {
   // The score hooks are escrow-only; tests impersonate the wired escrow address.
   async function withEscrow(escrow: any, fn: () => Promise<void>) {

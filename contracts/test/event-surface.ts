@@ -126,6 +126,7 @@ describe("Event-surface lock", () => {
       "ArbiterDeregistered",
       "ScoreChanged",
       "StakeDeposited",
+      "StakeReduced",
       "StakeLocked",
       "StakeWithdrawn",
       "StakeSlashed",

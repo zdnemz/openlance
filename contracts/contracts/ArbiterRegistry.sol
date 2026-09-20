@@ -16,6 +16,8 @@ import {IArbiterRegistry} from "./IArbiterRegistry.sol";
  *
  *         ══════════════════════ Staking model ══════════════════════
  *           - registerArbiter() {value: >= MIN_STAKE} → joins the roster, score 100.
+ *           - addStake() / reduceStake(amount) resize the position while staying
+ *             on the roster (reduce keeps remainder >= MIN_STAKE).
  *           - requestUnstake() requires the stake to have aged at least
  *             `unstakeCooldown` seconds (no join-and-leave sniping); it
  *             benches the arbiter from selection immediately.
@@ -68,6 +70,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     event ScoreChanged(address indexed arbiter, uint256 oldScore, uint256 newScore, uint8 reason);
 
     event StakeDeposited(address indexed arbiter, uint256 amount, uint256 totalStake);
+    event StakeReduced(address indexed arbiter, uint256 amount, uint256 remaining);
     event StakeLocked(address indexed arbiter, uint256 amount, uint256 score); // score < MIN_SCORE_TO_WITHDRAW
     event UnstakeRequested(address indexed arbiter, uint256 amount);
     event UnstakeCancelled(address indexed arbiter);
@@ -119,6 +122,11 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     error StakeTooRecent(uint256 stakedAt, uint256 minStakeDuration);
     /// @notice Exit blocked: the stake hasn't aged `unstakeCooldown` yet.
     error UnstakeTooEarly(uint256 readyAt);
+    /// @notice Partial exit blocked: emptying the account requires the full
+    ///         requestUnstake + withdrawStake exit, not reduceStake.
+    error FullExitRequired();
+    /// @notice Partial exit blocked: the remainder would fall below `minStake`.
+    error RemainingBelowMinimum(uint256 remaining, uint256 minStake);
     /// @notice Withdrawal blocked: the `unstakeCooldown` has not elapsed yet.
     error UnstakeCooldownActive(uint256 readyAt);
 
@@ -250,6 +258,34 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         if (msg.value == 0) revert NoStake();
         info.stake += msg.value;
         emit StakeDeposited(msg.sender, msg.value, info.stake);
+    }
+
+    /**
+     * @notice Withdraw part of the collateral while staying on the roster
+     *         (position sizing without leaving the pool). The remainder must
+     *         stay at or above `minStake` — emptying the account requires the
+     *         full requestUnstake + withdrawStake exit. Same health gates as
+     *         requestUnstake (idle, healthy score, aged stake).
+     */
+    function reduceStake(uint256 amount) external nonReentrant {
+        ArbiterInfo storage info = arbiters[msg.sender];
+        if (!info.registered) revert NotRegistered(msg.sender);
+        if (amount == 0) revert NoStake();
+        if (amount >= info.stake) revert FullExitRequired();
+        uint256 remaining = info.stake - amount;
+        if (remaining < minStake) revert RemainingBelowMinimum(remaining, minStake);
+        if (_isBusy(msg.sender)) revert StillHandlingDispute(msg.sender);
+        if (info.trustScore < minScoreToWithdraw) {
+            emit StakeLocked(msg.sender, info.stake, info.trustScore);
+            revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
+        }
+        uint256 readyAt = info.stakedAt + unstakeCooldown;
+        if (block.timestamp < readyAt) revert UnstakeTooEarly(readyAt);
+
+        // EFFECTS before INTERACTION.
+        info.stake = remaining;
+        emit StakeReduced(msg.sender, amount, remaining);
+        _pay(msg.sender, amount);
     }
 
     /**
