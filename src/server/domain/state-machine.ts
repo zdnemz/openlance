@@ -22,7 +22,9 @@ export type ChainEventName =
   | 'NoQuorumFallback' | 'RewardsDeposited'
   | 'FeeWithdrawn' | 'ArbiterRegistered' | 'ArbiterDeregistered' | 'TrustScoreUpdated'
   | 'ScoreChanged' | 'StakeDeposited' | 'StakeWithdrawn' | 'StakeSlashed' | 'StakeLocked'
-  | 'UnstakeRequested' | 'UnstakeCancelled' | 'EscrowSet'
+  | 'UnstakeRequested' | 'UnstakeCancelled' | 'TierThresholdsUpdated'
+  | 'MinStakeUpdated' | 'MinScoreToWithdrawUpdated' | 'MinStakeDurationUpdated'
+  | 'UnstakeCooldownUpdated' | 'EscrowSet'
 
 /** Legal (from, event) → to. Everything else is drift. */
 const TRANSITIONS: Partial<Record<ChainEventName, Partial<Record<MilestoneStatus, MilestoneStatus>>>> = {

@@ -52,6 +52,10 @@ export const ESCROW_ABI = parseAbi([
   'event StakeWithdrawn(address indexed arbiter, uint256 amount)',
   'event StakeSlashed(address indexed arbiter, address indexed treasury, uint256 amount)',
   'event TierThresholdsUpdated(uint256 silverStake, uint256 goldStake)',
+  'event MinStakeUpdated(uint256 oldMinStake, uint256 newMinStake)',
+  'event MinScoreToWithdrawUpdated(uint256 oldScore, uint256 newScore)',
+  'event MinStakeDurationUpdated(uint256 oldSeconds, uint256 newSeconds)',
+  'event UnstakeCooldownUpdated(uint256 oldSeconds, uint256 newSeconds)',
   // RPC read surface — readContract cannot encode calls from an events-only ABI.
   'function milestoneStatus(uint256 milestoneId) view returns (uint8)',
   'function accruedFees() view returns (uint256)',
