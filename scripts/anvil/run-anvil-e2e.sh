@@ -51,12 +51,12 @@ if [ -z "$ESCROW" ] || [ -z "$REGISTRY" ]; then
 fi
 echo "   escrow=$ESCROW registry=$REGISTRY"
 
-echo "── 3/4 fresh DB + API in CHAIN_MODE=real on :3031"
+echo "── 3/4 fresh env DB + API in CHAIN_MODE=real on :3031"
 cd "$API_DIR"
-rm -rf data/pglite-anvil
-PGLITE_DATA_DIR=./data/pglite-anvil bun src/scripts/migrate.ts > "$LOGS/migrate-anvil.log" 2>&1 \
-  || { echo "migrate failed"; tail -10 "$LOGS/migrate-anvil.log"; exit 1; }
-PGLITE_DATA_DIR=./data/pglite-anvil PORT=3031 CHAIN_MODE=real CHAIN_ID=31337 CHAIN_RPC_URL="$RPC" \
+# The database is purely env-driven (DATABASE_URL); push the schema, no local data dir.
+DATABASE_URL="$DATABASE_URL" bunx drizzle-kit push > "$LOGS/migrate-anvil.log" 2>&1 \
+  || { echo "push failed"; tail -10 "$LOGS/migrate-anvil.log"; exit 1; }
+DATABASE_URL="$DATABASE_URL" PORT=3031 CHAIN_MODE=real CHAIN_ID=31337 CHAIN_RPC_URL="$RPC" \
   ESCROW_ADDRESS="$ESCROW" ARBITER_REGISTRY_ADDRESS="$REGISTRY" \
   INDEXER_POLL_MS=1500 INDEXER_CONFIRMATIONS=1 \
   ADMIN_WALLETS=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 \

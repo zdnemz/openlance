@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Next.js 16 (App Router, Turbopack) + Tailwind CSS v4 + TanStack Query + viem (no wagvi/wagmi — memory); Hono.js API (:3030) + Drizzle/PGlite; Foundry contracts (Escrow + ArbiterRegistry) on anvil devnet 31337.
+Next.js 16 (App Router, Turbopack) + Tailwind CSS v4 + TanStack Query + viem (no wagvi/wagmi — memory); Hono.js API (:3030) + Drizzle/Postgres via env DATABASE_URL; Foundry contracts (Escrow + ArbiterRegistry) on anvil devnet 31337.
 
 ## Users
 

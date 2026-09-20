@@ -52,7 +52,7 @@ rate limits (an in-process fallback keeps local dev zero-infra).
 ```bash
 cp .env.example .env.local        # set DATABASE_URL (+ Upstash/Supabase optional)
 bun install
-bun run db:migrate                # drizzle migrations + RLS/realtime bootstrap
+bun run db:migrate                # drizzle-kit push schema → DATABASE_URL
 bun run db:seed                   # demo cast + a partially-progressed project
 bun run dev                       # Next.js + the API on :3000
 ```
@@ -80,8 +80,8 @@ src/server/           domain logic, ported 1:1 from the old Hono service
   modules/            jobs, proposals, projects, disputes, files, … 
   workers/            webhook delivery + crons
   proxy.ts            CORS + OPTIONS preflight for /api/**
-scripts/              migrate.ts, seed.ts, anvil/ (dev chain tooling)
-drizzle/ + db/        migrations and Supabase RLS/realtime SQL
+scripts/              seed.ts, anvil/ (dev chain tooling); schema pushes straight
+                      to DATABASE_URL via `drizzle-kit push` (no migration files)
 ```
 
 ## Demo data (created by real transactions at boot)

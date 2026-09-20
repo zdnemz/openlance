@@ -1,8 +1,9 @@
 /**
  * Database access — Drizzle over Supabase Postgres (postgres-js driver).
  *
- * The API always connects with privileged credentials and IS the write path;
- * RLS (db/rls.sql) constrains direct authenticated reads via PostgREST/Realtime.
+ * The API always connects with privileged credentials and IS the write path.
+ * (RLS bootstrap was removed — any policies on the env database are managed
+ * in the Supabase dashboard, not this repo.)
  * A module-scoped singleton keeps the pool alive across Next.js invocations in
  * the same server process (dev/hot-reload safe).
  */

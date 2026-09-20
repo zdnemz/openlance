@@ -84,9 +84,9 @@ EOF
 log ".env.local updated (real mode, contracts $ESCROW_ADDR / $REGISTRY_ADDR)"
 log "NOTE: restart the Next.js dev server to pick up env changes"
 
-# ── 4. migrate the configured database ──────────────────────────────────────
-log "applying migrations"
-bun "$ROOT/scripts/migrate.ts" > "$HERE/.state/migrate.log" 2>&1 || { log "FATAL: migrate failed (see $HERE/.state/migrate.log)"; exit 1; }
+# ── 4. sync the schema to the configured database (env DATABASE_URL) ───────
+log "pushing schema"
+bunx drizzle-kit push > "$HERE/.state/migrate.log" 2>&1 || { log "FATAL: push failed (see $HERE/.state/migrate.log)"; exit 1; }
 
 # ── 5. demo seed (idempotent, ~90s of real txs) — background, non-fatal ──────
 log "seeding demo data (background)"

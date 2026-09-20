@@ -185,7 +185,7 @@ export default function BackendConsole() {
 
           {data ? (
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><Database className="size-3.5" aria-hidden />{data.config.dbDriver === 'pglite' ? 'embedded Postgres (PGlite)' : 'external Postgres'}</span>
+              <span className="inline-flex items-center gap-1.5"><Database className="size-3.5" aria-hidden />{data.config.dbDriver === 'postgres' ? 'Postgres (DATABASE_URL)' : 'DB unconfigured'}</span>
               <Separator orientation="vertical" className="h-3.5" />
               <span className="inline-flex items-center gap-1.5"><Zap className="size-3.5" aria-hidden />queue: {data.config.queueMode}</span>
               <Separator orientation="vertical" className="h-3.5" />
