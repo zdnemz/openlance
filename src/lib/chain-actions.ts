@@ -26,6 +26,7 @@ export function useChainAction() {
   const [error, setError] = useState<string | null>(null);
   const escrow = useRuntime((s) => s.escrow);
   const registry = useRuntime((s) => s.registry);
+  const chainId = useRuntime((s) => s.chainId);
   const qc = useQueryClient();
 
   const reset = useCallback(() => {
@@ -62,6 +63,7 @@ export function useChainAction() {
           functionName: opts.functionName,
           args: opts.args,
           value: opts.value,
+          expectedChainId: chainId,
         });
         setTxHash(hash);
         setPhase("mining");
@@ -98,7 +100,7 @@ export function useChainAction() {
         return { ok: false, hash: null };
       }
     },
-    [escrow, registry, qc],
+    [escrow, registry, chainId, qc],
   );
 
   return { phase, txHash, error, run, reset };

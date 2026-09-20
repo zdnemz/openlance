@@ -198,9 +198,12 @@ export async function sendContractCall(opts: {
   functionName: string;
   args?: unknown[];
   value?: bigint;
+  /** Reject before signing when the wallet sits on another chain (wrong-chain sends revert or mis-fire). */
+  expectedChainId?: number;
 }): Promise<string> {
   const state = useWallet.getState();
   if (!state.address) throw new Error("No wallet connected");
+  if (opts.expectedChainId) await ensureChain(opts.expectedChainId);
   const data = encodeFunctionData({ abi: opts.abi, functionName: opts.functionName, args: opts.args ?? [] });
 
   return (await window.ethereum!.request({
