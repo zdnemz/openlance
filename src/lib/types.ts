@@ -202,11 +202,17 @@ export interface ArbiterView {
   trustScore: number;
   /** ETH collateral (wei). */
   stakeWei: string;
+  /** 0 none · 1 bronze · 2 silver · 3 gold (mirrors Registry.tierOf). */
+  tier: number;
   /** Below minScoreToWithdraw → stake locked + benched. */
   locked: boolean;
   unstakeRequested: boolean;
   /** May be drawn for new disputes (mirrors on-chain isEligible). */
   eligible: boolean;
+  /** ISO time when the min-stake-duration clock clears (null when eligible/unknown). */
+  selectableAfter?: string | null;
+  /** Off-chain KYC state (product needs verified + tier≥bronze for full standing). */
+  kycStatus?: string | null;
   resolutions: number;
   resolutionsWithinSla: number;
   resolutionsLate: number;
@@ -238,12 +244,19 @@ export interface RuntimeConfig {
   disputeFeeWei: string;
   /** Minimum arbiter collateral (wei). */
   minStakeWei: string;
+  /** Tier floors (wei): bronze = minStake, silver/gold from registry. */
+  tierSilverWei?: string;
+  tierGoldWei?: string;
   /** Trust score n below which a stake locks. */
   minScoreToWithdraw: number;
   /** Seconds of continuous stake required before an arbiter is selectable. */
   minStakeDurationSeconds: number;
   /** Seconds between requestUnstake and withdrawStake. */
   unstakeCooldownSeconds: number;
+  /** Dispute windows (seconds): commit / reveal / appeal. */
+  commitWindowSeconds?: number;
+  revealWindowSeconds?: number;
+  appealWindowSeconds?: number;
   dbDriver: string;
   storageDriver: string;
   queueMode: string;
