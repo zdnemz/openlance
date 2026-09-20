@@ -84,17 +84,22 @@ async function checkSolvency(
     .reduce((acc, m) => acc + BigInt(m.amountWei), 0n)
 
   const db = getDb()
-  const ledger = await db
-    .select({ eventType: ledgerEvents.eventType, payload: ledgerEvents.payload })
-    .from(ledgerEvents)
-  let feesAccrued = 0n
+  // Prefer the chain itself for unwithdrawn fees (accruedFees is already net
+  // of withdrawals); the ledger sum is fallback for unreachable RPC.
+  let feesAccrued = await adapter.getAccruedFees().then((v) => (v === null ? null : BigInt(v))).catch(() => null)
   let feesWithdrawn = 0n
-  for (const ev of ledger) {
-    const p = ev.payload as Record<string, unknown>
-    if (ev.eventType === 'MilestoneReleased' || ev.eventType === 'MilestoneSplit') {
-      feesAccrued += BigInt(String(p.fee ?? '0'))
-    } else if (ev.eventType === 'FeeWithdrawn') {
-      feesWithdrawn += BigInt(String(p.amount ?? '0'))
+  if (feesAccrued === null) {
+    feesAccrued = 0n
+    const ledger = await db
+      .select({ eventType: ledgerEvents.eventType, payload: ledgerEvents.payload })
+      .from(ledgerEvents)
+    for (const ev of ledger) {
+      const p = ev.payload as Record<string, unknown>
+      if (ev.eventType === 'MilestoneReleased' || ev.eventType === 'MilestoneSplit') {
+        feesAccrued += BigInt(String(p.fee ?? '0'))
+      } else if (ev.eventType === 'FeeWithdrawn') {
+        feesWithdrawn += BigInt(String(p.amount ?? '0'))
+      }
     }
   }
 

@@ -9,8 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:migrate": "drizzle-kit push",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:setup": "npm run db:migrate && npm run db:seed",
+    "db:setup": "npm run db:migrate",
     "verify:notifications": "tsx scripts/verify-notifications.ts",
     "prepare": "husky"
   },

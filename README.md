@@ -23,7 +23,7 @@ anvil :8545 ── Escrow + ArbiterRegistry (fresh deploy per boot)
     │   relay)       │
 browser ──────► Next.js :3000 ── /api route handlers ── Supabase Postgres
    signs with            │                              + Upstash Redis (cache)
-   anvil personas        └── seeded demo data, driven by REAL transactions
+   anvil personas        └── sign locally in the browser, drive REAL transactions
 ```
 
 - **One app, one origin**: the API is no longer a separate service — it runs
@@ -40,8 +40,8 @@ browser ──────► Next.js :3000 ── /api route handlers ── Su
   *signing → mining → indexer mirroring* — before declaring success.
 - **Boot self-healing**: the Next.js server babysits the chain stack through
   `scripts/anvil/dev-real.sh`: anvil → build + deploy (Hardhat 3, UUPS proxies
-  behind a timelock) → write contract addresses to `.env.local` → migrate →
-  demo seed (idempotent). `POST /api/dev/stack?force=1` restarts it on demand.
+  behind a timelock) →   write contract addresses to `.env.local` → migrate.
+  `POST /api/dev/stack?force=1` restarts it on demand.
 
 ## Running the backend
 
@@ -53,7 +53,6 @@ rate limits (an in-process fallback keeps local dev zero-infra).
 cp .env.example .env.local        # set DATABASE_URL (+ Upstash/Supabase optional)
 bun install
 bun run db:migrate                # drizzle-kit push schema → DATABASE_URL
-bun run db:seed                   # demo cast + a partially-progressed project
 bun run dev                       # Next.js + the API on :3000
 ```
 
@@ -107,20 +106,9 @@ src/server/           domain logic, ported 1:1 from the old Hono service
   modules/            jobs, proposals, projects, disputes, files, sponsorship, … 
   workers/            webhook delivery + crons
   proxy.ts            CORS + OPTIONS preflight for /api/**
-scripts/              seed.ts, anvil/ (dev chain tooling); schema pushes straight
+scripts/              anvil/ (dev chain tooling); schema pushes straight
                       to DATABASE_URL via `drizzle-kit push` (no migration files)
 ```
-
-## Demo data (created by real transactions at boot)
-
-- **3 open jobs** (bridge audit, realtime dashboard, NFT drop) with milestone
-  templates and 6 proposals from the personas.
-- **Project A** (audit, Dario): m1 released + both-side reviews, m2 funded
-  (freelancer submits from the UI), m3 fundable.
-- **Project B** (dashboard, Rhys): m1 disputed — drive the nomination and
-  resolution yourself from the parties' and arbiter's seats.
-- **Project C** (NFT drop): completed via mutual arbiter nomination and a
-  split resolution; arbiter trust score +1, chat + reviews recorded.
 
 ## Key routes
 

@@ -16,6 +16,7 @@ import { useSession, useSessionHydrated } from "@/lib/session";
 import { useWallet, useWalletHydrated } from "@/lib/wallet";
 import { ConnectPanel } from "@/components/wallet/connect-panel";
 import { ROLES, TIER_NAMES } from "@/lib/roles";
+import { useMyArbiterState } from "@/lib/register-arbiter";
 import { COUNTRIES } from "@/lib/countries";
 import { press } from "@/components/design";
 import type { PublicUser, UserRole } from "@/lib/types";
@@ -29,6 +30,8 @@ export default function OnboardingPage() {
   const router = useRouter();
   const session = useSession();
   const walletAddress = useWallet((s) => s.address);
+  // Arbiter tier comes from the live registry, never a DB mirror.
+  const { state: arbiterState } = useMyArbiterState();
   const sessionHydrated = useSessionHydrated();
   const walletHydrated = useWalletHydrated();
   const hydrated = sessionHydrated && walletHydrated;
@@ -92,13 +95,13 @@ export default function OnboardingPage() {
               <SealCheck weight="fill" className="h-5 w-5 text-state-released" /> You&apos;re in as {user.role}
             </h2>
             <p className="mt-1 text-sm text-dim">
-              KYC {user.kycStatus} · tier {TIER_NAMES[user.arbiterTier as 0 | 1 | 2 | 3] ?? "Unstaked"}.
+              KYC {user.kycStatus} · tier {TIER_NAMES[(arbiterState?.tier ?? 0) as 0 | 1 | 2 | 3] ?? "Unstaked"}.
               {user.role === "arbiter" ? " Stake collateral when you open disputes — not before." : ""}
             </p>
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
-                onClick={() => router.push(user.role === "arbiter" ? "/arbiters/stake" : "/dashboard")}
+                onClick={() => router.push(user.role === "arbiter" ? "/stake" : "/dashboard")}
                 className="rounded-full bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright"
               >
                 {user.role === "arbiter" ? "Review stake tiers" : "Enter app"}
@@ -139,7 +142,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
   return (
     <div>
       <h2 className="text-lg font-medium">2 — Pick your seat (permanent)</h2>
-      <p className="mt-1 text-sm text-dim">One active role. Writes are gated to it; reads stay open. Confirm to continue to identity.</p>
+      <p className="mt-1 text-sm text-dim">One active role. Seats are strictly separated — the proxy guards every page to its seat. Confirm to continue to identity.</p>
       <div className="mt-4 grid gap-2" role="radiogroup" aria-label="Role">
         {ROLES.map((r) => {
           const active = selectedRole === r.id;

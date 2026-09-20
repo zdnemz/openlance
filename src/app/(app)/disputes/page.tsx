@@ -20,6 +20,7 @@ import { useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt }
 import { DISPUTE_OUTCOME, QUORUM } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import { ListHead, Skeleton, EmptyState, StatusBadge, press, AddressText } from "@/components/design";
+import { PageHeader } from "@/components/page-header";
 import { timeAgo, timeUntil, shortAddress, formatEth, toWei } from "@/lib/format";
 import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
@@ -43,22 +44,11 @@ export default function DisputesPage() {
 
   return (
     <div className="space-y-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-[58ch]">
-          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">The arbiter path.</h1>
-          <p className="mt-3 text-sm leading-relaxed text-dim">
-            A dispute locks the milestone and pays the fee. The contract draws up to 3 random, eligible arbiters — never a
-            party — who vote commit-reveal. A 2-of-3 majority decides; the dissent and no-shows are scored.
-          </p>
-        </div>
-        {(open.length > 0 || resolved.length > 0) && (
-          <div className="num pb-1.5 text-right text-[12px] leading-relaxed text-faint">
-            {open.length} open · {resolved.length} settled
-            <br />
-            clocks run on-chain
-          </div>
-        )}
-      </div>
+      <PageHeader
+        title="The arbiter path."
+        desc="A dispute locks the milestone and pays the fee. The contract draws up to 3 random, eligible arbiters — never a party — who vote commit-reveal. A 2-of-3 majority decides; the dissent and no-shows are scored."
+        meta={(open.length > 0 || resolved.length > 0) ? <>{open.length} open · {resolved.length} settled<br />clocks run on-chain</> : undefined}
+      />
 
       {isLoading ? (
         <Skeleton className="h-40 rounded-3xl" />

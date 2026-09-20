@@ -11,8 +11,9 @@ import { getKv } from '../lib/kv'
 import { logger } from '../lib/logger'
 import { getChainAdapter } from '../chain/adapter'
 import { probeStorage, storageConfig } from '../storage'
+import { getRegistryTuning, listArbiters } from './arbiters'
 import {
-  arbiters, jobs, ledgerEvents, messages, projectMilestones, projects, proposals, reviews, users,
+  jobs, ledgerEvents, messages, projectMilestones, projects, proposals, reviews, users,
 } from '../db/schema'
 
 export function health() {
@@ -108,26 +109,31 @@ const EMPTY_COUNTS = { users: 0, jobs: 0, projects: 0, proposals: 0, messages: 0
 async function loadOverview() {
   const config = runtimeConfig() as Record<string, unknown> & { tierSilverWei: string; tierGoldWei: string; minStakeDurationSeconds: number; unstakeCooldownSeconds: number }
 
-  // KV-synced registry tuning (setTierThresholds / setMinStakeDuration /
-  // setUnstakeCooldown) overrides env defaults so /overview stays pixel-perfect
-  // with tierOf/isEligible after admin retunes. KV failure → env defaults.
+  // Registry tuning is chain truth (tier floors + duration clocks): live-read
+  // the registry; KV/env fallbacks stand when the RPC is unreachable.
   try {
-    const kv = await getKv()
-    const [s, g, d, c] = await Promise.all([
-      kv.get('registry:tierSilver'), kv.get('registry:tierGold'),
-      kv.get('registry:minStakeDuration'), kv.get('registry:unstakeCooldown'),
-    ])
-    if (s) config.tierSilverWei = s
-    if (g) config.tierGoldWei = g
-    if (d && Number(d) >= 0) config.minStakeDurationSeconds = Number(d)
-    if (c && Number(c) >= 0) config.unstakeCooldownSeconds = Number(c)
+    const t = await getRegistryTuning()
+    config.tierSilverWei = t.tierSilverWei
+    config.tierGoldWei = t.tierGoldWei
+    config.minStakeDurationSeconds = t.minStakeDurationSeconds
+    config.unstakeCooldownSeconds = t.unstakeCooldownSeconds
+  } catch { /* env defaults stand */ }
+
+  // Live escrow fee config (disputeFee/feeBps retunes take effect on-chain
+  // immediately); env defaults stand when the RPC is unreachable.
+  try {
+    const adapter = getChainAdapter()
+    if (adapter.mode === 'real') {
+      const live = await adapter.getFeeConfig().catch(() => null)
+      if (live?.disputeFeeWei) config.disputeFeeWei = live.disputeFeeWei
+      if (live?.feeBps !== null && live?.feeBps !== undefined) config.feeBps = live.feeBps
+    }
   } catch { /* env defaults stand */ }
 
   // Everything below is DATA, not config. If the database is unreachable we
   // still return a valid response with empty data — so the client always gets
   // the contract addresses and can render the stake panel even mid-outage.
   let counts = { ...EMPTY_COUNTS }
-  let arbiterRows: (typeof arbiters.$inferSelect)[] = []
   let latestLedger: (typeof ledgerEvents.$inferSelect)[] = []
   const histogram: Record<string, number> = {}
   let demoProject: unknown = null
@@ -145,7 +151,6 @@ async function loadOverview() {
     ])
     counts = { users: userCount, jobs: jobCount, projects: projectCount, proposals: proposalCount, messages: messageCount, reviews: reviewCount, ledgerEvents: ledgerCount }
 
-    arbiterRows = await db.select().from(arbiters).orderBy(desc(arbiters.trustScore)).limit(10)
     latestLedger = await db.select().from(ledgerEvents)
       .orderBy(desc(ledgerEvents.blockNumber), desc(ledgerEvents.logIndex)).limit(12)
 
@@ -173,6 +178,17 @@ async function loadOverview() {
   } catch (err) {
     // Degrade, don't fail: the config block above is the client's lifeline.
     logger.warn('overview: database unavailable — returning config with empty data', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // Arbiter standing is on-chain truth — read it live, never from the DB.
+  // Empty in mock mode / when the RPC is unreachable.
+  let arbiterRows: Awaited<ReturnType<typeof listArbiters>> = []
+  try {
+    arbiterRows = await listArbiters()
+  } catch (err) {
+    logger.warn('overview: arbiter registry read failed — returning empty roster', {
       err: err instanceof Error ? err.message : String(err),
     })
   }

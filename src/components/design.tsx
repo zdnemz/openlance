@@ -140,6 +140,50 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("skeleton-shimmer rounded-lg", className)} />;
 }
 
+/**
+ * Full-surface loading placeholder for the arbiter registry list. Reads come
+ * straight from the chain (no DB cache), so the fetch is slower and can flicker;
+ * this holds a stable, ranked shape until the roster lands.
+ */
+export function ArbiterRegistrySkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line" aria-busy="true" aria-live="polite">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex flex-col gap-4 bg-white/[0.012] px-6 py-6 md:flex-row md:items-center">
+          <Skeleton className="h-7 w-10 rounded-md" />
+          <div className="flex min-w-0 flex-1 items-center gap-3.5">
+            <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+            <div className="min-w-0 space-y-2">
+              <Skeleton className="h-3.5 w-40" />
+              <Skeleton className="h-2.5 w-56" />
+            </div>
+          </div>
+          <div className="hidden items-center gap-6 md:flex">
+            <Skeleton className="h-6 w-10" />
+            <Skeleton className="h-6 w-10" />
+            <Skeleton className="h-6 w-10" />
+          </div>
+          <Skeleton className="h-6 w-24 md:w-24" />
+          <Skeleton className="h-8 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Inline spinner + label for smaller arbiter surfaces (profile badge, dashboard
+ * counters) where a block skeleton would be too heavy.
+ */
+export function InlineLoading({ label = "Reading the registry…", className }: { label?: string; className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-2 text-faint", className)} aria-busy="true" aria-live="polite">
+      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70" aria-hidden />
+      <span className="text-[11px]">{label}</span>
+    </span>
+  );
+}
+
 export function ListHead({ children, className }: { children: React.ReactNode; className?: string }) {
   return <h2 className={cn("text-[13px] font-semibold tracking-normal text-foreground/90", className)}>{children}</h2>;
 }

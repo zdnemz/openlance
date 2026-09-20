@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session";
 import { post } from "@/lib/queries";
 import { press } from "@/components/design";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -97,11 +98,11 @@ export default function NewJobPage() {
   return (
     <RoleGate>
     <div className="mx-auto max-w-3xl">
-      <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Break the work into escrowable chunks.</h1>
-      <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
-        The milestone template is the contract's blueprint. Each milestone gets funded, delivered, submitted, and
-        released on its own; the sum must fit the budget range you declare.
-      </p>
+      <PageHeader
+        title="Break the work into escrowable chunks."
+        desc="The milestone template is the contract's blueprint. Each milestone gets funded, delivered, submitted, and released on its own; the sum must fit the budget range you declare."
+        meta={<>client seat<br />proxy-guarded</>}
+      />
 
       <div className="glass mt-10 space-y-6 rounded-3xl p-7 md:p-9">
         <div className="space-y-2">

@@ -3,7 +3,7 @@
  *
  *  mock : a simulation of the Escrow + ArbiterRegistry contracts that emits
  *         the exact event surface through the real indexer pipeline. State is
- *         derived from the shared DB mirror on every action (so seed scripts,
+ *         derived from the shared DB mirror on every action (so dev scripts,
  *         server restarts, and separate processes all agree), plus a small
  *         block counter in KV. Powers zero-infra local dev and the
  *         /dev/chain endpoints (never mounted in production). Fees/resolutions
@@ -21,7 +21,7 @@ import { outcomeFromUint8, type ResolutionOutcome } from './abi'
 import { uuidToBytes32 } from './events'
 import type { ChainEventName, MilestoneStatus } from '../domain/state-machine'
 import type { RawChainLog } from './events'
-import { arbiters, ledgerEvents, projectMilestones, projects, users } from '../db/schema'
+import { ledgerEvents, projectMilestones, projects, users } from '../db/schema'
 
 export interface ChainAdapter {
   mode: 'mock' | 'real'
@@ -32,6 +32,21 @@ export interface ChainAdapter {
   fetchLogs(fromBlock: number, toBlock: number): Promise<RawChainLog[]>
   /** Re-derive milestone status from the chain (truth for money-relevant checks). */
   getMilestoneStatus(onchainId: number): Promise<MilestoneStatus | null>
+  /** Full live milestone (client, freelancer, amount, fee snapshot, status). Null when unreadable. */
+  getMilestoneFull(onchainId: number): Promise<{
+    client: string; freelancer: string; amountWei: string; feeBps: number; status: MilestoneStatus
+  } | null>
+  /** Live dispute round (selected arbiters, phase clocks, tally). Null when unreadable. */
+  getDisputeRound(onchainId: number, round: number): Promise<{
+    arbiters: string[]; arbiterCount: number; commitCount: number; revealCount: number
+    tally: number[]; commitDeadline: number; revealDeadline: number; resolved: boolean; winningOutcome: number
+  } | null>
+  /** Live dispute metadata (current round + appeal count). Null when unreadable. */
+  getDisputeMeta(onchainId: number): Promise<{ round: number; appealCount: number } | null>
+  /** Live escrow fee config (disputeFee in wei, feeBps). Null fields fall back to env. */
+  getFeeConfig(): Promise<{ disputeFeeWei: string | null; feeBps: number | null }>
+  /** Live unwithdrawn platform fees (solvency input). Null when unreadable. */
+  getAccruedFees(): Promise<string | null>
   /** Real mode: the escrow contract's ETH balance (solvency invariant input). Mock: null. */
   getEscrowBalance(): Promise<string | null>
   getLatestBlock(): Promise<number>
@@ -128,6 +143,108 @@ export class RealChainAdapter implements ChainAdapter {
     return ONCHAIN_MILESTONE_STATUS[Number(data)] ?? null
   }
 
+  async getMilestoneFull(onchainId: number) {
+    const { client } = await this.viem()
+    const { ESCROW_ABI } = await import('./abi')
+    const raw = await client.readContract({
+      address: this.escrowAddress as `0x${string}`,
+      abi: ESCROW_ABI,
+      functionName: 'getMilestone',
+      args: [BigInt(onchainId)],
+    }).catch((err) => {
+      logger.warn('readContract getMilestone failed', { err: String(err) })
+      return null
+    })
+    if (!raw) return null
+    const { ONCHAIN_MILESTONE_STATUS } = await import('./events')
+    // viem decodes named tuple outputs to an object; fall back to positional.
+    const o = raw as unknown as Record<string, unknown>
+    const at = (i: number): unknown => (Array.isArray(raw) ? (raw as unknown[])[i] : undefined)
+    const status = ONCHAIN_MILESTONE_STATUS[Number(o.status ?? at(5))] ?? null
+    if (!status) return null
+    const str = (v: unknown): string => (typeof v === 'bigint' ? v.toString() : String(v ?? ''))
+    return {
+      client: String(o.client ?? at(1) ?? '').toLowerCase(),
+      freelancer: String(o.freelancer ?? at(2) ?? '').toLowerCase(),
+      amountWei: str(o.amount ?? at(3) ?? '0'),
+      feeBps: Number(o.feeBps ?? at(4) ?? 0),
+      status,
+    }
+  }
+
+  async getDisputeRound(onchainId: number, round: number) {
+    const { client } = await this.viem()
+    const { ESCROW_ABI } = await import('./abi')
+    const ZERO = '0x0000000000000000000000000000000000000000'
+    const raw = await client.readContract({
+      address: this.escrowAddress as `0x${string}`,
+      abi: ESCROW_ABI,
+      functionName: 'getRound',
+      args: [BigInt(onchainId), round],
+    }).catch((err) => {
+      logger.warn('readContract getRound failed', { err: String(err) })
+      return null
+    })
+    if (!raw) return null
+    const addrs = (raw[0] as unknown as string[]).slice(0, Number(raw[1])).filter((a) => a.toLowerCase() !== ZERO)
+    return {
+      arbiters: addrs.map((a) => a.toLowerCase()),
+      arbiterCount: Number(raw[1]),
+      commitCount: Number(raw[2]),
+      revealCount: Number(raw[3]),
+      tally: (raw[4] as unknown as number[]).map(Number),
+      commitDeadline: Number(raw[5]),
+      revealDeadline: Number(raw[6]),
+      resolved: Boolean(raw[7]),
+      winningOutcome: Number(raw[8]),
+    }
+  }
+
+  async getDisputeMeta(onchainId: number): Promise<{ round: number; appealCount: number } | null> {
+    const { client } = await this.viem()
+    const { ESCROW_ABI } = await import('./abi')
+    const raw = await client.readContract({
+      address: this.escrowAddress as `0x${string}`,
+      abi: ESCROW_ABI,
+      functionName: 'getDispute',
+      args: [BigInt(onchainId)],
+    }).catch((err) => {
+      logger.warn('readContract getDispute failed', { err: String(err) })
+      return null
+    })
+    if (!raw) return null
+    // viem decodes named tuple outputs to an object; fall back to positional.
+    const o = raw as unknown as Record<string, unknown>
+    const at = (i: number): unknown => (Array.isArray(raw) ? (raw as unknown[])[i] : undefined)
+    return { round: Number(o.round ?? at(3) ?? 0), appealCount: Number(o.appealCount ?? at(4) ?? 0) }
+  }
+
+  async getFeeConfig(): Promise<{ disputeFeeWei: string | null; feeBps: number | null }> {
+    const { client } = await this.viem()
+    const { ESCROW_ABI } = await import('./abi')
+    const [fee, bps] = await Promise.all([
+      client.readContract({ address: this.escrowAddress as `0x${string}`, abi: ESCROW_ABI, functionName: 'disputeFee' })
+        .then((v) => (v as bigint).toString()).catch(() => null),
+      client.readContract({ address: this.escrowAddress as `0x${string}`, abi: ESCROW_ABI, functionName: 'feeBps' })
+        .then((v) => Number(v)).catch(() => null),
+    ])
+    return { disputeFeeWei: fee, feeBps: bps }
+  }
+
+  async getAccruedFees(): Promise<string | null> {
+    const { client } = await this.viem()
+    const { ESCROW_ABI } = await import('./abi')
+    const data = await client.readContract({
+      address: this.escrowAddress as `0x${string}`,
+      abi: ESCROW_ABI,
+      functionName: 'accruedFees',
+    }).catch((err) => {
+      logger.warn('readContract accruedFees failed', { err: String(err) })
+      return null
+    })
+    return data === null ? null : (data as bigint).toString()
+  }
+
   /** The contract-side input of the solvency check (balance ≥ liabilities). */
   async getEscrowBalance(): Promise<string | null> {
     const { client } = await this.viem()
@@ -165,6 +282,9 @@ interface MockState {
 }
 
 const BLOCK_KEY = 'mockchain:block'
+/** Mock arbiter roster — persisted in KV (NOT Postgres). Arbiter state is never
+ *  an off-chain DB concern; the mock chain keeps its own simulated registry. */
+const ARBITERS_KEY = 'mockchain:arbiters'
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000'
 
 export class MockChainAdapter implements ChainAdapter {
@@ -174,17 +294,16 @@ export class MockChainAdapter implements ChainAdapter {
   registryAddress = '0x' + 'a2b1' + '00000000000000000000000000000000000000'
 
   /**
-   * Hydrate the simulated chain from the SHARED database (mirror + ledger +
-   * arbiter registry) so every process (seed script, API, tests) sees the
-   * same chain. Only the block counter lives in KV.
+   * Hydrate the simulated chain from the SHARED database (milestone mirror +
+   * ledger) plus the mock registry roster in KV, so every process (API,
+   * tests) sees the same chain. Arbiter state is NEVER stored in Postgres.
    */
   private async state(): Promise<MockState> {
     const db = getDb()
-    const [msRows, projRows, userRows, arbRows, ledger] = await Promise.all([
+    const [msRows, projRows, userRows, ledger] = await Promise.all([
       db.select().from(projectMilestones).where(isNotNull(projectMilestones.onchainId)),
       db.select().from(projects),
       db.select().from(users),
-      db.select().from(arbiters),
       db.select({ blockNumber: ledgerEvents.blockNumber, eventType: ledgerEvents.eventType, payload: ledgerEvents.payload }).from(ledgerEvents),
     ])
 
@@ -208,18 +327,18 @@ export class MockChainAdapter implements ChainAdapter {
 
     const arbiterState: MockState['arbiters'] = {}
     let maxSbtTokenId = 0
-    for (const a of arbRows) {
-      arbiterState[a.address] = {
-        registered: a.registered,
-        sbtTokenId: a.sbtTokenId ?? 0,
-        trustScore: a.trustScore,
-        stakeWei: a.stakeWei ?? '0',
-        unstakeRequested: a.unstakeRequested ?? false,
-        locked: a.locked ?? false,
-        registeredAt: a.registeredAt ? new Date(a.registeredAt).getTime() / 1000 : 0,
+    const kv = await getKv()
+    // Arbiter state lives in KV, never Postgres — the mock registry is the
+    // mock chain's own store (mirrors how real arbiter state lives on-chain).
+    try {
+      const raw = await kv.get(ARBITERS_KEY)
+      if (raw) {
+        for (const [addr, a] of Object.entries(JSON.parse(raw) as MockState['arbiters'])) {
+          arbiterState[addr] = a
+          maxSbtTokenId = Math.max(maxSbtTokenId, a.sbtTokenId ?? 0)
+        }
       }
-      maxSbtTokenId = Math.max(maxSbtTokenId, a.sbtTokenId ?? 0)
-    }
+    } catch { /* fresh state */ }
 
     let feeAccrued = 0n
     let feeWithdrawn = 0n
@@ -231,7 +350,6 @@ export class MockChainAdapter implements ChainAdapter {
       if (e.eventType === 'FeeWithdrawn') feeWithdrawn += BigInt(String(p.amount ?? '0'))
     }
 
-    const kv = await getKv()
     const block = Math.max(maxBlock, Number((await kv.get(BLOCK_KEY)) ?? 0))
 
     return {
@@ -250,6 +368,29 @@ export class MockChainAdapter implements ChainAdapter {
 
   async getMilestoneStatus(onchainId: number): Promise<MilestoneStatus | null> {
     return (await this.state()).milestones[String(onchainId)]?.status ?? null
+  }
+
+  async getMilestoneFull(onchainId: number) {
+    const m = (await this.state()).milestones[String(onchainId)]
+    if (!m) return null
+    // Mock has no per-party/fee snapshot beyond the mirror — status only.
+    return { client: m.client, freelancer: m.freelancer, amountWei: m.amount, feeBps: env.PLATFORM_FEE_BPS, status: m.status }
+  }
+
+  async getDisputeRound(): Promise<null> {
+    return null // mock derives dispute state from the DB mirror; the mirror IS the mock chain
+  }
+
+  async getDisputeMeta(): Promise<null> {
+    return null // same as above — no independent round index outside the mirror
+  }
+
+  async getFeeConfig(): Promise<{ disputeFeeWei: string | null; feeBps: number | null }> {
+    return { disputeFeeWei: null, feeBps: null } // env fallback; mock charges no real fees
+  }
+
+  async getAccruedFees(): Promise<string | null> {
+    return null // the mock moves no real ETH; solvency is enforced by the contract tests
   }
 
   async getEscrowBalance(): Promise<string | null> {
@@ -368,6 +509,11 @@ export class MockChainAdapter implements ChainAdapter {
     return logs
   }
 
+  /** Persist the mock registry roster to KV (its on-chain-state analog). */
+  private async saveArbiters(s: MockState): Promise<void> {
+    await (await getKv()).set(ARBITERS_KEY, JSON.stringify(s.arbiters))
+  }
+
   async resolve(onchainId: number, arbiter: string, outcome: ResolutionOutcome, withinSla: boolean): Promise<RawChainLog[]> {
     const s = await this.state()
     const m = this.milestone(s, onchainId)
@@ -407,9 +553,13 @@ export class MockChainAdapter implements ChainAdapter {
 
     // deterministic trust score for the mock: +5 majority, −10 minority (v2 deltas)
     const delta = withinSla ? 5 : -10
-    const newScore = Math.max(0, s.arbiters[arb]!.trustScore + delta)
+    const oldScore = s.arbiters[arb]!.trustScore
+    const newScore = Math.max(0, oldScore + delta)
+    // Persist the new score in the mock registry (KV) before re-deriving state.
+    s.arbiters[arb] = { ...s.arbiters[arb]!, trustScore: newScore, locked: newScore < env.MIN_SCORE_TO_WITHDRAW }
+    await this.saveArbiters(s)
     logs.push(await this.emit('TrustScoreUpdated', { arbiter: arb, delta, newScore, withinSla }, s.block + logs.length))
-    logs.push(await this.emit('ScoreChanged', { arbiter: arb, oldScore: s.arbiters[arb]!.trustScore, newScore, reason: withinSla ? 1 : 2 }, s.block + logs.length))
+    logs.push(await this.emit('ScoreChanged', { arbiter: arb, oldScore, newScore, reason: withinSla ? 1 : 2 }, s.block + logs.length))
     return logs
   }
 
@@ -419,7 +569,15 @@ export class MockChainAdapter implements ChainAdapter {
     if (s.arbiters[arb]?.registered) throw new Error('mock: already registered')
     const stake = stakeWei ?? env.MIN_STAKE_WEI
     if (BigInt(stake) < BigInt(env.MIN_STAKE_WEI)) throw new Error('mock: stake below minimum')
-    const log = await this.emit('ArbiterRegistered', { arbiter: arb, sbtTokenId: s.nextSbtTokenId }, s.block)
+    // Permanent SBT: a returning wallet reuses its tokenId (mirrors _enroll).
+    const tokenId = s.arbiters[arb]?.sbtTokenId || s.nextSbtTokenId
+    // Update the mock registry (KV) directly — no off-chain arbiter table.
+    s.arbiters[arb] = {
+      registered: true, sbtTokenId: tokenId, trustScore: 100, stakeWei: stake,
+      unstakeRequested: false, locked: false, registeredAt: Math.floor(Date.now() / 1000),
+    }
+    await this.saveArbiters(s)
+    const log = await this.emit('ArbiterRegistered', { arbiter: arb, sbtTokenId: tokenId }, s.block)
     // _enroll emits Registered + Deposited atomically — mirror both so stakeWei converges.
     await this.emit('StakeDeposited', { arbiter: arb, amount: stake, totalStake: stake }, s.block + 1)
     return log
@@ -429,6 +587,8 @@ export class MockChainAdapter implements ChainAdapter {
     const s = await this.state()
     const arb = address.toLowerCase()
     if (!s.arbiters[arb]?.registered) throw new Error('mock: not registered')
+    s.arbiters[arb] = { ...s.arbiters[arb]!, registered: false, stakeWei: '0', unstakeRequested: false, locked: false }
+    await this.saveArbiters(s)
     return this.emit('ArbiterDeregistered', { arbiter: arb }, s.block)
   }
 

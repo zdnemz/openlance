@@ -36,6 +36,7 @@ import { useRuntime } from "@/lib/runtime";
 import { useSession } from "@/lib/session";
 import { TIER_NAMES } from "@/lib/roles";
 import { formatEth } from "@/lib/format";
+import { Skeleton } from "@/components/design";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -110,11 +111,11 @@ function TonePill({ label, tone, icon, className }: { label: string; tone: strin
 function useStakeContext() {
   const { address } = useWallet();
   const hydrated = useWalletHydrated();
-  const { state, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh } = useArbiterStaking();
+  const { state, loading, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh } = useArbiterStaking();
   const { minStakeWei, minScoreToWithdraw } = useRuntime();
   const registryKnown = useRuntime((s) => !!s.registry);
   const loadRuntime = useRuntime((s) => s.load);
-  return { address, hydrated, state, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime };
+  return { address, hydrated, state, loading, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime };
 }
 
 /** Safe wei parser — tolerates undefined/empty from a still-loading runtime. */
@@ -194,10 +195,21 @@ function RankProgress({ stakeWei, tier, minWei, silverWei, goldWei }: {
 /* ── Summary band (for /arbiters) ──────────────────────────────────────────── */
 
 export function ArbiterStakeSummary() {
-  const { hydrated, address, state } = useStakeContext();
+  const { hydrated, address, state, loading } = useStakeContext();
 
   if (!hydrated) {
     return <div className="rounded-3xl border border-line bg-white/[0.012] px-6 py-5 text-[13px] text-faint">Checking your wallet…</div>;
+  }
+
+  // The registry is read live (no DB cache), so hold a stable placeholder while
+  // the chain read is in flight instead of flashing the "join" CTA.
+  if (address && loading && !state) {
+    return (
+      <div className="flex items-center gap-3 rounded-3xl border border-line bg-white/[0.012] px-6 py-5" aria-busy="true" aria-live="polite">
+        <SpinnerGap className="h-4 w-4 animate-spin text-state-split" aria-hidden />
+        <span className="text-[13px] text-faint">Reading your stake from the registry…</span>
+      </div>
+    );
   }
 
   if (!address || !state?.registered) {
@@ -277,7 +289,7 @@ export function ArbiterStakeSummary() {
 /* ── Hub (for /stake) ─────────────────────────────────────────────────────── */
 
 export function ArbiterStakeHub() {
-  const { address, hydrated, state, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime } = useStakeContext();
+  const { address, hydrated, state, loading, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime } = useStakeContext();
   const kycStatus = useSession((s) => s.user?.kycStatus);
   const [stakeModalOpen, setStakeModalOpen] = useState(false);
   const [stakeInput, setStakeInput] = useState("");
@@ -385,6 +397,31 @@ export function ArbiterStakeHub() {
         <p className="mx-auto mt-1.5 max-w-[44ch] text-[13px] leading-relaxed text-faint">
           Arbiter identity follows the key — connect a wallet to join the pool, top up collateral, or withdraw.
         </p>
+      </div>
+    );
+  }
+
+  // Hold a stable loading shell while the live registry read lands — otherwise
+  // the "join" form flashes before the position renders (visible flicker).
+  if (loading && !state) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start" aria-busy="true" aria-live="polite">
+        <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+          <div className="flex items-center gap-2.5 text-faint">
+            <SpinnerGap className="h-4 w-4 animate-spin text-state-split" aria-hidden />
+            <span className="text-[13px]">Reading your position from the registry…</span>
+          </div>
+          <div className="mt-6 space-y-3">
+            <Skeleton className="h-10 w-40 rounded-lg" />
+            <Skeleton className="h-1.5 w-full rounded-full" />
+            <Skeleton className="h-4 w-56 rounded-lg" />
+            <Skeleton className="h-4 w-48 rounded-lg" />
+          </div>
+        </div>
+        <div className="space-y-6">
+          <Skeleton className="h-40 rounded-3xl" />
+          <Skeleton className="h-40 rounded-3xl" />
+        </div>
       </div>
     );
   }

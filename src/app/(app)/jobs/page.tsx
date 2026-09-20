@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { useJobs } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { AddressAvatar, Chip, Skeleton, EmptyState, press } from "@/components/design";
+import { PageHeader } from "@/components/page-header";
+import { RoleGate } from "@/components/role-gate";
 import { formatEth, timeAgo } from "@/lib/format";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Briefcase } from "@phosphor-icons/react/dist/csr/Briefcase";
@@ -29,33 +31,23 @@ export default function JobsPage() {
   const session = useSession();
 
   return (
+    <RoleGate>
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-[58ch]">
-          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Open work</h1>
-          <p className="mt-3 text-sm leading-relaxed text-dim">
-            Jobs posted with milestone templates: the sum the client expects to escrow, broken into reviewable
-            chunks before anyone starts.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2.5">
-          {data && (
-            <div className="num text-right text-[12px] leading-relaxed text-faint">
-              {data.items.length} {data.items.length === 1 ? "listing" : "listings"}
-              <br />
-              milestone sums pre-validated
-            </div>
-          )}
-          {session.token && (
+      <PageHeader
+        title="Open work"
+        desc="Jobs posted with milestone templates: the sum the client expects to escrow, broken into reviewable chunks before anyone starts."
+        meta={data ? <>{data.items.length} {data.items.length === 1 ? "listing" : "listings"}<br />milestone sums pre-validated</> : undefined}
+        actions={
+          session.token && session.user?.role === "client" ? (
             <Link
               href="/jobs/new"
               className={`inline-flex items-center gap-2 rounded-full bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}
             >
               Post a job
             </Link>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       <div className="mt-9 flex flex-wrap items-center gap-2.5">
         <label className="relative flex-1 basis-64">
@@ -156,5 +148,6 @@ export default function JobsPage() {
         )}
       </div>
     </div>
+    </RoleGate>
   );
 }

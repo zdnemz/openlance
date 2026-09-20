@@ -232,7 +232,7 @@ export default function BackendConsole() {
                 <CardDescription>
                   {data?.demoProject
                     ? <>Client <strong>{data.demoProject.client?.displayName ?? shortAddr(data.demoProject.client?.walletAddress ?? '')}</strong> × freelancer <strong>{data.demoProject.freelancer?.displayName ?? shortAddr(data.demoProject.freelancer?.walletAddress ?? '')}</strong> — status <Badge variant="secondary" className="ml-1">{data.demoProject.status}</Badge></>
-                    : 'The seeded project and its milestone state machine.'}
+                    : 'The newest project and its milestone state machine.'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -376,7 +376,7 @@ export default function BackendConsole() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base"><ServerCog className="size-4 text-emerald-600" aria-hidden />API surface <span className="text-muted-foreground font-normal text-sm">— what the frontend will build against</span></CardTitle>
               <CardDescription>
-                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">src/app/api/**</code>. Golden path E2E: <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">bash scripts/anvil/run-anvil-e2e.sh</code>.
+                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">src/app/api/**</code>.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">

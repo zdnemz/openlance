@@ -3,7 +3,7 @@
  *
  * The API now runs inside this Next.js process (route handlers under /api),
  * so this route no longer supervises a separate API process — it only reports
- * API/chain health and can (re)spawn the anvil + contracts + seed stack that
+ * API/chain health and can (re)spawn the anvil + contracts stack that
  * lives in scripts/anvil/dev-real.sh.
  */
 export const dynamic = "force-dynamic";

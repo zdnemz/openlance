@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useUser, useUserReviews, useArbiters, useProjects, useInvalidate, patch, post } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import {
-  AddressAvatar, Chip, EthAmount, ListHead, Skeleton, EmptyState, StatusBadge, press, Copyable,
+  AddressAvatar, Chip, EthAmount, ListHead, Skeleton, EmptyState, StatusBadge, press, Copyable, InlineLoading,
 } from "@/components/design";
 import { shortAddress, timeAgo, dateLabel } from "@/lib/format";
 import { Star } from "@phosphor-icons/react/dist/csr/Star";
@@ -28,7 +28,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
   const session = useSession();
   const { data: user, isLoading } = useUser(address);
   const { data: reviews } = useUserReviews(address);
-  const { data: arbiters } = useArbiters();
+  const { data: arbiters, isLoading: arbitersLoading } = useArbiters();
   const arbiter = arbiters?.find((a) => a.address.toLowerCase() === address.toLowerCase());
   const isMe = session.user?.walletAddress?.toLowerCase() === address.toLowerCase() && !!session.token;
   const [editing, setEditing] = useState(false);
@@ -58,6 +58,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
               <div className="flex items-center gap-2.5">
                 <h1 className="text-2xl font-semibold tracking-tight">{user.displayName ?? shortAddress(address)}</h1>
                 {user.kycStatus === "verified" && <span className="num flex items-center gap-1 rounded-full bg-state-released/10 px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-state-released"><SealCheck weight="fill" className="h-3 w-3" /> verified</span>}
+                {arbitersLoading && <InlineLoading label="arbiter…" />}
                 {arbiter?.registered && (
                   <span className="flex items-center gap-1.5 rounded-full bg-state-split/10 px-2.5 py-0.5 text-[10.5px] text-state-split">
                     <SealCheck weight="fill" className="h-3.5 w-3.5" /> arbiter · trust {arbiter.trustScore}

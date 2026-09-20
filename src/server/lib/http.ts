@@ -31,21 +31,45 @@ export function ok<T>(data: T, status = 200, init?: ResponseInit): NextResponse 
  */
 export const ONBOARDED_COOKIE = 'el_onboarded'
 
+/**
+ * Role-hint cookie read by the edge proxy for strict seat separation.
+ * Plain (not signed) UX hint stamped only by JWT-verified server routes —
+ * the API still enforces auth/role per request; tampering just bounces
+ * between friendly pages. In sync with src/lib/role-routes.ts ROLE_COOKIE.
+ */
+export const ROLE_COOKIE = 'el_role'
+
+const cookieBase = {
+  path: '/',
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  maxAge: env.SESSION_TTL_SECONDS,
+  ...(process.env.NODE_ENV === 'production' ? { secure: true } : {}),
+}
+
 /** Stamp the gate cookie on an `ok()` response (auth verify / role / KYC). */
 export function withOnboardedCookie(res: NextResponse, verified: boolean): NextResponse {
-  res.cookies.set(ONBOARDED_COOKIE, verified ? '1' : '0', {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: env.SESSION_TTL_SECONDS,
-    ...(process.env.NODE_ENV === 'production' ? { secure: true } : {}),
-  })
+  res.cookies.set(ONBOARDED_COOKIE, verified ? '1' : '0', cookieBase)
+  return res
+}
+
+/** Stamp both proxy cookies (onboarded + seat) after any identity change. */
+export function withGateCookies(res: NextResponse, gate: { verified: boolean; role: string }): NextResponse {
+  res.cookies.set(ONBOARDED_COOKIE, gate.verified ? '1' : '0', cookieBase)
+  res.cookies.set(ROLE_COOKIE, gate.role, { ...cookieBase, httpOnly: false })
   return res
 }
 
 /** Expire the gate cookie (logout — always succeeds, even unauthenticated). */
 export function clearOnboardedCookie(res: NextResponse): NextResponse {
   res.cookies.set(ONBOARDED_COOKIE, '', { path: '/', maxAge: 0 })
+  return res
+}
+
+/** Expire both gate cookies (logout). */
+export function clearGateCookies(res: NextResponse): NextResponse {
+  res.cookies.set(ONBOARDED_COOKIE, '', { path: '/', maxAge: 0 })
+  res.cookies.set(ROLE_COOKIE, '', { path: '/', maxAge: 0 })
   return res
 }
 

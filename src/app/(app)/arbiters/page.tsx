@@ -10,7 +10,9 @@
  * contracts/contracts/ArbiterRegistry.sol isEligible/isLocked.
  */
 import { useArbiters } from "@/lib/queries";
-import { AddressAvatar, Skeleton, EmptyState, press } from "@/components/design";
+import { AddressAvatar, EmptyState, ArbiterRegistrySkeleton, press } from "@/components/design";
+import { PageHeader } from "@/components/page-header";
+import { RoleGate } from "@/components/role-gate";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
 import { shortAddress, dateLabel, formatEth, timeUntil } from "@/lib/format";
 import { TIER_NAMES } from "@/lib/roles";
@@ -48,11 +50,12 @@ export default function ArbitersPage() {
   const eligibleCount = registered.filter((a) => a.eligible).length;
 
   return (
+    <RoleGate>
     <div className="space-y-9">
-      <div className="flex flex-wrap items-end justify-between gap-5">
-        <div className="max-w-[62ch]">
-          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Arbiters stake their name.</h1>
-          <p className="mt-3 text-sm leading-relaxed text-dim">
+      <PageHeader
+        title="Arbiters stake their name."
+        desc={
+          <>
             Arbiters bond ETH collateral and hold a soulbound badge (ERC-5194). Trust score runs{" "}
             <span className="num text-foreground">0–100</span>: you start at 100, gain{" "}
             <span className="num text-state-released">+5</span> for a majority vote, and lose{" "}
@@ -61,24 +64,15 @@ export default function ArbitersPage() {
             <span className="num text-state-disputed">−25</span> overturned. Below a score of{" "}
             <span className="num text-foreground">{minScore}</span> the stake locks and you drop out of selection;
             hit <span className="num text-foreground">0</span> and the whole stake is slashed to the treasury.
-          </p>
-        </div>
-        {registered.length > 0 && (
-          <div className="num pb-1.5 text-right text-[12px] leading-relaxed text-faint">
-            {registered.length} registered
-            <br />
-            <span className="text-state-released">{eligibleCount}</span> eligible for selection
-          </div>
-        )}
-      </div>
+          </>
+        }
+        meta={registered.length > 0 ? <>{registered.length} registered<br /><span className="text-state-released">{eligibleCount}</span> eligible for selection</> : undefined}
+      />
 
       <ArbiterStakeSummary />
 
       {isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-24 rounded-2xl" />
-          <Skeleton className="h-24 rounded-2xl" />
-        </div>
+        <ArbiterRegistrySkeleton />
       ) : !registered.length ? (
         <EmptyState
           icon={<Scales className="h-5 w-5" />}
@@ -172,5 +166,6 @@ export default function ArbitersPage() {
         </ol>
       )}
     </div>
+    </RoleGate>
   );
 }

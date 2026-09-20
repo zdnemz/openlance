@@ -30,9 +30,11 @@ export interface PublicUser {
   role: UserRole;
   kycStatus: KycStatus;
   kycLevel: string | null;
-  /** Mirror of ArbiterRegistry.tierOf (0 none … 3 gold). */
-  arbiterTier: number;
-  isArbiter: boolean;
+  /**
+   * NOTE: arbiter standing (registered · tier · trust · stake) is NOT part of
+   * the user profile — it is read live from the on-chain ArbiterRegistry
+   * (see ArbiterView). The DB is never a source of arbiter truth.
+   */
   isAdmin?: boolean;
   stats: {
     totalEarnedWei: string;
@@ -171,7 +173,7 @@ export interface DisputeView {
   freelancerProposedArbiter: string | null;
   agreedArbiter: string | null;
   adminAssignedArbiter: string | null;
-  agreementDeadline: string;
+  agreementDeadline: string | null;
   // ── Settlement ──────────────────────────────────────────────────────────
   resolvedArbiter: string | null;
   majorityArbiters: string[];

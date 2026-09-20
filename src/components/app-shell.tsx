@@ -2,11 +2,15 @@
 
 /**
  * App shell — asymmetric left rail (desktop) / top+bottom bars (mobile).
+ * Strict seats: the rail and bottom nav render only the active role's pages
+ * (the proxy enforces the same matrix server-side). /dashboard is the single
+ * adaptive home every seat shares.
  * The calm interior: generous spacing, hairlines over boxes, mono numbers.
  */
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { NotificationBell } from "@/components/notification-bell";
@@ -15,11 +19,13 @@ import { useDisputes, useProjects, useNotifications } from "@/lib/queries";
 import { AddressAvatar, StatusDot } from "@/components/design";
 import { shortAddress } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
+import type { UserRole } from "@/lib/types";
 import { Compass } from "@phosphor-icons/react/dist/csr/Compass";
 import { SquaresFour } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { Layout } from "@phosphor-icons/react/dist/csr/Layout";
 import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
+import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
 import { ShieldStar } from "@phosphor-icons/react/dist/csr/ShieldStar";
 import { TerminalWindow } from "@phosphor-icons/react/dist/csr/TerminalWindow";
 import { ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
@@ -37,16 +43,76 @@ export function Logo({ size = "md", withMark = true }: { size?: "sm" | "md"; wit
   );
 }
 
-function railItems(admin: boolean, disputesCount: number, unread: number, kycNone: boolean) {
+type RailItem = { href: string; label: string; icon: React.ComponentType<{ weight?: "fill" | "regular"; className?: string }>; badge?: number };
+
+function railItems(role: UserRole | undefined, admin: boolean, disputesCount: number, unread: number, kycNone: boolean): RailItem[] {
+  const notifs: RailItem = { href: "/settings/notifications", label: "Notifications", icon: Bell, badge: unread || undefined };
+  const onboarding: RailItem[] = kycNone ? [{ href: "/onboarding", label: "Onboarding", icon: ShieldStar }] : [];
+  const adminItem: RailItem[] = admin ? [{ href: "/admin", label: "Admin", icon: ShieldStar }] : [];
+  const disputes: RailItem = { href: "/disputes", label: "Disputes", icon: Gavel, badge: disputesCount || undefined };
+
+  if (role === "arbiter") {
+    return [
+      { href: "/dashboard", label: "Dashboard", icon: Layout },
+      { href: "/stake", label: "Stake", icon: Coins },
+      { href: "/arbiters", label: "Registry", icon: Scales },
+      disputes,
+      ...onboarding,
+      notifs,
+      ...adminItem,
+    ];
+  }
+  if (role === "freelancer") {
+    return [
+      { href: "/jobs", label: "Explore", icon: Compass },
+      { href: "/dashboard", label: "Dashboard", icon: Layout },
+      disputes,
+      ...onboarding,
+      notifs,
+      ...adminItem,
+    ];
+  }
+  if (role === "client") {
+    return [
+      { href: "/jobs", label: "Explore", icon: Compass },
+      { href: "/jobs/new", label: "Post a job", icon: SquaresFour },
+      { href: "/dashboard", label: "Dashboard", icon: Layout },
+      disputes,
+      ...onboarding,
+      notifs,
+      ...adminItem,
+    ];
+  }
   return [
     { href: "/jobs", label: "Explore", icon: Compass },
-    { href: "/jobs/new", label: "Post a job", icon: SquaresFour },
     { href: "/dashboard", label: "Dashboard", icon: Layout },
+    disputes,
+    notifs,
+  ];
+}
+
+function bottomItems(role: UserRole | undefined, disputesCount: number): RailItem[] {
+  if (role === "arbiter") {
+    return [
+      { href: "/dashboard", label: "Work", icon: Layout },
+      { href: "/stake", label: "Stake", icon: Coins },
+      { href: "/disputes", label: "Disputes", icon: Gavel, badge: disputesCount || undefined },
+      { href: "/arbiters", label: "Registry", icon: Scales },
+    ];
+  }
+  if (role === "freelancer") {
+    return [
+      { href: "/jobs", label: "Explore", icon: Compass },
+      { href: "/dashboard", label: "Work", icon: Layout },
+      { href: "/disputes", label: "Disputes", icon: Gavel, badge: disputesCount || undefined },
+      { href: "/settings/notifications", label: "Alerts", icon: Bell },
+    ];
+  }
+  return [
+    { href: "/jobs", label: "Explore", icon: Compass },
+    { href: "/jobs/new", label: "Post", icon: SquaresFour },
+    { href: "/dashboard", label: "Work", icon: Layout },
     { href: "/disputes", label: "Disputes", icon: Gavel, badge: disputesCount || undefined },
-    { href: "/arbiters", label: "Arbiters", icon: Scales },
-    ...(kycNone ? [{ href: "/onboarding", label: "Onboarding", icon: ShieldStar }] : []),
-    { href: "/settings/notifications", label: "Notifications", icon: Bell, badge: unread || undefined },
-    ...(admin ? [{ href: "/admin", label: "Admin", icon: ShieldStar }] : []),
   ];
 }
 
@@ -61,22 +127,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: notifications } = useNotifications();
   const unread = notifications?.unread ?? 0;
   const kycNone = sessionHydrated && !!session.token && session.user?.kycStatus === "none";
-  const items = railItems(isAdmin, openDisputes, unread, kycNone);
+  const role = sessionHydrated ? session.user?.role : undefined;
+  // Mirror the seat into a readable cookie so the edge proxy can guard
+  // without a DB lookup (covers sessions minted before the role cookie
+  // existed; the API remains the security boundary, this is navigation).
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    try {
+      if (session.user?.role) {
+        document.cookie = `el_role=${session.user.role}; path=/; max-age=2592000; samesite=lax`;
+      } else if (!session.token) {
+        document.cookie = `el_role=; path=/; max-age=0; samesite=lax`;
+      }
+    } catch { /* noop */ }
+  }, [sessionHydrated, session.user?.role, session.token]);
+  const items = railItems(role, isAdmin, openDisputes, unread, kycNone);
+  const mobile = bottomItems(role, openDisputes);
   // Gate the persisted-session-derived chip: the server always sees an empty
   // session, so rendering it before localStorage rehydrates would mismatch.
   const address = sessionHydrated ? session.user?.walletAddress : undefined;
   const roleLine = session.user ? `${session.user.role} · kyc ${session.user.kycStatus}` : "member";
-  const isBackable = pathname !== "/dashboard" && pathname !== "/jobs";
+  const isBackable = pathname !== "/dashboard" && pathname !== "/jobs" && pathname !== "/stake";
 
   return (
     <div className="min-h-[100dvh] w-full">
       {/* ── desktop rail ─────────────────────────────────────────────── */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-line bg-ink/70 backdrop-blur-xl lg:flex">
-        <div className="flex h-16 items-center px-6">
+        <div className="flex h-16 items-center justify-between px-6">
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
           </Link>
         </div>
+        {role && (
+          <div className="px-6 pb-1">
+            <span className="num inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.03] px-2.5 py-1 text-[10.5px] uppercase tracking-[0.14em] text-dim">
+              <StatusDot color="#f43f5e" />
+              {role} seat
+            </span>
+          </div>
+        )}
         <nav className="mt-2 flex flex-1 flex-col gap-0.5 px-3">
           {items.map((item) => {
             const active = pathname === item.href || (item.href !== "/jobs/new" && pathname.startsWith(`${item.href}/`));
@@ -111,16 +200,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Backend console
             </a>
             {address && (
-              <Link
-                href="/profile/me"
-                className="mt-1 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] text-dim hover:bg-white/[0.04] hover:text-foreground"
-              >
-                <AddressAvatar address={address} size={26} />
-                <span className="min-w-0">
-                  <span className="block truncate leading-tight">{session.user?.displayName ?? shortAddress(address)}</span>
-                  <span className="block text-[11px] leading-tight text-faint">{roleLine}</span>
-                </span>
-              </Link>
+              <div className="mt-1 rounded-xl px-1 py-1">
+                <Link
+                  href="/profile/me"
+                  className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] text-dim hover:bg-white/[0.04] hover:text-foreground"
+                >
+                  <AddressAvatar address={address} size={26} />
+                  <span className="min-w-0">
+                    <span className="block truncate leading-tight">{session.user?.displayName ?? shortAddress(address)}</span>
+                    <span className="block text-[11px] leading-tight text-faint">{roleLine}</span>
+                  </span>
+                </Link>
+                <Link
+                  href="/onboarding"
+                  className="num mt-0.5 block rounded-lg px-3.5 py-1.5 text-[11px] text-faint transition-colors hover:text-dim"
+                >
+                  Switch seat →
+                </Link>
+              </div>
             )}
           </div>
         </nav>
@@ -138,6 +235,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         )}
         <div className="flex items-center gap-2">
+          {role && (
+            <span className="num rounded-full border border-line bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-wider text-dim">
+              {role}
+            </span>
+          )}
           {sessionHydrated && session.token && <NotificationBell compact />}
           <WalletButton compact />
         </div>
@@ -160,13 +262,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── mobile bottom nav ────────────────────────────────────────── */}
       <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[68px] items-stretch border-t border-line bg-ink/90 backdrop-blur-xl lg:hidden">
-        {[
-          { href: "/jobs", label: "Explore", icon: Compass },
-          { href: "/dashboard", label: "Work", icon: Layout },
-          { href: "/disputes", label: "Disputes", icon: Gavel, badge: openDisputes || undefined },
-          { href: "/arbiters", label: "Arbiters", icon: Scales },
-        ].map((item) => {
-          const active = pathname.startsWith(item.href);
+        {mobile.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return (
             <Link

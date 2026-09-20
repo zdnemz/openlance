@@ -18,8 +18,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWallet, readContract } from "@/lib/wallet";
 import { useRuntime } from "@/lib/runtime";
-import { get, qk } from "@/lib/queries";
-import type { ArbiterView } from "@/lib/types";
+import { qk } from "@/lib/queries";
 import { REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { toWei } from "@/lib/format";
 import {
@@ -67,19 +66,22 @@ export interface MyArbiterState {
 }
 
 /** Live on-chain state for the connected wallet's arbiter account. */
-export function useMyArbiterState(): { state: MyArbiterState | null; refresh: () => void } {
+export function useMyArbiterState(): { state: MyArbiterState | null; loading: boolean; refresh: () => void } {
   const { address } = useWallet();
   const registry = useRuntime((s) => s.registry);
   const escrow = useRuntime((s) => s.escrow);
   const [state, setState] = useState<MyArbiterState | null>(null);
+  const [loading, setLoading] = useState(false);
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     if (!registry || !address) {
       setState(null);
+      setLoading(false);
       return;
     }
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
         let firstErr: string | null = null;
@@ -156,6 +158,7 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
           minStakeDurationSeconds: Number(minStakeDuration ?? 0n), unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
           eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false, busyKnown: activeDisputesRaw !== null,
         });
+        setLoading(false);
         return;
       }
       setState({
@@ -181,12 +184,14 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         busy: activeDisputes > 0,
         busyKnown: activeDisputesRaw !== null,
       });
+      if (!cancelled) setLoading(false);
       } catch (err) {
         // Never an unhandled rejection: keep the last good state and surface
         // the reason for the next render.
         if (!cancelled) {
           const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
           setState((prev) => (prev ? { ...prev, readError: prev.readError ?? msg } : prev));
+          setLoading(false);
         }
       }
     })();
@@ -194,41 +199,22 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
   }, [registry, escrow, address, nonce]);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
-  return { state, refresh };
+  return { state, loading, refresh };
 }
 
 /** Staking actions for the connected wallet. */
 export function useArbiterStaking() {
   const chain = useChainAction();
-  const { state, refresh } = useMyArbiterState();
+  const { state, loading, refresh } = useMyArbiterState();
   const { address } = useWallet();
   const qc = useQueryClient();
-  // Chain reads + off-chain mirrors converge after every stake tx; without
-  // this the panel keeps offering "join" for a registered arbiter (whose next
-  // register would revert AlreadyRegistered).
-  const synced = useCallback(async (wait?: () => Promise<void>) => {
-    refresh(); // chain truth first — the panel flips immediately
-    if (wait) await wait(); // …then invalidate once the mirror caught up
+  // Arbiter truth is on-chain: after a stake tx we re-read the contract and
+  // drop the cached registry list — there is no off-chain mirror to wait for.
+  const synced = useCallback(() => {
+    refresh(); // re-read contract truth — the panel flips as soon as it lands
     void qc.invalidateQueries({ queryKey: qk.arbiters });
     void qc.invalidateQueries({ queryKey: qk.overview });
   }, [refresh, qc]);
-
-  /** Poll the off-chain mirror until it reflects the just-mined tx (~20s max —
-   *  the list polls anyway). Invalidating before the mirror flips just
-   *  re-caches stale rows: the "must reload" complaint. */
-  const awaitMirror = useCallback(async (pred: (list: ArbiterView[]) => boolean) => {
-    for (let i = 0; i < 13; i++) {
-      try {
-        if (pred(await get<ArbiterView[]>("/arbiters"))) return;
-      } catch { /* transient — keep polling */ }
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-  }, []);
-
-  const mine = useCallback((list: ArbiterView[]) => {
-    const me = (address ?? "").toLowerCase();
-    return me ? list.find((a) => a.address.toLowerCase() === me) : undefined;
-  }, [address]);
 
   const register = useCallback(async (stakeWei: bigint) => {
     if (!state?.minStakeKnown) {
@@ -242,19 +228,16 @@ export function useArbiterStaking() {
     }
     const res = await registerArbiterWithStakeAction(chain.run)(stakeWei);
     if (!res.ok) return res;
-    await synced(() => awaitMirror((l) => mine(l)?.registered === true));
+    synced();
     return res;
-  }, [chain.run, state?.minStakeWei, state?.minStakeKnown, synced, awaitMirror, mine]);
+  }, [chain.run, state?.minStakeWei, state?.minStakeKnown, synced]);
 
   const add = useCallback(async (amountWei: bigint) => {
-    const before = toWei(state?.stakeWei ?? "0");
     const res = await addStakeAction(chain.run)(amountWei);
     if (!res.ok) return res;
-    await synced(() => awaitMirror((l) => {
-      try { return BigInt(mine(l)?.stakeWei ?? "0") >= before + amountWei; } catch { return false; }
-    }));
+    synced();
     return res;
-  }, [chain.run, state?.stakeWei, synced, awaitMirror, mine]);
+  }, [chain.run, synced]);
 
   const reduce = useCallback(async (amountWei: bigint) => {
     const stake = toWei(state?.stakeWei ?? "0");
@@ -277,34 +260,30 @@ export function useArbiterStaking() {
     }
     const res = await reduceStakeAction(chain.run)(amountWei);
     if (!res.ok) return res;
-    await synced(() => awaitMirror((l) => {
-      const e = mine(l);
-      if (!e) return false;
-      try { return BigInt(e.stakeWei) <= stake - amountWei; } catch { return false; }
-    }));
+    synced();
     return res;
-  }, [chain.run, state?.stakeWei, state?.minStakeWei, state?.minStakeKnown, synced, awaitMirror, mine]);
+  }, [chain.run, state?.stakeWei, state?.minStakeWei, state?.minStakeKnown, synced]);
 
   const requestUnstake = useCallback(async () => {
     const res = await requestUnstakeAction(chain.run)();
     if (!res.ok) return res;
-    await synced(() => awaitMirror((l) => mine(l)?.unstakeRequested === true));
+    synced();
     return res;
-  }, [chain.run, synced, awaitMirror, mine]);
+  }, [chain.run, synced]);
 
   const cancelUnstake = useCallback(async () => {
     const res = await cancelUnstakeAction(chain.run)();
     if (!res.ok) return res;
-    await synced(() => awaitMirror((l) => { const e = mine(l); return !!e && !e.unstakeRequested; }));
+    synced();
     return res;
-  }, [chain.run, synced, awaitMirror, mine]);
+  }, [chain.run, synced]);
 
   const withdraw = useCallback(async () => {
     const res = await withdrawStakeAction(chain.run)();
     if (!res.ok) return res;
-    await synced(() => awaitMirror((l) => { const e = mine(l); return !e || !e.registered; }));
+    synced();
     return res;
-  }, [chain.run, synced, awaitMirror, mine]);
+  }, [chain.run, synced]);
 
-  return { chain, state, address, register, add, reduce, requestUnstake, cancelUnstake, withdraw, refresh };
+  return { chain, state, loading, address, register, add, reduce, requestUnstake, cancelUnstake, withdraw, refresh };
 }

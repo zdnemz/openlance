@@ -1,15 +1,14 @@
 #!/bin/bash
-# OpenLance dev chain stack — anvil + contracts + real-chain seed.
+# OpenLance dev chain stack — anvil + contracts, no seed data (fresh boot).
 #
 #   anvil (:8545, chain 31337)  →  deploy Escrow+Registry  →  write contract
-#   addresses to .env.local  →  migrate Supabase Postgres  →  demo seed (real txs)
+#   addresses to .env.local  →  migrate Supabase Postgres
 #
 # The API itself now runs INSIDE the Next.js server (route handlers under
 # /api) — this script does not start or babysit a separate API process. It is
 # invoked by the /api/dev/stack route or manually: `bash scripts/anvil/dev-real.sh`.
 #
-# Safe to re-run: it reuses a live anvil, always deploys fresh contracts, and
-# the seed is idempotent.
+# Safe to re-run: it reuses a live anvil and always deploys fresh contracts.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -88,9 +87,4 @@ log "NOTE: restart the Next.js dev server to pick up env changes"
 log "pushing schema"
 bunx drizzle-kit push > "$HERE/.state/migrate.log" 2>&1 || { log "FATAL: push failed (see $HERE/.state/migrate.log)"; exit 1; }
 
-# ── 5. demo seed (idempotent, ~90s of real txs) — background, non-fatal ──────
-log "seeding demo data (background)"
-(bun "$HERE/seed-real.ts" > "$HERE/.state/seed.log" 2>&1; ec=$?; if [ $ec -eq 0 ]; then log "seed complete"; else log "seed failed (see $HERE/.state/seed.log)"; fi) &
-disown $! 2>/dev/null || true
-
-log "chain stack up — anvil :8545, contracts deployed, seed running; API is served by Next.js on :3000"
+log "chain stack up — anvil :8545, fresh contracts deployed, empty DB; API is served by Next.js on :3000"

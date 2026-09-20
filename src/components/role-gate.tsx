@@ -5,12 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useSession, useSessionHydrated } from "@/lib/session";
 import { requiredRolesForPath, roleUpsell } from "@/lib/roles";
+import { isAllowed } from "@/lib/role-routes";
 import { ShieldStar } from "@phosphor-icons/react";
 
 /**
  * RoleGate — redirect + upsell (never a dead 404).
- * Reads stay open; when the active role may not WRITE here, show the
- * explainer + switch/stake CTA instead of the gated children.
+ * Strict separation: the proxy is the enforcer; this covers a stale gate
+ * cookie between role switches without a full reload.
  */
 export function RoleGate({ children, write = true }: { children: ReactNode; write?: boolean }) {
   const pathname = usePathname();
@@ -29,9 +30,15 @@ export function RoleGate({ children, write = true }: { children: ReactNode; writ
     );
   }
   if (!write) return <>{children}</>;
-  const required = requiredRolesForPath(pathname ?? "");
+  const path = pathname ?? "";
+  // Strict read gate (mirrors the proxy): wrong seat sees the upsell.
+  if (!isAllowed(path, session.user.role)) {
+    const upsell = roleUpsell(path, session.user.role);
+    return <GateCard title={upsell.title} body={`${upsell.body} You are ${session.user.role} + KYC ${session.user.kycStatus}.`} cta={upsell.cta} href="/onboarding" />;
+  }
+  const required = requiredRolesForPath(path);
   if (!required || required.includes(session.user.role)) return <>{children}</>;
-  const upsell = roleUpsell(pathname ?? "", session.user.role);
+  const upsell = roleUpsell(path, session.user.role);
   return <GateCard title={upsell.title} body={`${upsell.body} You are ${session.user.role} + KYC ${session.user.kycStatus}.`} cta={upsell.cta} href="/onboarding" />;
 }
 

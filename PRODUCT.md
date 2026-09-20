@@ -56,7 +56,6 @@ The contract is the source of truth: the off-chain layer is a mirror, and every 
 
 ## Evidence on Hand
 
-- Live seeded demo data: 3 jobs, 3 projects in distinct states (funded mid-flight, disputed, completed via split), ranked arbiter registry with real trust scores, 18+ ledger events with real tx hashes.
 - 90 Foundry tests, 31 backend tests, E2E smoke green; contracts at 97%+ branch coverage with invariant fuzz suite.
 
 ## Product Principles

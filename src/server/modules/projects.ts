@@ -49,6 +49,7 @@ export async function getProject(request: Request, projectId: string) {
   const db = getDb()
   const ms = (await db.select().from(projectMilestones).where(eq(projectMilestones.projectId, project.id)))
     .sort((a, b) => a.position - b.position)
+  await overlayChainStatus(ms)
   const [client] = await db.select().from(users).where(eq(users.id, project.clientId)).limit(1)
   const [freelancer] = await db.select().from(users).where(eq(users.id, project.freelancerId)).limit(1)
   return {
@@ -65,7 +66,28 @@ export async function listProjectMilestones(request: Request, projectId: string)
   const db = getDb()
   const ms = (await db.select().from(projectMilestones).where(eq(projectMilestones.projectId, project.id)))
     .sort((a, b) => a.position - b.position)
+  await overlayChainStatus(ms)
   return ms.map((m) => milestoneView(m, true))
+}
+
+/**
+ * On-chain first: every milestone with an onchainId is live-read in real mode
+ * (terminal rows included — the read confirms finality rather than assuming
+ * the mirror). One `getMilestone` call covers status + escrowed amount, so
+ * displayed sums are chain truth too. The DB mirror is fallback only;
+ * failures keep the mirror.
+ */
+async function overlayChainStatus(ms: { onchainId: number | null; chainStatus: string; amountWei: string }[]) {
+  const pending = ms.filter((m) => m.onchainId !== null)
+  if (pending.length === 0) return
+  const adapter = getChainAdapter()
+  if (adapter.mode !== 'real') return
+  await Promise.all(pending.map(async (m) => {
+    const live = await adapter.getMilestoneFull(m.onchainId!).catch(() => null)
+    if (!live) return
+    m.chainStatus = live.status
+    m.amountWei = live.amountWei
+  }))
 }
 
 export async function listProjectReviews(request: Request, projectId: string) {

@@ -26,7 +26,7 @@ import { bytes32ToUuid } from './events'
 import type { RawChainLog, EvMilestoneFunded } from './events'
 import { outcomeFromUint8 } from './abi'
 import {
-  arbiters, disputes, ledgerEvents, projectMilestones, projects,
+  disputes, ledgerEvents, projectMilestones, projects,
   users,
 } from '../db/schema'
 import { writeOutbox } from '../modules/notify'
@@ -131,22 +131,25 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'AppealOpened': return applyAppealOpened(tx, evt)
     case 'AppealResolved': return applyAppealResolved(tx, evt)
     case 'ArbiterRewarded':
-    case 'ArbiterPenalized': return null // ledger-only; scores mirror via TrustScoreUpdated
+    case 'ArbiterPenalized': return null // ledger-only; scores live on-chain
     case 'FeeWithdrawn': return null // ledger-only
-    case 'ArbiterRegistered': return applyArbiterRegistered(tx, evt)
-    case 'ArbiterDeregistered': return applyArbiterDeregistered(tx, evt)
-    case 'TrustScoreUpdated': return applyTrustScore(tx, evt)
-    case 'ScoreChanged': return applyScoreChanged(tx, evt)
-    case 'StakeDeposited': return applyStakeDeposited(tx, evt)
-    case 'StakeReduced': return applyStakeReduced(tx, evt)
-    case 'StakeWithdrawn': return applyStakeWithdrawn(tx, evt)
-    case 'StakeLocked': return applyStakeLocked(tx, evt)
-    case 'StakeSlashed': return applyStakeSlashed(tx, evt)
-    case 'UnstakeRequested': return applyUnstakeRequested(tx, evt)
-    case 'UnstakeCancelled': return applyUnstakeCancelled(tx, evt)
-    case 'TierThresholdsUpdated': return applyTierThresholds(tx, evt)
+    // ── Registry events: NO off-chain arbiter table to mirror. Scores, stakes
+    //    and the roster are read live from the contract. Only the registry's
+    //    *tuning knobs* are cached in KV so tier/eligibility math stays in sync.
+    case 'ArbiterRegistered':
+    case 'ArbiterDeregistered':
+    case 'TrustScoreUpdated':
+    case 'ScoreChanged':
+    case 'StakeDeposited':
+    case 'StakeReduced':
+    case 'StakeWithdrawn':
+    case 'StakeLocked':
+    case 'StakeSlashed':
+    case 'UnstakeRequested':
+    case 'UnstakeCancelled':
     case 'MinStakeUpdated':
-    case 'MinScoreToWithdrawUpdated': return null // config mirrors via env; no per-arbiter row change
+    case 'MinScoreToWithdrawUpdated': return null
+    case 'TierThresholdsUpdated': return applyTierThresholds(tx, evt)
     case 'MinStakeDurationUpdated': return applyMinStakeDuration(tx, evt)
     case 'UnstakeCooldownUpdated': return applyUnstakeCooldown(tx, evt)
     default: return null
@@ -484,172 +487,15 @@ async function applyAppealResolved(tx: Tx, evt: RawChainLog): Promise<PlannedNot
   return null
 }
 
-// ── Registry staking + score mirror ─────────────────────────────────────────
+// ── Registry tuning knobs (KV cache only) ───────────────────────────────────
+// Arbiter standing (roster · trust · stake · tier) is NOT mirrored off-chain:
+// it is read live from the contract. Only setTierThresholds / setMinStakeDuration
+// / setUnstakeCooldown are cached in KV, so tier + eligibility math can stay in
+// sync with the chain without an arbiter table.
 
-function tierForSync(stakeWei: string, registered: boolean, silverWei: string, goldWei: string): number {
-  if (!registered) return 0
-  let stake = 0n
-  try { stake = BigInt(stakeWei || '0') } catch { stake = 0n }
-  const min = BigInt(env.MIN_STAKE_WEI)
-  if (stake < min) return 0
-  try {
-    if (BigInt(goldWei) > 0n && stake >= BigInt(goldWei)) return 3
-    if (BigInt(silverWei) > 0n && stake >= BigInt(silverWei)) return 2
-  } catch { /* malformed threshold → bronze fallback */ }
-  return 1
-}
-
-async function currentThresholds(): Promise<{ silver: string; gold: string }> {
-  const min = BigInt(env.MIN_STAKE_WEI)
-  try {
-    const kv = await getKv()
-    const [s, g] = await Promise.all([kv.get('registry:tierSilver'), kv.get('registry:tierGold')])
-    return { silver: s ?? (min * 10n).toString(), gold: g ?? (min * 100n).toString() }
-  } catch {
-    return { silver: (min * 10n).toString(), gold: (min * 100n).toString() }
-  }
-}
-
-async function syncUserArbiter(tx: Tx, address: string, stakeWei: string, registered: boolean) {
-  const { silver, gold } = await currentThresholds()
-  await tx.update(users).set({
-    isArbiter: registered,
-    arbiterTier: tierForSync(stakeWei, registered, silver, gold),
-    updatedAt: new Date(),
-  }).where(eq(users.walletAddress, address))
-}
-
-async function applyScoreChanged(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  const newScore = numOrNull(evt.args.newScore) ?? 0
-  const reason = numOrNull(evt.args.reason) ?? 0
-  const locked = newScore < env.MIN_SCORE_TO_WITHDRAW
-  await tx.update(arbiters).set({
-    trustScore: newScore,
-    locked,
-    resolutions: sql`${arbiters.resolutions} + 1`,
-    resolutionsWithinSla: sql`${arbiters.resolutionsWithinSla} + ${reason === 1 ? 1 : 0}`,
-    resolutionsLate: sql`${arbiters.resolutionsLate} + ${reason === 3 ? 1 : 0}`,
-    updatedAt: new Date(),
-  }).where(eq(arbiters.address, address))
-  return null
-}
-
-async function applyStakeDeposited(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  const total = str(evt.args.totalStake)
-  // _enroll emits Registered + Deposited in one tx; either order must converge.
-  // New rows start at MAX_SCORE (100) — never the 0 column default.
-  await tx.insert(arbiters).values({
-    address, registered: true, stakeWei: total, trustScore: 100, registeredAt: evt.blockTime,
-  }).onConflictDoUpdate({
-    target: arbiters.address,
-    set: { stakeWei: total, registered: true, updatedAt: evt.blockTime },
-  })
-  await syncUserArbiter(tx, address, total, true)
-  return null
-}
-
-async function applyStakeReduced(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  const remaining = str(evt.args.remaining)
-  // Partial exit: the arbiter stays on the roster with a smaller position.
-  await tx.insert(arbiters).values({
-    address, registered: true, stakeWei: remaining, trustScore: 100, registeredAt: evt.blockTime,
-  }).onConflictDoUpdate({
-    target: arbiters.address,
-    set: { stakeWei: remaining, registered: true, updatedAt: evt.blockTime },
-  })
-  await syncUserArbiter(tx, address, remaining, true)
-  return null
-}
-
-async function applyStakeWithdrawn(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  await tx.update(arbiters).set({
-    stakeWei: '0', registered: false, unstakeRequested: false, locked: false, updatedAt: evt.blockTime,
-  }).where(eq(arbiters.address, address))
-  await syncUserArbiter(tx, address, '0', false)
-  return null
-}
-
-async function applyStakeLocked(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  await tx.update(arbiters).set({ locked: true, updatedAt: evt.blockTime }).where(eq(arbiters.address, address))
-  return null
-}
-
-async function applyStakeSlashed(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  await tx.update(arbiters).set({
-    stakeWei: '0', registered: false, locked: false, updatedAt: evt.blockTime,
-  }).where(eq(arbiters.address, address))
-  await syncUserArbiter(tx, address, '0', false)
-  return null
-}
-
-async function applyUnstakeRequested(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  // Benched from selection immediately; withdrawal needs no further wait (the
-  // cooldown gates the request itself) — unstakeReadyAt is already past.
-  await tx.update(arbiters).set({ unstakeRequested: true, updatedAt: evt.blockTime }).where(eq(arbiters.address, address))
-  return null
-}
-
-async function applyUnstakeCancelled(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  await tx.update(arbiters).set({ unstakeRequested: false, updatedAt: evt.blockTime }).where(eq(arbiters.address, address))
-  return null
-}
-
-async function applyArbiterRegistered(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  const tokenId = numOrNull(evt.args.sbtTokenId)
-  // New arbiters start at the maximum trust score (ArbiterRegistry._enroll sets
-  // `trustScore = MAX_SCORE` with no event), so seed the mirror at 100 to match
-  // the chain — otherwise the panel shows 0 until the first dispute.
-  // StakeDeposited (same tx) carries the collateral; preserve it when present.
-  const [existing] = await tx.select({ stakeWei: arbiters.stakeWei, trustScore: arbiters.trustScore }).from(arbiters).where(eq(arbiters.address, address)).limit(1)
-  const stakeWei = existing?.stakeWei ?? '0'
-  await tx.insert(arbiters).values({
-    address, registered: true, sbtTokenId: tokenId, trustScore: 100, stakeWei, registeredAt: evt.blockTime,
-  }).onConflictDoUpdate({
-    target: arbiters.address,
-    set: {
-      registered: true, sbtTokenId: tokenId,
-      trustScore: existing && existing.trustScore > 0 ? existing.trustScore : 100,
-      registeredAt: evt.blockTime, updatedAt: evt.blockTime,
-    },
-  })
-  await syncUserArbiter(tx, address, stakeWei, true)
-  return null
-}
-
-async function applyArbiterDeregistered(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  await tx.update(arbiters).set({ registered: false, updatedAt: new Date() }).where(eq(arbiters.address, address))
-  const [row] = await tx.select({ stakeWei: arbiters.stakeWei }).from(arbiters).where(eq(arbiters.address, address)).limit(1)
-  await syncUserArbiter(tx, address, row?.stakeWei ?? '0', false)
-  return null
-}
-
-async function applyTrustScore(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  const address = str(evt.args.arbiter).toLowerCase()
-  const newScore = numOrNull(evt.args.newScore) ?? 0
-  const withinSla = Boolean(evt.args.withinSla)
-  await tx.update(arbiters).set({
-    trustScore: newScore,
-    locked: newScore < env.MIN_SCORE_TO_WITHDRAW,
-    resolutions: sql`${arbiters.resolutions} + 1`,
-    resolutionsWithinSla: sql`${arbiters.resolutionsWithinSla} + ${withinSla ? 1 : 0}`,
-    resolutionsLate: sql`${arbiters.resolutionsLate} + ${withinSla ? 0 : 1}`,
-    updatedAt: new Date(),
-  }).where(eq(arbiters.address, address))
-  return null
-}
-
-async function applyTierThresholds(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
-  // setTierThresholds(silver, gold) — persist so tierFor stays in sync with tierOf.
+async function applyTierThresholds(_tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  // setTierThresholds(silver, gold) — persist so tier math stays in sync with
+  // tierOf. There is no per-arbiter row to update; tiers are derived on read.
   const silver = str(evt.args.silverStake ?? evt.args.silver ?? '')
   const gold = str(evt.args.goldStake ?? evt.args.gold ?? '')
   try {
@@ -658,21 +504,6 @@ async function applyTierThresholds(tx: Tx, evt: RawChainLog): Promise<PlannedNot
     if (gold && BigInt(gold) >= 0n) await kv.set('registry:tierGold', gold)
   } catch (err) {
     log.warn('TierThresholdsUpdated KV persist failed', { err: String(err) })
-  }
-  // Recompute every user's tier with the new floors (stake mirrors are unchanged).
-  try {
-    const rows = await tx.select({ address: arbiters.address, stakeWei: arbiters.stakeWei, registered: arbiters.registered }).from(arbiters)
-    const { silver: s, gold: g } = await currentThresholds()
-    for (const r of rows) {
-      const [u] = await tx.select({ id: users.id }).from(users).where(eq(users.walletAddress, r.address)).limit(1)
-      if (!u) continue
-      await tx.update(users).set({
-        arbiterTier: tierForSync(r.stakeWei, r.registered, s, g),
-        updatedAt: new Date(),
-      }).where(eq(users.id, u.id))
-    }
-  } catch (err) {
-    log.warn('TierThresholdsUpdated user resync failed', { err: String(err) })
   }
   return null
 }

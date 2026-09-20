@@ -23,8 +23,6 @@ export function publicUser(u: typeof users.$inferSelect) {
     role: u.role,
     kycStatus: u.kycStatus,
     kycLevel: u.kycLevel,
-    arbiterTier: u.arbiterTier,
-    isArbiter: u.isArbiter,
     isAdmin: env.adminWallets.includes(u.walletAddress),
     stats: {
       totalEarnedWei: u.totalEarnedWei,

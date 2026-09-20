@@ -60,8 +60,11 @@ export const ESCROW_ABI = parseAbi([
   // RPC read surface — readContract cannot encode calls from an events-only ABI.
   'function milestoneStatus(uint256 milestoneId) view returns (uint8)',
   'function accruedFees() view returns (uint256)',
+  'function disputeFee() view returns (uint256)',
+  'function feeBps() view returns (uint16)',
   'function getRound(uint256 milestoneId, uint8 round) view returns (address[3] arbiters, uint8 arbiterCount, uint8 commitCount, uint8 revealCount, uint8[3] tally, uint64 commitDeadline, uint64 revealDeadline, bool resolved, uint8 winningOutcome)',
-])
+  'function getDispute(uint256 milestoneId) view returns (address openedBy, uint64 openedAt, uint256 fee, uint8 round, uint8 appealCount, address[3] settledArbiters, uint8 settledOutcome)',
+  'function getMilestone(uint256 milestoneId) view returns (bytes32 ref, address client, address freelancer, uint256 amount, uint16 feeBps, uint8 status)',])
 
 /** Dispute resolution outcomes — must match the contract enum. */
 export const RESOLUTION_OUTCOMES = ['release', 'refund', 'split'] as const

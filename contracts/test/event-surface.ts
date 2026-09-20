@@ -83,7 +83,7 @@ describe("Event-surface lock", () => {
       .filter((x) => x.type === "function")
       .map((x) => x.name);
     // Money lifecycle is frozen for the backend indexer.
-    for (const required of ["milestoneStatus", "accruedFees", "fund", "submit", "approve", "cancel"]) {
+    for (const required of ["milestoneStatus", "getMilestone", "accruedFees", "fund", "submit", "approve", "cancel"]) {
       assert.ok(fns.includes(required), `Escrow missing required function ${required}`);
     }
     // Multi-arbiter dispute surface.
@@ -96,6 +96,7 @@ describe("Event-surface lock", () => {
       "appeal",
       "resolveAppeal",
       "getRound",
+      "getDispute",
       "computeCommit",
     ]) {
       assert.ok(fns.includes(required), `Escrow missing dispute function ${required}`);

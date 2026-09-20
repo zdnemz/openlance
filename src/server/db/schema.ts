@@ -3,9 +3,14 @@
  *
  * THE STATE SPLIT (PRD §7.3): money + commitments + trust facts are
  * authoritative ON-CHAIN. Everything here that mirrors chain state
- * (project_milestones.chain_status, ledger_events, arbiters, user stats) is an
+ * (project_milestones.chain_status, ledger_events, user stats) is an
  * UNTRUSTED CACHE derived from contract events by the indexer. Money-relevant
  * actions re-derive truth from the chain (adapter RPC), never from these rows.
+ *
+ * Arbiter registry state (registered · trust score · stake · tier · eligibility)
+ * is NOT mirrored here at all — there is no off-chain arbiter table. Every
+ * arbiter read goes straight to the ArbiterRegistry contract (see
+ * src/server/modules/arbiters.ts); the DB is never a source of arbiter truth.
  */
 import { sql } from 'drizzle-orm'
 import {
@@ -56,10 +61,9 @@ export const users = pgTable('users', {
   /** light (client) | standard (freelancer) | enhanced (arbiter). */
   kycLevel: text('kyc_level'),
   kycUpdatedAt: timestamp('kyc_updated_at', { withTimezone: true }),
-  /** Mirror of ArbiterRegistry.tierOf (0 none … 3 gold). */
-  arbiterTier: integer('arbiter_tier').notNull().default(0),
-  // Mirror of the on-chain ArbiterRegistry (indexer-maintained).
-  isArbiter: boolean('is_arbiter').notNull().default(false),
+  // NOTE: arbiter standing (registered · trust score · stake · tier) is NOT
+  // mirrored here — it is read live from the ArbiterRegistry on-chain. See
+  // src/server/modules/arbiters.ts. There is no off-chain arbiter table.
   // Derived stats — computed from chain settlement events, never client-writable.
   totalEarnedWei: wei('total_earned_wei').notNull().default('0'),
   totalPaidWei: wei('total_paid_wei').notNull().default('0'),
@@ -271,7 +275,8 @@ export const disputes = pgTable('disputes', {
   freelancerProposedArbiter: text('freelancer_proposed_arbiter'),
   agreedArbiter: text('agreed_arbiter'),
   adminAssignedArbiter: text('admin_assigned_arbiter'),
-  agreementDeadline: timestamp('agreement_deadline', { withTimezone: true }).notNull(),
+  /** Dead v1 clock (selection is on-chain now); nullable so new rows write nothing. */
+  agreementDeadline: timestamp('agreement_deadline', { withTimezone: true }),
   // ── Settlement ───────────────────────────────────────────────────────────
   /** Winning arbiter (majority representative) for the settled round. */
   resolvedArbiter: text('resolved_arbiter'),
@@ -302,31 +307,13 @@ export const ledgerEvents = pgTable('ledger_events', {
   uniqueIndex('ledger_tx_log_idx').on(t.txHash, t.logIndex), // idempotency key
   index('ledger_project_idx').on(t.projectId),
   index('ledger_type_idx').on(t.eventType),
+  index('ledger_milestone_idx').on(t.milestoneOnchainId), // stats recompute filters on this
 ])
 
 /** Indexer checkpoint per contract (last fully ingested block). */
 export const indexerState = pgTable('indexer_state', {
   id: text('id').primaryKey(), // 'escrow' | 'arbiter-registry'
   lastBlock: bigint('last_block', { mode: 'number' }).notNull().default(0),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
-
-/** Mirror of ArbiterRegistry + ERC-5194 SBT trust data + staking (PRD F11/F12). */
-export const arbiters = pgTable('arbiters', {
-  address: text('address').primaryKey(), // lowercase
-  registered: boolean('registered').notNull().default(true),
-  sbtTokenId: bigint('sbt_token_id', { mode: 'number' }),
-  trustScore: integer('trust_score').notNull().default(0),
-  /** ETH collateral held on-chain (wei). Mirror of `stakeOf`. */
-  stakeWei: wei('stake_wei').notNull().default('0'),
-  /** True when the arbiter has requested to unstake (benched from selection). */
-  unstakeRequested: boolean('unstake_requested').notNull().default(false),
-  /** True when score < minScoreToWithdraw: stake locked, benched. */
-  locked: boolean('locked').notNull().default(false),
-  resolutions: integer('resolutions').notNull().default(0),
-  resolutionsWithinSla: integer('resolutions_within_sla').notNull().default(0),
-  resolutionsLate: integer('resolutions_late').notNull().default(0),
-  registeredAt: timestamp('registered_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -419,7 +406,6 @@ export type Submission = typeof submissions.$inferSelect
 export type Review = typeof reviews.$inferSelect
 export type Dispute = typeof disputes.$inferSelect
 export type LedgerEvent = typeof ledgerEvents.$inferSelect
-export type Arbiter = typeof arbiters.$inferSelect
 export type NotificationEvent = typeof notificationEvents.$inferSelect
 export type NotificationRecipient = typeof notificationRecipients.$inferSelect
 export type NotificationPreference = typeof notificationPreferences.$inferSelect
