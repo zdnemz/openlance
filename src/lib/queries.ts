@@ -38,11 +38,12 @@ export function useOverview() {
   return useQuery({ queryKey: qk.overview, queryFn: () => get<Overview>("/overview"), refetchInterval: 15_000 });
 }
 
-export function useJobs(filters?: Record<string, string>) {
+export function useJobs(filters?: Record<string, string>, enabled = true) {
   const search = new URLSearchParams(filters ?? {}).toString();
   return useQuery({
     queryKey: qk.jobs(filters),
     queryFn: () => get<{ items: JobView[]; total: number }>(`/jobs${search ? `?${search}` : ""}`),
+    enabled,
   });
 }
 

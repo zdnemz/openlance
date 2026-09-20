@@ -29,6 +29,8 @@ export default function JobsPage() {
 
   const { data, isLoading, error } = useJobs(filters);
   const session = useSession();
+  const isClient = !!session.token && session.user?.role === "client";
+  const { data: drafts } = useJobs({ status: "draft" }, isClient);
 
   return (
     <RoleGate>
@@ -79,6 +81,27 @@ export default function JobsPage() {
       </div>
 
       <div className="mt-8">
+        {isClient && !!drafts?.items.length && (
+          <div className="mb-8 overflow-hidden rounded-3xl border border-amber-400/25 bg-amber-400/[0.04]">
+            <div className="px-6 pt-5">
+              <span className="num text-[11px] uppercase tracking-wider text-amber-300">your drafts · deposit to publish</span>
+            </div>
+            <div className="divide-y divide-white/[0.05]">
+              {drafts.items.map((job) => (
+                <Link
+                  key={job.id}
+                  href={`/jobs/${job.id}`}
+                  className="group flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-white/[0.03]"
+                >
+                  <span className="min-w-0 truncate text-[14px] font-medium">{job.title}</span>
+                  <span className="num shrink-0 text-[12px] text-amber-300">
+                    {formatEth(job.budget.maxWei)} ETH to publish →
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-4">
             {[0, 1, 2].map((i) => (

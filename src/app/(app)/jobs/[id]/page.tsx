@@ -140,7 +140,15 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <section>
               <ListHead>Proposals · {proposals?.length ?? 0}</ListHead>
               {!proposals?.length ? (
-                <EmptyState className="mt-4" title="No proposals yet" body="Freelancers see this job the moment it's open. Switch to the freelancer seat to propose." />
+                <EmptyState
+                  className="mt-4"
+                  title="No proposals yet"
+                  body={
+                    job.status === "draft"
+                      ? "Publish first — freelancers can propose once the deposit locks."
+                      : "Freelancers see this job the moment it's open. Switch to the freelancer seat to propose."
+                  }
+                />
               ) : (
                 <div className="mt-4 space-y-4">
                   {proposals.map((p) => (
