@@ -1,6 +1,6 @@
 "use client";
 
-/** /jobs/new — post a job with a milestone builder; sum must fit budget. */
+/** /jobs/new — draft a job with a milestone builder; deposit publishes it. */
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -86,7 +86,7 @@ export default function NewJobPage() {
         budgetMax: d.budgetMax,
         milestones: d.milestones.map((m) => ({ title: m.title.trim(), description: m.description.trim(), amount: m.amount })),
       });
-      toast.success("Job posted", { description: "It's live in the marketplace with its milestone template." });
+      toast.success("Draft saved", { description: "Deposit the budget max to publish it to the marketplace." });
       router.push(`/jobs/${job.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -100,8 +100,8 @@ export default function NewJobPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Break the work into escrowable chunks."
-        desc="The milestone template is the contract's blueprint. Each milestone gets funded, delivered, submitted, and released on its own; the sum must fit the budget range you declare."
-        meta={<>client seat<br />proxy-guarded</>}
+        desc="This saves a private draft. Depositing the budget max publishes it — only funded jobs reach the marketplace."
+        meta={<>client seat<br />draft → deposit → publish</>}
       />
 
       <div className="glass mt-10 space-y-6 rounded-3xl p-7 md:p-9">
@@ -221,7 +221,7 @@ export default function NewJobPage() {
         )}
 
         <Button onClick={submit} disabled={submitting} className="w-full rounded-full bg-rose-accent py-3.5 text-sm font-medium hover:bg-rose-bright">
-          {submitting ? "Posting…" : <span className="flex items-center gap-2">Post job <ArrowRight className="h-4 w-4" weight="bold" /></span>}
+          {submitting ? "Saving…" : <span className="flex items-center gap-2">Save draft <ArrowRight className="h-4 w-4" weight="bold" /></span>}
         </Button>
       </div>
     </div>

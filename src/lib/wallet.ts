@@ -251,6 +251,21 @@ export async function sendContractCall(opts: {
   })) as string;
 }
 
+/** Sign + send a bare ETH transfer (e.g. the publish deposit). Returns the tx hash. */
+export async function sendTransfer(opts: {
+  to: string;
+  value: bigint;
+  expectedChainId?: number;
+}): Promise<string> {
+  const state = useWallet.getState();
+  if (!state.address) throw new Error("No wallet connected");
+  if (opts.expectedChainId) await ensureChain(opts.expectedChainId);
+  return (await window.ethereum!.request({
+    method: "eth_sendTransaction",
+    params: [{ from: state.address, to: opts.to, value: `0x${opts.value.toString(16)}` }],
+  })) as string;
+}
+
 /** Wait for a receipt via the relay. */
 export async function waitForReceipt(hash: string, timeoutMs = 30_000): Promise<{ status: "success" | "reverted"; blockNumber: number }> {
   const started = Date.now();
