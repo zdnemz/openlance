@@ -72,6 +72,7 @@ describe("UUPS upgrade authorization", () => {
         120n, // commitWindow
         120n, // revealWindow
         600n, // appealWindow
+        "0x0000000000000000000000000000000000000000", // trustedForwarder
       ], { account: owner }),
       /InvalidInitialization/,
     );
@@ -94,6 +95,7 @@ describe("UUPS upgrade authorization", () => {
         owner, // treasury
         604800n, // minStakeDuration (7d)
         259200n, // unstakeCooldown (3d)
+        "0x0000000000000000000000000000000000000000", // trustedForwarder
       ], { account: owner }),
       /InvalidInitialization/,
     );

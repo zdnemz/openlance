@@ -43,15 +43,19 @@ export async function deployWithEoaOwner() {
   const owner = deployer.account.address;
   const treasury = deployer.account.address;
 
+  // Gasless sponsorship forwarder (ERC-2771). Deployed once per fixture so the
+  // proxied escrow/registry can trust it.
+  const forwarder = await viem.deployContract("SponsorshipForwarder", []);
+
   const up = await upgradesApi();
   const registry = await up.deployProxy(
     "ArbiterRegistry",
-    ["OpenLance Arbiter", "OLANCE", owner, MIN_STAKE, MIN_SCORE, treasury, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN],
+    ["OpenLance Arbiter", "OLANCE", owner, MIN_STAKE, MIN_SCORE, treasury, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN, forwarder.address],
     { kind: "uups" },
   );
   const escrow = await up.deployProxy(
     "Escrow",
-    [registry.address, owner, 250, DISPUTE_FEE, treasury, COMMIT_WINDOW, REVEAL_WINDOW, APPEAL_WINDOW],
+    [registry.address, owner, 250, DISPUTE_FEE, treasury, COMMIT_WINDOW, REVEAL_WINDOW, APPEAL_WINDOW, forwarder.address],
     { kind: "uups" },
   );
 
@@ -62,6 +66,7 @@ export async function deployWithEoaOwner() {
     networkHelpers,
     registry: registry as any,
     escrow: escrow as any,
+    forwarder: forwarder as any,
     deployer,
     client,
     freelancer,
@@ -80,17 +85,18 @@ export async function deployWithTimelockOwner() {
   const owner = deployer.account.address;
   const treasury = deployer.account.address;
 
+  const forwarder = await viem.deployContract("SponsorshipForwarder", []);
   const timelock = await viem.deployContract("OpenLanceTimelock", [0n, [owner], [owner], owner]);
 
   const up = await upgradesApi();
   const registry = await up.deployProxy(
     "ArbiterRegistry",
-    ["OpenLance Arbiter", "OLANCE", timelock.address, MIN_STAKE, MIN_SCORE, treasury, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN],
+    ["OpenLance Arbiter", "OLANCE", timelock.address, MIN_STAKE, MIN_SCORE, treasury, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN, forwarder.address],
     { kind: "uups" },
   );
   const escrow = await up.deployProxy(
     "Escrow",
-    [registry.address, timelock.address, 250, DISPUTE_FEE, treasury, COMMIT_WINDOW, REVEAL_WINDOW, APPEAL_WINDOW],
+    [registry.address, timelock.address, 250, DISPUTE_FEE, treasury, COMMIT_WINDOW, REVEAL_WINDOW, APPEAL_WINDOW, forwarder.address],
     { kind: "uups" },
   );
 
@@ -108,6 +114,7 @@ export async function deployWithTimelockOwner() {
     timelock,
     registry: registry as any,
     escrow: escrow as any,
+    forwarder: forwarder as any,
     deployer,
     client,
     freelancer,
