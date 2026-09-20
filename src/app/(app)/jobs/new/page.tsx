@@ -13,15 +13,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { CaretDown } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { Check } from "@phosphor-icons/react/dist/csr/Check";
+import { X } from "@phosphor-icons/react/dist/csr/X";
 import { RoleGate } from "@/components/role-gate";
-import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
-import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Chip } from "@/components/design";
 
 interface Draft {
   title: string;
   description: string;
   category: string;
+  customCategory: string;
   skills: string;
   budgetMin: string;
   budgetMax: string;
@@ -32,6 +37,7 @@ const START: Draft = {
   title: "",
   description: "",
   category: "frontend",
+  customCategory: "",
   skills: "",
   budgetMin: "0.1",
   budgetMax: "0.5",
@@ -39,6 +45,18 @@ const START: Draft = {
 };
 
 const CATEGORIES = ["frontend", "backend", "contracts", "security", "design", "other"];
+const CUSTOM_CATEGORY = "custom";
+const PRESET_SKILLS = [
+  "solidity", "foundry", "fuzzing", "auditing", "formal-verification",
+  "react", "typescript", "next.js", "rust", "cairo", "design", "writing",
+];
+
+function skillTokens(skills: string): string[] {
+  return skills.split(",").map((s) => s.trim()).filter(Boolean);
+}
+import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
+import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
+import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 
 export default function NewJobPage() {
   const session = useSession();
@@ -69,8 +87,10 @@ export default function NewJobPage() {
 
   async function submit() {
     setError(null);
+    const category = d.category === CUSTOM_CATEGORY ? d.customCategory.trim() : d.category;
     if (d.title.trim().length < 4) return setError("Give the job a real title (4+ characters).");
     if (d.description.trim().length < 20) return setError("The brief needs at least 20 characters — describe the work and the acceptance bar.");
+    if (category.length < 2) return setError("Pick a category, or type a custom one (2+ characters).");
     if (min <= 0 || max <= 0 || min > max) return setError("Budget range must be positive, with min ≤ max.");
     if (!d.milestones.length || !d.milestones.every((m) => m.title.trim() && m.description.trim() && /^\d*\.?\d+$/.test(m.amount)))
       return setError("Every milestone needs a title, a description, and a valid ETH amount.");
@@ -80,7 +100,7 @@ export default function NewJobPage() {
       const job = await post<{ id: string }>("/jobs", {
         title: d.title.trim(),
         description: d.description.trim(),
-        category: d.category,
+        category,
         skills: d.skills.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 15),
         budgetMin: d.budgetMin,
         budgetMax: d.budgetMax,
@@ -101,7 +121,6 @@ export default function NewJobPage() {
       <PageHeader
         title="Break the work into escrowable chunks."
         desc="This saves a private draft. Depositing the budget max publishes it — only funded jobs reach the marketplace."
-        meta={<>client seat<br />draft → deposit → publish</>}
       />
 
       <div className="glass mt-10 space-y-6 rounded-3xl p-7 md:p-9">
@@ -128,12 +147,42 @@ export default function NewJobPage() {
         <div className="grid gap-5 sm:grid-cols-3">
           <div className="space-y-2">
             <label className="text-[13px] font-medium">Category</label>
-            <select
-              value={d.category} onChange={(e) => setD({ ...d, category: e.target.value })}
-              className="h-11 w-full rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none focus:border-rose-accent/50"
-            >
-              {CATEGORIES.map((c) => <option key={c} value={c} className="bg-ink-raised">{c}</option>)}
-            </select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-11 w-full items-center justify-between rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus:border-rose-accent/50"
+                >
+                  <span>{d.category === CUSTOM_CATEGORY ? "Custom…" : d.category}</span>
+                  <CaretDown className="h-4 w-4 shrink-0 text-faint" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="glass-raised w-56 rounded-2xl border-line p-1.5">
+                {CATEGORIES.map((c) => (
+                  <DropdownMenuItem
+                    key={c} onSelect={() => setD({ ...d, category: c })}
+                    className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm"
+                  >
+                    {c}
+                    {d.category === c && <Check className="h-3.5 w-3.5 text-rose-bright" weight="bold" />}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem
+                  onSelect={() => setD({ ...d, category: CUSTOM_CATEGORY })}
+                  className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm text-dim"
+                >
+                  Custom…
+                  {d.category === CUSTOM_CATEGORY && <Check className="h-3.5 w-3.5 text-rose-bright" weight="bold" />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {d.category === CUSTOM_CATEGORY && (
+              <Input
+                value={d.customCategory} onChange={(e) => setD({ ...d, customCategory: e.target.value })}
+                placeholder="e.g. zero-knowledge"
+                className="h-11 border-line bg-white/[0.03] text-sm"
+              />
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-[13px] font-medium">Budget min (ETH)</label>
@@ -147,12 +196,12 @@ export default function NewJobPage() {
 
         <div className="space-y-2">
           <label className="text-[13px] font-medium">Skills</label>
-          <Input
-            value={d.skills} onChange={(e) => setD({ ...d, skills: e.target.value })}
-            placeholder="solidity, foundry, fuzzing"
-            className="h-11 border-line bg-white/[0.03] text-sm"
+          <SkillPicker
+            value={d.skills}
+            onChange={(skills) => setD({ ...d, skills })}
+            onError={setError}
           />
-          <p className="text-[12px] text-faint">Comma-separated, up to 15.</p>
+          <p className="text-[12px] text-faint">Up to 15 — presets or your own, comma-free.</p>
         </div>
 
         {/* milestone builder */}
@@ -226,5 +275,86 @@ export default function NewJobPage() {
       </div>
     </div>
     </RoleGate>
+  );
+}
+
+/* ── multi-select skill dropdown (presets + custom) ─────────────────── */
+
+function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v: string) => void; onError: (e: string) => void }) {
+  const [custom, setCustom] = useState("");
+  const tokens = skillTokens(value);
+
+  function toggle(skill: string) {
+    const next = tokens.includes(skill) ? tokens.filter((t) => t !== skill) : [...tokens, skill];
+    onChange(next.join(", "));
+  }
+
+  function addCustom() {
+    const skill = custom.trim().replace(/,/g, "");
+    if (!skill) return;
+    if (skill.length > 40) return onError("Custom skills cap at 40 characters.");
+    if (tokens.length >= 15) return onError("Up to 15 skills — remove one to add another.");
+    if (tokens.some((t) => t.toLowerCase() === skill.toLowerCase())) return setCustom("");
+    onChange([...tokens, skill].join(", "));
+    setCustom("");
+  }
+
+  const preview = tokens.slice(0, 3).join(", ") + (tokens.length > 3 ? ` +${tokens.length - 3}` : "");
+
+  return (
+    <div className="space-y-2.5">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus:border-rose-accent/50"
+          >
+            <span className={`min-w-0 truncate ${tokens.length ? "" : "text-faint"}`}>
+              {tokens.length ? preview : "Select skills…"}
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              {tokens.length > 0 && <span className="num text-[11px] text-faint">{tokens.length}/15</span>}
+              <CaretDown className="h-4 w-4 text-faint" />
+            </span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="glass-raised w-64 rounded-2xl border-line p-1.5">
+          {PRESET_SKILLS.map((s) => (
+            <DropdownMenuItem
+              key={s}
+              onSelect={(e) => { e.preventDefault(); toggle(s); }}
+              className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm"
+            >
+              {s}
+              {tokens.includes(s) && <Check className="h-3.5 w-3.5 text-rose-bright" weight="bold" />}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator className="bg-white/[0.06]" />
+          <div className="flex items-center gap-1.5 p-1">
+            <Input
+              value={custom} onChange={(e) => setCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
+              placeholder="Custom skill…"
+              className="h-9 flex-1 border-line bg-white/[0.03] text-[13px]"
+            />
+            <Button type="button" onClick={addCustom} disabled={!custom.trim()} className="h-9 shrink-0 rounded-xl bg-white/10 px-3.5 text-[13px] hover:bg-white/20">
+              Add
+            </Button>
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {tokens.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tokens.map((t) => (
+            <Chip key={t} className="gap-1.5 py-1 pl-2.5 pr-1.5">
+              {t}
+              <button type="button" aria-label={`Remove ${t}`} onClick={() => toggle(t)} className="rounded-full p-0.5 text-faint transition-colors hover:text-foreground">
+                <X className="h-3 w-3" weight="bold" />
+              </button>
+            </Chip>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
