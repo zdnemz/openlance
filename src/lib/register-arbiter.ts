@@ -93,11 +93,16 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
       const activeDisputes = Number(activeDisputesRaw ?? 0n);
       const chainNow = Math.floor(Date.now() / 1000);
       if (cancelled) return;
+      // tierSilver/Gold default to minStake*2/*5 (registry initialize) when the
+      // view call is unavailable — never collapse them onto minStake.
+      const min = minStakeWei ?? 0n;
+      const silverFallback = tierSilver ?? (min ? min * 2n : 0n);
+      const goldFallback = tierGold ?? (min ? min * 5n : 0n);
       if (!info) {
         setState({
           registered: false, trustScore: 0, stakeWei: "0", tier: 0,
-          tierSilverWei: (tierSilver ?? minStakeWei ?? 0n).toString(),
-          tierGoldWei: (tierGold ?? minStakeWei ?? 0n).toString(), locked: false, unstakeRequested: false, eligible: false,
+          tierSilverWei: silverFallback.toString(),
+          tierGoldWei: goldFallback.toString(), locked: false, unstakeRequested: false, eligible: false,
           minStakeWei: (minStakeWei ?? 0n).toString(), minScoreToWithdraw: Number(minScore ?? 50n),
           minStakeDurationSeconds: Number(minStakeDuration ?? 0n), unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
           eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false,
@@ -110,8 +115,8 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         trustScore: Number(info[3]),
         stakeWei: (info[4] as bigint).toString(),
         tier: Number(tier ?? 0),
-        tierSilverWei: (tierSilver ?? minStakeWei ?? 0n).toString(),
-        tierGoldWei: (tierGold ?? minStakeWei ?? 0n).toString(),
+        tierSilverWei: silverFallback.toString(),
+        tierGoldWei: goldFallback.toString(),
         locked: Boolean(locked),
         eligible: Boolean(eligible),
         minStakeWei: (minStakeWei ?? 0n).toString(),

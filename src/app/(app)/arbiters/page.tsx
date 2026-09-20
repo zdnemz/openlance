@@ -12,7 +12,8 @@
 import { useArbiters } from "@/lib/queries";
 import { AddressAvatar, Skeleton, EmptyState, press } from "@/components/design";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
-import { shortAddress, dateLabel, formatEth } from "@/lib/format";
+import { shortAddress, dateLabel, formatEth, timeUntil } from "@/lib/format";
+import { TIER_NAMES } from "@/lib/roles";
 import { useRuntime } from "@/lib/runtime";
 import Link from "next/link";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
@@ -23,13 +24,17 @@ import type { ArbiterView } from "@/lib/types";
  * The arbiter's standing, mirroring the registry:
  *   locked   → score below the withdrawal floor: benched + stake locked
  *   unstaking→ requestUnstake called: benched from selection
- *   eligible → drawable for new disputes now
+ *   eligible → drawable for new disputes now (stake ≥ min + duration met)
+ *   understake → stake below min: top up before the duration clock matters
  *   staked   → registered but the min-stake-duration clock is still running
  */
-function standing(a: ArbiterView): { label: string; color: string } {
+function standing(a: ArbiterView, minStakeWei: string): { label: string; color: string } {
   if (a.locked) return { label: "locked", color: "var(--color-state-disputed)" };
   if (a.unstakeRequested) return { label: "unstaking", color: "var(--color-state-pending)" };
   if (a.eligible) return { label: "eligible", color: "var(--color-state-released)" };
+  try {
+    if (BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0")) return { label: "understake", color: "var(--color-state-disputed)" };
+  } catch { /* malformed wei → fall through to staked */ }
   return { label: "staked", color: "var(--color-state-submitted)" };
 }
 
@@ -83,8 +88,9 @@ export default function ArbitersPage() {
       ) : (
         <ol className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
           {ranked.map((a, i) => {
-            const st = standing(a);
-            const belowMinStake = BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0");
+            const st = standing(a, minStakeWei);
+            const tierName = (TIER_NAMES[a.tier ?? 0] ?? "Unstaked").toLowerCase();
+            const belowMinStake = (() => { try { return BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0"); } catch { return false; } })();
             return (
               <li key={a.address}>
                 <Link
@@ -122,7 +128,9 @@ export default function ArbitersPage() {
                         </span>
                       </span>
                       <span className="num mt-0.5 block text-[12px] text-faint">
-                        {a.registeredAt ? `registered ${dateLabel(a.registeredAt)}` : "registered"} · badge {a.sbtTokenId ? `#${a.sbtTokenId}` : "pending"}
+                        {a.registeredAt ? `registered ${dateLabel(a.registeredAt)}` : "registered"} · badge {a.sbtTokenId ? `#${a.sbtTokenId}` : "pending"} · {tierName}
+                        {st.label === "staked" && a.selectableAfter ? ` · selectable ${timeUntil(a.selectableAfter)}` : ""}
+                        {a.kycStatus && a.kycStatus !== "verified" ? ` · kyc ${a.kycStatus}` : ""}
                       </span>
                     </span>
                   </span>
@@ -148,7 +156,7 @@ export default function ArbitersPage() {
                     <span className={`num text-lg font-medium leading-none ${belowMinStake ? "text-state-disputed" : "text-dim"}`}>
                       {formatEth(a.stakeWei)}
                     </span>
-                    <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">ETH staked</span>
+                    <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">ETH · {tierName}</span>
                   </span>
                   {/* trust — the verdict, right rail */}
                   <span className="flex items-baseline justify-between gap-2 border-t border-line pt-4 md:w-24 md:flex-col md:items-end md:border-l md:border-t-0 md:pl-6 md:pt-0">

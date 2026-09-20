@@ -6,7 +6,7 @@
  *   ArbiterStakeSummary — the "Your stake" stat band on /arbiters: a full-width
  *                         read of the connected wallet's position that links to
  *                         the hub. Shown only when useful (staked, or a join CTA).
- *   ArbiterStakeHub     — the two-column staking cockpit on /arbiters/stake:
+ *   ArbiterStakeHub     — the two-column staking cockpit on /stake:
  *                         LEFT is your position (big ETH, trust meter, clocks,
  *                         serving/locked notices), RIGHT is the action panel
  *                         (join · top-up · request/cancel unstake · withdraw).
@@ -32,6 +32,8 @@ import Link from "next/link";
 import { useWallet, useWalletHydrated } from "@/lib/wallet";
 import { useArbiterStaking, type MyArbiterState } from "@/lib/register-arbiter";
 import { useRuntime } from "@/lib/runtime";
+import { useSession } from "@/lib/session";
+import { TIER_NAMES } from "@/lib/roles";
 import { formatEth } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -168,7 +170,7 @@ export function ArbiterStakeSummary() {
           </div>
         </div>
         <Link
-          href="/arbiters/stake"
+          href="/stake"
           className="flex shrink-0 items-center gap-1.5 rounded-full bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-bright"
         >
           Stake &amp; join
@@ -193,10 +195,13 @@ export function ArbiterStakeSummary() {
           <div className="flex items-baseline gap-2">
             <span className="num text-4xl font-medium leading-none tracking-tight">{formatEth(toWei(state.stakeWei))}</span>
             <span className="num text-[13px] text-faint">ETH</span>
+            <span className="num ml-1 rounded-full border border-line px-2 py-0.5 text-[11px] text-dim">
+              {TIER_NAMES[state.tier ?? 0]?.toLowerCase() ?? "unstaked"}
+            </span>
           </div>
         </div>
         <Link
-          href="/arbiters/stake"
+          href="/stake"
           className="flex shrink-0 items-center gap-1.5 rounded-full bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-bright"
         >
           Manage stake
@@ -226,10 +231,11 @@ export function ArbiterStakeSummary() {
   );
 }
 
-/* ── Hub (for /arbiters/stake) ─────────────────────────────────────────────── */
+/* ── Hub (for /stake) ─────────────────────────────────────────────────────── */
 
 export function ArbiterStakeHub() {
   const { address, hydrated, state, register, add, requestUnstake, cancelUnstake, withdraw, chain, minStakeWei, minScoreToWithdraw } = useStakeContext();
+  const kycStatus = useSession((s) => s.user?.kycStatus);
   const [stakeModalOpen, setStakeModalOpen] = useState(false);
   const [stakeInput, setStakeInput] = useState("");
   const [topUpInput, setTopUpInput] = useState("");
@@ -279,6 +285,15 @@ export function ArbiterStakeHub() {
   const exitBlocked = busy || locked;
   const cooldownActive = Boolean(state?.unstakeRequested && minsToWithdraw > 0);
   const st = state ? standingOf(state, minsToEligible, minsToWithdraw) : null;
+  // isEligible covers stake floor + duration + score + bench; when the clock
+  // has passed but stake < min the user is NOT selectable — surface top-up.
+  const belowMinStake = registered && state ? toWei(state.stakeWei) < toWei(state.minStakeWei) : false;
+  const selectableValue = state?.eligible
+    ? "now"
+    : belowMinStake
+      ? `top up to ${formatEth(state?.minStakeWei ?? minStake)} ETH`
+      : `${fmtDuration(minsToEligible * 60)}`;
+  const selectableHint = state?.eligible || belowMinStake ? undefined : `${minStakeDays}d continuous stake`;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
@@ -297,7 +312,7 @@ export function ArbiterStakeHub() {
               <span className="num text-[44px] font-medium leading-none tracking-tight">{formatEth(toWei(state.stakeWei))}</span>
               <span className="num text-[14px] text-faint">ETH staked</span>
               <span className="num ml-1 rounded-full border border-line px-2 py-0.5 text-[11px] text-dim">
-                {["unstaked", "bronze", "silver", "gold"][state.tier ?? 0] ?? "unstaked"}
+                {TIER_NAMES[state.tier ?? 0]?.toLowerCase() ?? "unstaked"}
               </span>
             </div>
 
@@ -318,7 +333,7 @@ export function ArbiterStakeHub() {
             </div>
 
             <dl className="mt-6 space-y-2.5 border-t border-line pt-5 text-[12.5px]">
-              <RuleRow label="Selectable after" value={state.eligible ? "now" : `${fmtDuration(minsToEligible * 60)}`} hint={state.eligible ? undefined : `${minStakeDays}d continuous stake`} />
+              <RuleRow label="Selectable after" value={selectableValue} hint={selectableHint} accent={belowMinStake} />
               <RuleRow
                 label="Exit cooldown"
                 value={state.unstakeRequested ? (cooldownActive ? `${fmtDuration(minsToWithdraw * 60)} left` : "ready") : `${cooldownDays}d`}
@@ -358,6 +373,12 @@ export function ArbiterStakeHub() {
             ? "Top up your stake, bench yourself from selection, or withdraw once the cooldown clears."
             : "Deposit at least the minimum to mint your soulbound badge and enter the selection pool."}
         </p>
+        {kycStatus && kycStatus !== "verified" && (
+          <p className="mt-3 rounded-2xl border border-line bg-white/[0.02] px-3.5 py-2.5 text-[12px] leading-relaxed text-faint">
+            On-chain selection needs stake only, but product standing needs enhanced KYC too — you’re <span className="num text-dim">KYC {kycStatus}</span>.{" "}
+            <Link href="/onboarding" className="text-dim underline underline-offset-2 hover:text-foreground">Verify identity</Link>.
+          </p>
+        )}
 
         <div className="mt-5 space-y-3">
           {!(state && state.registered) ? (

@@ -121,25 +121,35 @@ export function quorumMet(round: RoundState | null): boolean {
 
 /**
  * Reads the escrow's static dispute windows (commit/reveal/appeal), in seconds.
- * Used for the finalize gate and copy.
+ * Used for the finalize gate and copy. Chain reads are authoritative; on failure
+ * (mock dev, offline) falls back to the /overview runtime mirrors so clocks
+ * still render instead of collapsing to 0.
  */
 export function useDisputeWindows(): { commit: number; reveal: number; appeal: number } {
   const escrow = useRuntime((s) => s.escrow);
-  const [w, setW] = useState({ commit: 0, reveal: 0, appeal: 0 });
+  const fbCommit = useRuntime((s) => s.commitWindowSeconds);
+  const fbReveal = useRuntime((s) => s.revealWindowSeconds);
+  const fbAppeal = useRuntime((s) => s.appealWindowSeconds);
+  const [chain, setChain] = useState<{ commit: number; reveal: number; appeal: number } | null>(null);
   useEffect(() => {
     if (!escrow) return;
     let cancelled = false;
     (async () => {
       const [c, r, a] = await Promise.all([
-        readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "commitWindow" }),
-        readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "revealWindow" }),
-        readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "appealWindow" }),
+        readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "commitWindow" }).catch(() => null),
+        readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "revealWindow" }).catch(() => null),
+        readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "appealWindow" }).catch(() => null),
       ]);
-      if (!cancelled) setW({ commit: Number(c ?? 0n), reveal: Number(r ?? 0n), appeal: Number(a ?? 0n) });
+      if (cancelled) return;
+      if (c !== null || r !== null || a !== null) setChain({
+        commit: Number(c ?? BigInt(fbCommit)),
+        reveal: Number(r ?? BigInt(fbReveal)),
+        appeal: Number(a ?? BigInt(fbAppeal)),
+      });
     })();
     return () => { cancelled = true; };
-  }, [escrow]);
-  return w;
+  }, [escrow, fbCommit, fbReveal, fbAppeal]);
+  return chain ?? { commit: fbCommit, reveal: fbReveal, appeal: fbAppeal };
 }
 
 /** A 1-second ticking clock; returns current unix seconds. */
