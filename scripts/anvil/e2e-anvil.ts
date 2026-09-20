@@ -11,8 +11,8 @@
  *   1. anvil --block-time 1 --chain-id 31337          # background
  *   2. forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 \
  *        --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --broadcast
- *   3. API on :3031 with CHAIN_MODE=real CHAIN_ID=31337 PGLITE_DATA_DIR=./data/pglite-anvil
- *      (fresh DB — db:migrate first), ESCROW_ADDRESS / ARBITER_REGISTRY_ADDRESS set,
+  *   3. API on :3031 with CHAIN_MODE=real CHAIN_ID=31337 DATABASE_URL=postgresql://.../openlance
+  *      (fresh env DB — db:migrate first), ESCROW_ADDRESS / ARBITER_REGISTRY_ADDRESS set,
  *      INDEXER_CONFIRMATIONS=1 INDEXER_POLL_MS=1500.
  *
  * Run: bun scripts/e2e-anvil.ts
@@ -95,6 +95,21 @@ async function siweLogin(w: { key: string; addr: string }) {
   return res.data.token
 }
 
+// Walk the real onboarding path: writes (jobs, proposals, profile, …) require
+// verified KYC, so the e2e wallets verify exactly like users do.
+async function onboard(token: string, name: string, role: 'client' | 'freelancer' | 'arbiter') {
+  const r = await api('POST', '/users/me/role', { role }, token)
+  if (r.status !== 200 || !r.data) throw new Error(`role failed: ${JSON.stringify(r)}`)
+  const sub = (await api('POST', '/users/me/kyc', {
+    fullName: name, country: 'E2E', idType: 'passport', idNumber: 'E2E-0001', livenessConfirmed: true,
+  }, token)) as { status: number; data?: { user: { kycStatus: string } } }
+  if (sub.status !== 200 || !sub.data) throw new Error(`kyc failed: ${JSON.stringify(sub)}`)
+  if (sub.data.user.kycStatus === 'pending') {
+    const ap = await api('POST', '/users/me/kyc?action=approve', {}, token)
+    if (ap.status !== 200) throw new Error(`approve failed: ${JSON.stringify(ap)}`)
+  }
+}
+
 type Mirror = { milestones: { id: string; chainStatus: string; onchainId: number | null; fund: { ref: string; amountWei: string } }[]; status: string }
 async function projectView(id: string, token: string) {
   return (await api('GET', `/projects/${id}`, undefined, token)) as { data: Mirror }
@@ -119,6 +134,8 @@ const tokenA = await siweLogin(A)
 const tokenB = await siweLogin(B)
 const tokenC = await siweLogin(C)
 check('three wallets authenticated', !!tokenA && !!tokenB && !!tokenC)
+await onboard(tokenA, 'E2E Client', 'client')
+await onboard(tokenB, 'E2E Freelancer', 'freelancer')
 
 console.log('── marketplace: job → proposal → award (off-chain)')
 const job = (await api('POST', '/jobs', {

@@ -229,6 +229,17 @@ async function siweLogin(p: { key: string; addr: string }) {
   return res.token as string
 }
 
+// Onboard a persona through the real flow: pick role → verify KYC → approve.
+// Writes (jobs, proposals, profile, messages…) require verified KYC, so the
+// seed must walk the same path a user does. Idempotent per fresh DB.
+async function onboard(token: string, name: string, role: 'client' | 'freelancer' | 'arbiter') {
+  await api('POST', '/users/me/role', { role }, token)
+  const sub = await api('POST', '/users/me/kyc', {
+    fullName: name, country: 'Seedland', idType: 'passport', idNumber: 'SEED-0001', livenessConfirmed: true,
+  }, token)
+  if (sub.user.kycStatus === 'pending') await api('POST', '/users/me/kyc?action=approve', {}, token)
+}
+
 type Mirror = { milestones: { id: string; chainStatus: string; onchainId: number | null; fund: { ref: string; amountWei: string } }[]; status: string }
 async function mirrorWait(label: string, projectId: string, token: string, pred: (p: Mirror) => boolean, timeoutMs = 40_000) {
   const started = Date.now()
@@ -254,6 +265,13 @@ async function main() {
     rhys: await siweLogin(P.rhys), ingrid: await siweLogin(P.ingrid),
   }
 
+  log('onboarding personas (role + verified KYC — writes require it)')
+  await onboard(t.mara, P.mara.name, 'client')
+  await onboard(t.dario, P.dario.name, 'freelancer')
+  await onboard(t.junko, P.junko.name, 'client')
+  await onboard(t.rhys, P.rhys.name, 'freelancer')
+  await onboard(t.ingrid, P.ingrid.name, 'arbiter')
+
   log('writing profiles')
   await api('PATCH', '/users/me', {
     displayName: 'Mara Voss', role: 'client', bio: 'Founder at Studio Halo — a five-person product studio shipping web3 tooling. I hire for audit-grade work and pay through escrow, milestone by milestone.',
@@ -264,7 +282,7 @@ async function main() {
     skills: ['solidity', 'foundry', 'fuzzing', 'security', 'vyper'],
   }, t.dario)
   await api('PATCH', '/users/me', {
-    displayName: 'Junko Almeida', role: 'both', bio: 'Full-stack dev (Next.js/Rust). I build trading dashboards and post the occasional contracts job when my queue clears.',
+    displayName: 'Junko Almeida', role: 'client', bio: 'Full-stack dev (Next.js/Rust). I build trading dashboards and post the occasional contracts job when my queue clears.',
     skills: ['nextjs', 'react', 'rust', 'websockets', 'typescript'],
   }, t.junko)
   await api('PATCH', '/users/me', {
@@ -272,18 +290,22 @@ async function main() {
     skills: ['react', 'nextjs', 'canvas', 'websockets', 'tailwind'],
   }, t.rhys)
   await api('PATCH', '/users/me', {
-    displayName: 'Ingrid Salm', role: 'freelancer', bio: 'Security researcher and OpenLance arbiter. 40+ peer reviews, MEV-adjacent by day. I resolve disputes on the evidence, not the vibes.',
+    displayName: 'Ingrid Salm', role: 'arbiter', bio: 'Security researcher and OpenLance arbiter. 40+ peer reviews, MEV-adjacent by day. I resolve disputes on the evidence, not the vibes.',
     skills: ['security', 'auditing', 'solidity'],
   }, t.ingrid)
 
+  const tNils = await siweLogin(P.nils)
+  await onboard(tNils, P.nils.name, 'arbiter')
   await api('PATCH', '/users/me', {
-    displayName: 'Nils Ekmann', role: 'freelancer', bio: 'Backend auditor turned arbiter. Ex-Erigon contributor; I read diffs for fun and settle on the spec, not the volume of the argument.',
+    displayName: 'Nils Ekmann', bio: 'Backend auditor turned arbiter. Ex-Erigon contributor; I read diffs for fun and settle on the spec, not the volume of the argument.',
     skills: ['auditing', 'golang', 'protocol-design'],
-  }, await siweLogin(P.nils))
+  }, tNils)
+  const tPriya = await siweLogin(P.priya)
+  await onboard(tPriya, P.priya.name, 'arbiter')
   await api('PATCH', '/users/me', {
-    displayName: 'Priya Raghunathan', role: 'freelancer', bio: 'Formal-methods engineer (TLA+, Certora). Arbiter on the side — disputes with a written spec end in one read; disputes without one end in questions.',
+    displayName: 'Priya Raghunathan', bio: 'Formal-methods engineer (TLA+, Certora). Arbiter on the side — disputes with a written spec end in one read; disputes without one end in questions.',
     skills: ['formal-methods', 'solidity', 'certora'],
-  }, await siweLogin(P.priya))
+  }, tPriya)
 
   log('registering arbiters on-chain (Ingrid, Nils, Priya)')
   for (const a of [P.ingrid, P.nils, P.priya]) {
@@ -359,6 +381,9 @@ async function main() {
   }, t.junko)
 
   log('submitting proposals')
+  // Junko posted the NFT job as a client; stepping UP to freelancer resets her
+  // KYC, so she re-verifies before proposing — the same path a user walks.
+  await onboard(t.junko, P.junko.name, 'freelancer')
   const darioAudit = await api('POST', `/jobs/${auditJob.id}/proposals`, {
     coverNote: 'Bridges are exactly my lane — I spent two years inside one. Plan: day one I map the message layer and hand you the threat model; week two is the invariant suite (I will show you the handler architecture first, no black box); report lands with a retest. I quote the middle milestone heaviest because that is where the risk lives. Happy to walk through a prior bridge audit on a call.',
     deliveryDays: 21,
