@@ -96,14 +96,24 @@ export async function readContract<T = unknown>(opts: {
   abi: Abi;
   functionName: string;
   args?: unknown[];
+  /** Called with the revert/transport reason on failure (reads stay null-safe). */
+  onError?: (functionName: string, message: string) => void;
 }): Promise<T | null> {
+  const fail = (message: string) => {
+    opts.onError?.(opts.functionName, message);
+    return null;
+  };
   try {
     const data = encodeFunctionData({ abi: opts.abi, functionName: opts.functionName, args: opts.args ?? [] });
     const raw = await rpc<`0x${string}` | null>("eth_call", [{ to: opts.to, data }, "latest"]);
-    if (!raw || raw === "0x") return null;
-    return decodeFunctionResult({ abi: opts.abi, functionName: opts.functionName, data: raw }) as T;
-  } catch {
-    return null; // contract not deployed / wrong chain → callers render an offline state
+    if (!raw || raw === "0x") return fail("empty response — no contract code at target?");
+    try {
+      return decodeFunctionResult({ abi: opts.abi, functionName: opts.functionName, data: raw }) as T;
+    } catch (err) {
+      return fail(`decode failed: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`);
+    }
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
   }
 }
 

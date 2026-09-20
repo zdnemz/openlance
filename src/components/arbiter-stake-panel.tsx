@@ -555,6 +555,7 @@ export function ArbiterStakeHub() {
                   {!registryKnown
                     ? "App config still loading — contract addresses unknown."
                     : "Live registry reads are unavailable — tiers and minimums are estimates. Check your wallet network before confirming."}{" "}
+                  {state?.readError && <span className="num block truncate opacity-80" title={state.readError}>last error: {state.readError}</span>}{" "}
                   <button
                     type="button"
                     disabled={retrying}

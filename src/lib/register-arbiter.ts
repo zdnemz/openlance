@@ -38,6 +38,8 @@ export interface MyArbiterState {
   minStakeWei: string;
   /** False when the minStake read failed — value checks below would be lies. */
   minStakeKnown: boolean;
+  /** First chain-read failure reason (verbatim) — surfaced so users can report it. */
+  readError: string | null;
   minScoreToWithdraw: number;
   /** Seconds of continuous stake required before selection. */
   minStakeDurationSeconds: number;
@@ -75,24 +77,30 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
     }
     let cancelled = false;
     (async () => {
-      const info = await readContract<readonly unknown[]>({
+      let firstErr: string | null = null;
+      const noteErr = (fn: string, message: string) => { firstErr ??= `${fn}: ${message}`; };
+      const rc = <T,>(o: Omit<Parameters<typeof readContract>[0], "onError">) =>
+        readContract<T>({ ...o, onError: noteErr });
+      const info = await rc<readonly unknown[]>({
         to: registry, abi: REGISTRY_ABI, functionName: "arbiterInfo", args: [address],
       });
-      const minStakeWei = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStake" });
-      const minScore = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minScoreToWithdraw" });
-      const minStakeDuration = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStakeDuration" });
-      const unstakeCooldown = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeCooldown" });
-      const eligible = await readContract<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isEligible", args: [address] });
-      const locked = await readContract<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isLocked", args: [address] });
-      const eligibleAt = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "eligibleAt", args: [address] });
-      const unstakeReadyAt = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeReadyAt", args: [address] });
+      const minStakeWei = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStake" });
+      const minScore = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minScoreToWithdraw" });
+      const minStakeDuration = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStakeDuration" });
+      const unstakeCooldown = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeCooldown" });
+      const eligible = await rc<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isEligible", args: [address] });
+      const locked = await rc<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isLocked", args: [address] });
+      const eligibleAt = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "eligibleAt", args: [address] });
+      const unstakeReadyAt = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeReadyAt", args: [address] });
+      // Tier reads are optional (fall back to minStake×2/×5) — don't let them
+      // mask or trigger the load-bearing readError below.
       const tier = await readContract<number>({ to: registry, abi: REGISTRY_ABI, functionName: "tierOf", args: [address] }).catch(() => 0);
       const tierSilver = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierSilver" }).catch(() => null);
       const tierGold = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierGold" }).catch(() => null);
       // The escrow owns the "active dispute" bookkeeping the registry's _isBusy
       // guard consults; read it directly so the UI matches the revert condition.
       const activeDisputesRaw = escrow
-        ? await readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "activeDisputes", args: [address] })
+        ? await rc<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "activeDisputes", args: [address] })
         : null;
       const activeDisputes = Number(activeDisputesRaw ?? 0n);
       const chainNow = Math.floor(Date.now() / 1000);
@@ -107,7 +115,7 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
           registered: false, trustScore: 0, stakeWei: "0", tier: 0,
           tierSilverWei: silverFallback.toString(),
           tierGoldWei: goldFallback.toString(), locked: false, unstakeRequested: false, eligible: false,
-          minStakeWei: (minStakeWei ?? 0n).toString(), minStakeKnown: minStakeWei !== null, minScoreToWithdraw: Number(minScore ?? 50n),
+          minStakeWei: (minStakeWei ?? 0n).toString(), minStakeKnown: minStakeWei !== null, readError: firstErr, minScoreToWithdraw: Number(minScore ?? 50n),
           minStakeDurationSeconds: Number(minStakeDuration ?? 0n), unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
           eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false,
         });
@@ -125,6 +133,7 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         eligible: Boolean(eligible),
         minStakeWei: (minStakeWei ?? 0n).toString(),
         minStakeKnown: minStakeWei !== null,
+        readError: firstErr,
         minScoreToWithdraw: Number(minScore ?? 50n),
         minStakeDurationSeconds: Number(minStakeDuration ?? 0n),
         unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
