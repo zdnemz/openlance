@@ -13,8 +13,10 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWallet, readContract } from "@/lib/wallet";
 import { useRuntime } from "@/lib/runtime";
+import { qk } from "@/lib/queries";
 import { REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { toWei } from "@/lib/format";
 import {
@@ -34,6 +36,8 @@ export interface MyArbiterState {
   unstakeRequested: boolean;
   eligible: boolean;
   minStakeWei: string;
+  /** False when the minStake read failed — value checks below would be lies. */
+  minStakeKnown: boolean;
   minScoreToWithdraw: number;
   /** Seconds of continuous stake required before selection. */
   minStakeDurationSeconds: number;
@@ -103,7 +107,7 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
           registered: false, trustScore: 0, stakeWei: "0", tier: 0,
           tierSilverWei: silverFallback.toString(),
           tierGoldWei: goldFallback.toString(), locked: false, unstakeRequested: false, eligible: false,
-          minStakeWei: (minStakeWei ?? 0n).toString(), minScoreToWithdraw: Number(minScore ?? 50n),
+          minStakeWei: (minStakeWei ?? 0n).toString(), minStakeKnown: minStakeWei !== null, minScoreToWithdraw: Number(minScore ?? 50n),
           minStakeDurationSeconds: Number(minStakeDuration ?? 0n), unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
           eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false,
         });
@@ -120,6 +124,7 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         locked: Boolean(locked),
         eligible: Boolean(eligible),
         minStakeWei: (minStakeWei ?? 0n).toString(),
+        minStakeKnown: minStakeWei !== null,
         minScoreToWithdraw: Number(minScore ?? 50n),
         minStakeDurationSeconds: Number(minStakeDuration ?? 0n),
         unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
@@ -142,41 +147,54 @@ export function useArbiterStaking() {
   const chain = useChainAction();
   const { state, refresh } = useMyArbiterState();
   const { address } = useWallet();
+  const qc = useQueryClient();
+  // Chain reads + off-chain mirrors converge after every stake tx; without
+  // this the panel keeps offering "join" for a registered arbiter (whose next
+  // register would revert AlreadyRegistered).
+  const synced = useCallback(() => {
+    refresh();
+    void qc.invalidateQueries({ queryKey: qk.arbiters });
+    void qc.invalidateQueries({ queryKey: qk.overview });
+  }, [refresh, qc]);
 
   const register = useCallback(async (stakeWei: bigint) => {
+    if (!state?.minStakeKnown) {
+      toast.error("Registry unreachable", { description: "Couldn't read the live minimum — check your wallet network and retry." });
+      return { ok: false };
+    }
     const min = toWei(state?.minStakeWei ?? "0");
     if (stakeWei < min) {
       toast.error("Stake below minimum", { description: `At least ${min.toString()} wei is required.` });
       return { ok: false };
     }
     const res = await registerArbiterWithStakeAction(chain.run)(stakeWei);
-    if (res.ok) refresh();
+    if (res.ok) synced();
     return res;
-  }, [chain.run, state?.minStakeWei, refresh]);
+  }, [chain.run, state?.minStakeWei, state?.minStakeKnown, synced]);
 
   const add = useCallback(async (amountWei: bigint) => {
     const res = await addStakeAction(chain.run)(amountWei);
-    if (res.ok) refresh();
+    if (res.ok) synced();
     return res;
-  }, [chain.run, refresh]);
+  }, [chain.run, synced]);
 
   const requestUnstake = useCallback(async () => {
     const res = await requestUnstakeAction(chain.run)();
-    if (res.ok) refresh();
+    if (res.ok) synced();
     return res;
-  }, [chain.run, refresh]);
+  }, [chain.run, synced]);
 
   const cancelUnstake = useCallback(async () => {
     const res = await cancelUnstakeAction(chain.run)();
-    if (res.ok) refresh();
+    if (res.ok) synced();
     return res;
-  }, [chain.run, refresh]);
+  }, [chain.run, synced]);
 
   const withdraw = useCallback(async () => {
     const res = await withdrawStakeAction(chain.run)();
-    if (res.ok) refresh();
+    if (res.ok) synced();
     return res;
-  }, [chain.run, refresh]);
+  }, [chain.run, synced]);
 
   return { chain, state, address, register, add, requestUnstake, cancelUnstake, withdraw, refresh };
 }

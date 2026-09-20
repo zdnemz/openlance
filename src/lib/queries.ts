@@ -144,7 +144,7 @@ export function useDisputes() {
 }
 
 export function useArbiters() {
-  return useQuery({ queryKey: qk.arbiters, queryFn: () => get<ArbiterView[]>("/arbiters") });
+  return useQuery({ queryKey: qk.arbiters, queryFn: () => get<ArbiterView[]>("/arbiters"), refetchInterval: 15_000 });
 }
 
 export function useUser(address: string) {

@@ -244,6 +244,9 @@ export function ArbiterStakeHub() {
   const stakeWei = ethToWei(stakeInput);
   const minStake = state?.minStakeWei ?? minStakeWei;
   const belowMin = stakeWei < toWei(minStake);
+  // minStakeKnown=false means the registry reads failed: any minimum shown is
+  // a guess, so Confirm stays shut instead of sending a reverting stake.
+  const minKnown = state?.minStakeKnown ?? false;
 
   // Close the modal once the stake tx has fully settled, and reset the amount.
   useEffect(() => {
@@ -535,6 +538,11 @@ export function ArbiterStakeHub() {
                 Minimum <span className="num text-dim">{formatEth(minStake)} ETH</span>. Higher tiers (Silver/Gold) raise
                 your selection weight — Escrow snapshots <span className="num">stakeOf</span> per round. You can top up later.
               </p>
+              {!minKnown && (
+                <p className="mt-1.5 text-[11.5px] text-state-disputed">
+                  Live registry reads are unavailable — tiers and minimums are estimates. Check your wallet network before confirming.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2 rounded-2xl border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
@@ -575,9 +583,10 @@ export function ArbiterStakeHub() {
             </Button>
             <Button
               type="button"
-              disabled={active || belowMin}
+              disabled={active || belowMin || !minKnown}
               onClick={() => register(stakeWei)}
               className="rounded-full bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
+              title={!minKnown ? "Live registry reads unavailable — check your wallet network" : undefined}
             >
               {active ? (
                 <span className="inline-flex items-center gap-2">
