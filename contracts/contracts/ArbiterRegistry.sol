@@ -5,6 +5,8 @@ import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC72
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {ERC2771ContextLite} from "./ERC2771ContextLite.sol";
+import {ContextUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import {IArbiterRegistry} from "./IArbiterRegistry.sol";
 
 /**
@@ -46,7 +48,7 @@ import {IArbiterRegistry} from "./IArbiterRegistry.sol";
  *       - Stake/slash/treasury changes are owner-gated (timelock in prod).
  *       - A locked arbiter cannot withdraw, so misbehaviour has real skin.
  */
-contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient {
+contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient, ERC2771ContextLite {
     // ── Immutable score constants (part of the public contract) ────────────────
     uint256 public constant MAX_SCORE = 100;
     int256 public constant DELTA_MAJORITY = 5; // voted with the majority
@@ -93,7 +95,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     struct ArbiterInfo {
         bool registered;
         bool unstakeRequested;
-        uint256 tokenId; // latest SBT (re-registration mints a fresh one)
+        uint256 tokenId; // permanent SBT per wallet (reused on restake)
         uint256 trustScore;
         uint256 stake; // wei currently deposited as collateral
         uint256 resolutions;
@@ -161,7 +163,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
 
     /// @dev Reserved storage for future upgrades. Shrink only by the number of
     ///      slots added above it.
-    uint256[36] private __gap;
+    uint256[35] private __gap;
 
     modifier onlyEscrow() {
         if (msg.sender != escrow) revert NotEscrow();
@@ -183,6 +185,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      * @param treasury_           receives slashed collateral (defaults to owner if zero)
      * @param minStakeDuration_   seconds of continuous stake required before selection
      * @param unstakeCooldown_    seconds staked before requestUnstake may be called
+     * @param trustedForwarder_   ERC-2771 forwarder trusted for gasless meta-txs
+     *                            (address(0) disables sponsorship forwarding)
      */
     function initialize(
         string memory name_,
@@ -192,13 +196,15 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         uint256 minScoreToWithdraw_,
         address treasury_,
         uint256 minStakeDuration_,
-        uint256 unstakeCooldown_
+        uint256 unstakeCooldown_,
+        address trustedForwarder_
     ) external initializer {
         if (owner_ == address(0)) revert ZeroAddress();
         if (minScoreToWithdraw_ > MAX_SCORE) revert ScoreOutOfRange(minScoreToWithdraw_);
 
         __ERC721_init(name_, symbol_);
         __Ownable_init(owner_);
+        __ERC2771ContextLite_init(trustedForwarder_);
         nextTokenId = 1;
         minStake = minStake_;
         minScoreToWithdraw = minScoreToWithdraw_;
@@ -225,6 +231,14 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         emit EscrowSet(escrow_);
     }
 
+    /**
+     * @notice Repoint the trusted ERC-2771 forwarder (gasless meta-tx sponsor).
+     *         Owner-gated (timelock in prod); address(0) disables forwarding.
+     */
+    function setTrustedForwarder(address forwarder_) external onlyOwner {
+        _setTrustedForwarder(forwarder_);
+    }
+
     // ── Registration & staking ─────────────────────────────────────────────────
 
     /**
@@ -234,7 +248,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      */
     function registerArbiter() external payable returns (uint256 tokenId) {
         if (msg.value < minStake) revert StakeBelowMinimum(msg.value, minStake);
-        tokenId = _enroll(msg.sender, msg.value);
+        tokenId = _enroll(_msgSender(), msg.value);
     }
 
     /**
@@ -253,11 +267,12 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      *         drew the stake toward (or below) the floor.
      */
     function addStake() external payable {
-        ArbiterInfo storage info = arbiters[msg.sender];
-        if (!info.registered) revert NotRegistered(msg.sender);
+        address who = _msgSender();
+        ArbiterInfo storage info = arbiters[who];
+        if (!info.registered) revert NotRegistered(who);
         if (msg.value == 0) revert NoStake();
         info.stake += msg.value;
-        emit StakeDeposited(msg.sender, msg.value, info.stake);
+        emit StakeDeposited(who, msg.value, info.stake);
     }
 
     /**
@@ -268,15 +283,16 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      *         requestUnstake (idle, healthy score, aged stake).
      */
     function reduceStake(uint256 amount) external nonReentrant {
-        ArbiterInfo storage info = arbiters[msg.sender];
-        if (!info.registered) revert NotRegistered(msg.sender);
+        address who = _msgSender();
+        ArbiterInfo storage info = arbiters[who];
+        if (!info.registered) revert NotRegistered(who);
         if (amount == 0) revert NoStake();
         if (amount >= info.stake) revert FullExitRequired();
         uint256 remaining = info.stake - amount;
         if (remaining < minStake) revert RemainingBelowMinimum(remaining, minStake);
-        if (_isBusy(msg.sender)) revert StillHandlingDispute(msg.sender);
+        if (_isBusy(who)) revert StillHandlingDispute(who);
         if (info.trustScore < minScoreToWithdraw) {
-            emit StakeLocked(msg.sender, info.stake, info.trustScore);
+            emit StakeLocked(who, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
         }
         uint256 readyAt = info.stakedAt + unstakeCooldown;
@@ -284,8 +300,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
 
         // EFFECTS before INTERACTION.
         info.stake = remaining;
-        emit StakeReduced(msg.sender, amount, remaining);
-        _pay(msg.sender, amount);
+        emit StakeReduced(who, amount, remaining);
+        _pay(who, amount);
     }
 
     /**
@@ -298,13 +314,14 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      *         Withdrawal after a request is immediate (no second wait).
      */
     function requestUnstake() external {
-        ArbiterInfo storage info = arbiters[msg.sender];
-        if (!info.registered) revert NotRegistered(msg.sender);
+        address who = _msgSender();
+        ArbiterInfo storage info = arbiters[who];
+        if (!info.registered) revert NotRegistered(who);
         if (info.unstakeRequested) revert UnstakeAlreadyRequested();
         if (info.stake == 0) revert NoStake();
-        if (_isBusy(msg.sender)) revert StillHandlingDispute(msg.sender);
+        if (_isBusy(who)) revert StillHandlingDispute(who);
         if (info.trustScore < minScoreToWithdraw) {
-            emit StakeLocked(msg.sender, info.stake, info.trustScore);
+            emit StakeLocked(who, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
         }
         uint256 readyAt = info.stakedAt + unstakeCooldown;
@@ -312,16 +329,17 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
 
         info.unstakeRequested = true;
         info.unstakeRequestedAt = block.timestamp; // record only; withdrawal follows immediately
-        emit UnstakeRequested(msg.sender, info.stake);
+        emit UnstakeRequested(who, info.stake);
     }
 
     /// @notice Cancel a pending unstake and rejoin the selection pool.
     function cancelUnstake() external {
-        ArbiterInfo storage info = arbiters[msg.sender];
+        address who = _msgSender();
+        ArbiterInfo storage info = arbiters[who];
         if (!info.unstakeRequested) revert UnstakeNotRequested();
         info.unstakeRequested = false;
         info.unstakeRequestedAt = 0; // clear the request record
-        emit UnstakeCancelled(msg.sender);
+        emit UnstakeCancelled(who);
     }
 
     /**
@@ -333,12 +351,13 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      *         before the ETH transfer (CEI).
      */
     function withdrawStake() external nonReentrant {
-        ArbiterInfo storage info = arbiters[msg.sender];
-        if (!info.registered) revert NotRegistered(msg.sender);
+        address who = _msgSender();
+        ArbiterInfo storage info = arbiters[who];
+        if (!info.registered) revert NotRegistered(who);
         if (!info.unstakeRequested) revert UnstakeNotRequested();
-        if (_isBusy(msg.sender)) revert StillHandlingDispute(msg.sender);
+        if (_isBusy(who)) revert StillHandlingDispute(who);
         if (info.trustScore < minScoreToWithdraw) {
-            emit StakeLocked(msg.sender, info.stake, info.trustScore);
+            emit StakeLocked(who, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
         }
         uint256 amount = info.stake;
@@ -349,11 +368,11 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         info.unstakeRequested = false;
         info.unstakeRequestedAt = 0;
         info.registered = false; // leaves the roster; badge (SBT) stays as history
-        _rosterRemove(msg.sender);
+        _rosterRemove(who);
 
-        emit StakeWithdrawn(msg.sender, amount);
-        emit ArbiterDeregistered(msg.sender);
-        _pay(msg.sender, amount);
+        emit StakeWithdrawn(who, amount);
+        emit ArbiterDeregistered(who);
+        _pay(who, amount);
     }
 
     // ── Escrow-only levers ─────────────────────────────────────────────────────
@@ -548,17 +567,24 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         ArbiterInfo storage info = arbiters[arbiter];
         if (info.registered) revert AlreadyRegistered(arbiter);
 
-        tokenId = nextTokenId++;
         info.registered = true;
-        info.tokenId = tokenId;
-        info.trustScore = MAX_SCORE; // new arbiters start perfect
         info.stake = value;
         info.unstakeRequested = false;
         info.stakedAt = block.timestamp; // starts the min-stake-duration clock
         info.unstakeRequestedAt = 0;
 
+        if (info.tokenId == 0) {
+            // First-time wallet: mint the soulbound badge, start perfect.
+            tokenId = nextTokenId++;
+            info.tokenId = tokenId;
+            info.trustScore = MAX_SCORE;
+            _mint(arbiter, tokenId);
+        } else {
+            // ponytail: returning wallet reuses its SBT; trustScore + resolutions stay permanent (0 = perma-banned, still ineligible).
+            tokenId = info.tokenId;
+        }
+
         _rosterAdd(arbiter);
-        _mint(arbiter, tokenId);
         emit ArbiterRegistered(arbiter, tokenId);
         emit StakeDeposited(arbiter, value, value);
     }
@@ -637,5 +663,21 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     /// @dev Direct ETH transfers revert; collateral only enters via the staking API.
     receive() external payable {
         revert("ArbiterRegistry: direct transfers not allowed"); // solhint-disable-line reason-string
+    }
+
+    // ── ERC-2771 diamond resolution ──────────────────────────────────────────
+    // ContextUpgradeable is inherited via several bases; these overrides defer
+    // to the ERC-2771-aware implementation (ERC2771ContextLite).
+
+    function _msgSender() internal view override(ERC2771ContextLite, ContextUpgradeable) returns (address) {
+        return super._msgSender();
+    }
+
+    function _msgData() internal view override(ERC2771ContextLite, ContextUpgradeable) returns (bytes calldata) {
+        return super._msgData();
+    }
+
+    function _contextSuffixLength() internal view override(ERC2771ContextLite, ContextUpgradeable) returns (uint256) {
+        return super._contextSuffixLength();
     }
 }

@@ -2,6 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {IArbiterRegistry} from "./IArbiterRegistry.sol";
+import {ERC2771ContextLite} from "./ERC2771ContextLite.sol";
+import {ContextUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
@@ -65,7 +67,7 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
  *      eligible arbiters are drawn, and the 2-of-3 commit-reveal quorum plus
  *      staking/slashing still gate the money.
  */
-contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient {
+contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient, ERC2771ContextLite {
     // ─────────────────────────────────────────────────────────────────────────
     // Types — Status ordinal positions are API: the backend maps uint8 → name
     // (ONCHAIN_MILESTONE_STATUS in src/server/chain/events.ts). Never reorder.
@@ -227,7 +229,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     uint256 public rewardPool; // protocol-subsidised arbiter rewards
 
     /// @dev Reserved storage for future upgrades.
-    uint256[39] private __gap;
+    uint256[38] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -244,6 +246,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      * @param commitWindow_    commit-phase duration in seconds
      * @param revealWindow_    reveal-phase duration in seconds
      * @param appealWindow_    appeal window after finalization, seconds
+     * @param trustedForwarder_ ERC-2771 forwarder trusted for gasless meta-txs
+     *                          (address(0) disables sponsorship forwarding)
      */
     function initialize(
         IArbiterRegistry arbiterRegistry_,
@@ -253,12 +257,14 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         address treasury_,
         uint64 commitWindow_,
         uint64 revealWindow_,
-        uint64 appealWindow_
+        uint64 appealWindow_,
+        address trustedForwarder_
     ) external initializer {
         if (address(arbiterRegistry_) == address(0) || owner_ == address(0)) revert ZeroAddress();
         if (feeBps_ > MAX_FEE_BPS) revert FeeTooHigh(feeBps_, MAX_FEE_BPS);
 
         __Ownable_init(owner_);
+        __ERC2771ContextLite_init(trustedForwarder_);
         arbiterRegistry = arbiterRegistry_;
         feeBps = feeBps_;
         disputeFee = disputeFee_;
@@ -279,18 +285,19 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      */
     function fund(bytes32 ref, address freelancer) external payable {
         if (msg.value == 0) revert ZeroAmount();
-        if (freelancer == address(0) || freelancer == msg.sender) revert InvalidFreelancer();
+        address client = _msgSender();
+        if (freelancer == address(0) || freelancer == client) revert InvalidFreelancer();
 
         uint256 milestoneId = nextMilestoneId++;
         Milestone storage m = milestones_[milestoneId];
         m.ref = ref;
-        m.client = msg.sender;
+        m.client = client;
         m.freelancer = freelancer;
         m.amount = msg.value;
         m.feeBps = feeBps; // snapshot: later fee changes never touch in-flight milestones
         m.status = Status.Funded;
 
-        emit MilestoneFunded(milestoneId, ref, msg.sender, freelancer, msg.value);
+        emit MilestoneFunded(milestoneId, ref, client, freelancer, msg.value);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -300,17 +307,18 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     /// @notice Freelancer signals work is delivered.
     function submit(uint256 milestoneId) external {
         Milestone storage m = _m(milestoneId);
-        if (msg.sender != m.freelancer) revert NotFreelancer();
+        address freelancer = _msgSender();
+        if (freelancer != m.freelancer) revert NotFreelancer();
         if (m.status != Status.Funded) revert WrongStatus(Status.Funded, m.status);
 
         m.status = Status.Submitted;
-        emit MilestoneSubmitted(milestoneId, m.freelancer);
+        emit MilestoneSubmitted(milestoneId, freelancer);
     }
 
     /// @notice Client approves delivered work: fee is taken, principal released.
     function approve(uint256 milestoneId) external nonReentrant {
         Milestone storage m = _m(milestoneId);
-        if (msg.sender != m.client) revert NotClient();
+        if (_msgSender() != m.client) revert NotClient();
         if (m.status != Status.Submitted) revert WrongStatus(Status.Submitted, m.status);
 
         m.status = Status.Released; // EFFECT before INTERACTION (CEI)
@@ -325,7 +333,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     /// @notice Client cancels a funded (not yet submitted) milestone: full refund.
     function cancel(uint256 milestoneId) external nonReentrant {
         Milestone storage m = _m(milestoneId);
-        if (msg.sender != m.client) revert NotClient();
+        if (_msgSender() != m.client) revert NotClient();
         if (m.status != Status.Funded) revert WrongStatus(Status.Funded, m.status);
 
         m.status = Status.Cancelled;
@@ -346,17 +354,18 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      */
     function openDispute(uint256 milestoneId) external payable nonReentrant {
         Milestone storage m = _m(milestoneId);
-        if (msg.sender != m.client && msg.sender != m.freelancer) revert NotParty();
+        address opener = _msgSender();
+        if (opener != m.client && opener != m.freelancer) revert NotParty();
         if (m.status != Status.Funded && m.status != Status.Submitted) revert NotDisputable(m.status);
         if (msg.value < disputeFee) revert DisputeFeeTooLow(msg.value, disputeFee);
 
         m.status = Status.Disputed;
         Dispute storage d = disputes_[milestoneId];
-        d.openedBy = msg.sender;
+        d.openedBy = opener;
         d.openedAt = uint64(block.timestamp);
         d.fee = msg.value;
 
-        emit DisputeOpened(milestoneId, msg.sender, m.amount);
+        emit DisputeOpened(milestoneId, opener, m.amount);
 
         _startRound(milestoneId, m, 0);
     }
@@ -471,14 +480,15 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      */
     function commitVote(uint256 milestoneId, uint8 round, bytes32 commitHash) external {
         Round storage r = _round(milestoneId, round);
+        address arbiter = _msgSender();
         if (r.resolved) revert ArbitrationAlreadyResolved();
-        if (!_isSelected(r, msg.sender)) revert NotSelectedArbiter();
+        if (!_isSelected(r, arbiter)) revert NotSelectedArbiter();
         if (block.timestamp > r.commitDeadline) revert CommitDeadlinePassed();
-        if (r.commits[msg.sender] != bytes32(0)) revert AlreadyCommitted();
+        if (r.commits[arbiter] != bytes32(0)) revert AlreadyCommitted();
 
-        r.commits[msg.sender] = commitHash;
+        r.commits[arbiter] = commitHash;
         r.commitCount += 1;
-        emit VoteCommitted(milestoneId, round, msg.sender, commitHash);
+        emit VoteCommitted(milestoneId, round, arbiter, commitHash);
     }
 
     /**
@@ -487,22 +497,23 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      */
     function revealVote(uint256 milestoneId, uint8 round, uint8 outcome, bytes32 salt) external {
         Round storage r = _round(milestoneId, round);
+        address arbiter = _msgSender();
         if (r.resolved) revert ArbitrationAlreadyResolved();
-        if (!_isSelected(r, msg.sender)) revert NotSelectedArbiter();
+        if (!_isSelected(r, arbiter)) revert NotSelectedArbiter();
         if (block.timestamp <= r.commitDeadline) revert CommitDeadlineNotPassed();
         if (block.timestamp > r.revealDeadline) revert RevealWindowClosed();
-        if (r.revealed[msg.sender]) revert AlreadyRevealed();
+        if (r.revealed[arbiter]) revert AlreadyRevealed();
         if (outcome > uint8(Outcome.Split)) revert InvalidOutcome(outcome);
 
-        bytes32 expected = keccak256(abi.encode(outcome, salt, msg.sender, milestoneId, round));
-        if (r.commits[msg.sender] != expected) revert CommitMismatch();
+        bytes32 expected = keccak256(abi.encode(outcome, salt, arbiter, milestoneId, round));
+        if (r.commits[arbiter] != expected) revert CommitMismatch();
 
-        r.revealed[msg.sender] = true;
-        r.votes[msg.sender] = outcome;
+        r.revealed[arbiter] = true;
+        r.votes[arbiter] = outcome;
         r.revealCount += 1;
         r.tally[outcome] += 1;
 
-        emit VoteRevealed(milestoneId, round, msg.sender, outcome);
+        emit VoteRevealed(milestoneId, round, arbiter, outcome);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -681,7 +692,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         Dispute storage d = disputes_[milestoneId];
         if (d.openedAt == 0) revert NotDisputed();
         Milestone storage m = _m(milestoneId);
-        if (msg.sender != m.client && msg.sender != m.freelancer) revert NotParty();
+        address appellant = _msgSender();
+        if (appellant != m.client && appellant != m.freelancer) revert NotParty();
         if (msg.value < disputeFee) revert DisputeFeeTooLow(msg.value, disputeFee);
 
         uint8 prevRound = d.round;
@@ -694,7 +706,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         d.appealCount += 1;
         d.fee = msg.value; // appeal fee becomes the new reward pot
 
-        emit AppealOpened(milestoneId, newRound, msg.sender, msg.value);
+        emit AppealOpened(milestoneId, newRound, appellant, msg.value);
         _startRound(milestoneId, m, newRound);
     }
 
@@ -768,6 +780,14 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         uint256 old = disputeFee;
         disputeFee = newFee;
         emit DisputeFeeUpdated(old, newFee);
+    }
+
+    /**
+     * @notice Repoint the trusted ERC-2771 forwarder (gasless meta-tx sponsor).
+     *         Owner-gated (timelock in prod); address(0) disables forwarding.
+     */
+    function setTrustedForwarder(address forwarder_) external onlyOwner {
+        _setTrustedForwarder(forwarder_);
     }
 
     /// @notice Fund the reward pool used to top up arbiter rewards.
@@ -979,5 +999,22 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     /// @dev Direct ETH transfers revert, so the balance maps 1:1 to liabilities.
     receive() external payable {
         revert("Escrow: direct transfers not allowed"); // solhint-disable-line reason-string
+    }
+
+    // ── ERC-2771 diamond resolution ──────────────────────────────────────────
+    // Escrow inherits ContextUpgradeable via both Ownable2StepUpgradeable and
+    // ERC2771ContextLite; these explicit overrides defer to the ERC-2771-aware
+    // implementation (the most-derived virtual, i.e. ERC2771ContextLite).
+
+    function _msgSender() internal view override(ERC2771ContextLite, ContextUpgradeable) returns (address) {
+        return super._msgSender();
+    }
+
+    function _msgData() internal view override(ERC2771ContextLite, ContextUpgradeable) returns (bytes calldata) {
+        return super._msgData();
+    }
+
+    function _contextSuffixLength() internal view override(ERC2771ContextLite, ContextUpgradeable) returns (uint256) {
+        return super._contextSuffixLength();
     }
 }
