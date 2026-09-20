@@ -92,31 +92,32 @@ describe("ArbiterRegistry — time-based staking rules", () => {
     );
   });
 
-  it("withdraw is blocked until the unstake cooldown elapses", async function () {
+  it("requestUnstake reverts until the stake has aged; withdraw is then immediate", async function () {
     const { registry, arbiters } = await deployWithEoaOwner();
     const a = arbiters[0]!;
     await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
-    await registry.write.requestUnstake({ account: a.account });
 
-    // Cooldown not yet elapsed → withdraw reverts.
-    await assert.rejects(registry.write.withdrawStake({ account: a.account }), /UnstakeCooldownActive/);
+    // Fresh stake → request reverts with the time it unlocks.
+    await assert.rejects(registry.write.requestUnstake({ account: a.account }), /UnstakeTooEarly/);
+
+    // Still locked right before the window closes.
+    await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) - 10);
+    await assert.rejects(registry.write.requestUnstake({ account: a.account }), /UnstakeTooEarly/);
+
+    // Aged stake → request succeeds, and withdraw pays out with no second wait.
+    await networkHelpers.time.increase(11);
+    await registry.write.requestUnstake({ account: a.account });
     const readyAt = await registry.read.unstakeReadyAt([a.account.address]);
     assert.ok(readyAt > 0n, "unstakeReadyAt should be set while a request is pending");
-
-    // Still blocked right before the window closes.
-    await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) - 10);
-    await assert.rejects(registry.write.withdrawStake({ account: a.account }), /UnstakeCooldownActive/);
-
-    // After the cooldown → withdraw succeeds.
-    await networkHelpers.time.increase(11);
     await registry.write.withdrawStake({ account: a.account });
     assert.equal(await registry.read.isRegistered([a.account.address]), false);
   });
 
-  it("cancelUnstake clears the cooldown clock", async function () {
+  it("cancelUnstake clears the request", async function () {
     const { registry, arbiters } = await deployWithEoaOwner();
     const a = arbiters[0]!;
     await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+    await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) + 1); // age past the request gate
     await registry.write.requestUnstake({ account: a.account });
     assert.ok((await registry.read.unstakeReadyAt([a.account.address])) > 0n);
 
@@ -146,9 +147,9 @@ describe("ArbiterRegistry — unstake / withdraw / lock", () => {
     await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
 
     const pc = await viem.getPublicClient();
-    await registry.write.requestUnstake({ account: a.account });
-    // Wait out the unstake cooldown before the collateral is released.
+    // Age the stake past the request gate; no wait follows the request itself.
     await networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) + 1);
+    await registry.write.requestUnstake({ account: a.account });
     const before = await pc.getBalance({ address: a.account.address });
     await registry.write.withdrawStake({ account: a.account });
     const after = await pc.getBalance({ address: a.account.address });

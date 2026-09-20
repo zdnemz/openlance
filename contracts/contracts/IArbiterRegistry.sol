@@ -40,7 +40,8 @@ interface IArbiterRegistry {
     /// @notice Minimum continuous stake time (seconds) before an arbiter may be selected.
     function minStakeDuration() external view returns (uint256);
 
-    /// @notice Delay (seconds) between requestUnstake and withdrawStake.
+    /// @notice Minimum seconds staked before requestUnstake may be called
+    ///         (withdrawal itself is immediate).
     function unstakeCooldown() external view returns (uint256);
 
     /// @notice Number of arbiters currently on the roster.

@@ -16,8 +16,11 @@ import {IArbiterRegistry} from "./IArbiterRegistry.sol";
  *
  *         ══════════════════════ Staking model ══════════════════════
  *           - registerArbiter() {value: >= MIN_STAKE} → joins the roster, score 100.
- *           - Score >= MIN_SCORE_TO_WITHDRAW (n) → requestUnstake() then
- *             withdrawStake() returns the collateral.
+ *           - requestUnstake() requires the stake to have aged at least
+ *             `unstakeCooldown` seconds (no join-and-leave sniping); it
+ *             benches the arbiter from selection immediately.
+ *           - withdrawStake() pays out IMMEDIATELY once requested (no second
+ *             wait) — provided the score is still >= MIN_SCORE_TO_WITHDRAW.
  *           - Score  < n  → the stake is LOCKED: requestUnstake() reverts and the
  *             arbiter is dropped from the selection pool (cannot be picked for
  *             new disputes) until the score recovers.
@@ -92,7 +95,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         uint256 stake; // wei currently deposited as collateral
         uint256 resolutions;
         uint256 stakedAt; // when the current continuous stake began (min-stake-duration clock)
-        uint256 unstakeRequestedAt; // when requestUnstake was called (cooldown clock)
+        uint256 unstakeRequestedAt; // when requestUnstake was called (record only)
     }
 
     // ── Errors ─────────────────────────────────────────────────────────────────
@@ -114,6 +117,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     error BadTierThresholds(uint256 silver, uint256 gold, uint256 minStake);
     /// @notice Selection blocked: not staked for at least `minStakeDuration` yet.
     error StakeTooRecent(uint256 stakedAt, uint256 minStakeDuration);
+    /// @notice Exit blocked: the stake hasn't aged `unstakeCooldown` yet.
+    error UnstakeTooEarly(uint256 readyAt);
     /// @notice Withdrawal blocked: the `unstakeCooldown` has not elapsed yet.
     error UnstakeCooldownActive(uint256 readyAt);
 
@@ -136,7 +141,9 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     /// @notice Minimum continuous stake time (seconds) before an arbiter may be
     ///         selected for a new dispute — blocks join-and-leave sniping.
     uint256 public minStakeDuration;
-    /// @notice Delay (seconds) between `requestUnstake` and `withdrawStake`.
+    /// @notice Minimum staking time (seconds) before `requestUnstake` may be
+    ///         called — the exit cooldown gates the REQUEST, not the payout:
+    ///         once requested, `withdrawStake` releases immediately.
     uint256 public unstakeCooldown;
     /// @notice Tier floors (wei): bronze = minStake, silver/gold upgrade selection
     ///         weight + fee share. Invariant: minStake <= tierSilver <= tierGold.
@@ -166,7 +173,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
      * @param minScoreToWithdraw_ score threshold n below which the stake locks
      * @param treasury_           receives slashed collateral (defaults to owner if zero)
      * @param minStakeDuration_   seconds of continuous stake required before selection
-     * @param unstakeCooldown_    seconds between requestUnstake and withdrawStake
+     * @param unstakeCooldown_    seconds staked before requestUnstake may be called
      */
     function initialize(
         string memory name_,
@@ -247,9 +254,11 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     /**
      * @notice Signal intent to leave and reclaim collateral. Reverts if the
      *         stake is locked (score < minScoreToWithdraw) — a misbehaving
-     *         arbiter cannot exit with their collateral.
+     *         arbiter cannot exit with their collateral — or if the stake
+     *         hasn't aged `unstakeCooldown` yet (no join-and-leave sniping).
      * @dev    The escrow checks `unstakeRequested` and will not pick the arbiter
      *         for new disputes, so a request effectively benches them immediately.
+     *         Withdrawal after a request is immediate (no second wait).
      */
     function requestUnstake() external {
         ArbiterInfo storage info = arbiters[msg.sender];
@@ -261,9 +270,11 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
             emit StakeLocked(msg.sender, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
         }
+        uint256 readyAt = info.stakedAt + unstakeCooldown;
+        if (block.timestamp < readyAt) revert UnstakeTooEarly(readyAt);
 
         info.unstakeRequested = true;
-        info.unstakeRequestedAt = block.timestamp; // starts the withdraw cooldown
+        info.unstakeRequestedAt = block.timestamp; // record only; withdrawal follows immediately
         emit UnstakeRequested(msg.sender, info.stake);
     }
 
@@ -272,15 +283,15 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         ArbiterInfo storage info = arbiters[msg.sender];
         if (!info.unstakeRequested) revert UnstakeNotRequested();
         info.unstakeRequested = false;
-        info.unstakeRequestedAt = 0; // clear the cooldown clock
+        info.unstakeRequestedAt = 0; // clear the request record
         emit UnstakeCancelled(msg.sender);
     }
 
     /**
-     * @notice Withdraw collateral after `requestUnstake`. Requires the arbiter to
-     *         be free of active disputes (enforced by the escrow call that clears
-     *         `unstakeRequested` only when idle — here we simply require the
-     *         request flag AND a healthy score).
+     * @notice Withdraw collateral after `requestUnstake`. Immediate: the only
+     *         wait in the exit flow is the pre-request stake aging enforced by
+     *         `requestUnstake`. Requires the arbiter to be free of active
+     *         disputes and to hold a healthy score.
      * @dev    Reentrancy-guarded; effects (zero the stake, clear flags) happen
      *         before the ETH transfer (CEI).
      */
@@ -289,10 +300,6 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         if (!info.registered) revert NotRegistered(msg.sender);
         if (!info.unstakeRequested) revert UnstakeNotRequested();
         if (_isBusy(msg.sender)) revert StillHandlingDispute(msg.sender);
-        // Enforce the unstake cooldown: the request must have aged at least
-        // `unstakeCooldown` seconds before the collateral is released.
-        uint256 readyAt = info.unstakeRequestedAt + unstakeCooldown;
-        if (block.timestamp < readyAt) revert UnstakeCooldownActive(readyAt);
         if (info.trustScore < minScoreToWithdraw) {
             emit StakeLocked(msg.sender, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
@@ -415,7 +422,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         return arbiters[arbiter].stakedAt + minStakeDuration;
     }
 
-    /// @notice Unix time at which a pending unstake may be withdrawn (0 if none pending).
+    /// @notice Unix time at which a pending unstake may be withdrawn: the
+    ///         request timestamp itself (withdrawal is immediate; 0 if none).
     function unstakeReadyAt(address arbiter) external view returns (uint256) {
         ArbiterInfo storage info = arbiters[arbiter];
         if (!info.unstakeRequested) return 0;
@@ -477,7 +485,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         emit MinStakeDurationUpdated(old, newSeconds);
     }
 
-    /// @notice Set the delay (seconds) between requestUnstake and withdrawStake.
+    /// @notice Set the minimum staking time (seconds) before `requestUnstake`.
     function setUnstakeCooldown(uint256 newSeconds) external onlyOwner {
         uint256 old = unstakeCooldown;
         unstakeCooldown = newSeconds;
