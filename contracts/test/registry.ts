@@ -280,17 +280,17 @@ describe("ArbiterRegistry — scoring, locking, slashing (via escrow hooks)", ()
 });
 
 describe("ArbiterRegistry — stake tiers", () => {
-  it("defaults silver=2x and gold=5x minStake; tierOf gates on collateral", async function () {
+  it("defaults silver=10x and gold=100x minStake; tierOf gates on collateral", async function () {
     const { registry, arbiters } = await deployWithEoaOwner();
     const [a, b, c] = [arbiters[0]!, arbiters[1]!, arbiters[2]!];
-    assert.equal(await registry.read.tierSilver(), MIN_STAKE * 2n);
-    assert.equal(await registry.read.tierGold(), MIN_STAKE * 5n);
+    assert.equal(await registry.read.tierSilver(), MIN_STAKE * 10n); // 1 ETH
+    assert.equal(await registry.read.tierGold(), MIN_STAKE * 100n); // 10 ETH
 
     await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
     assert.equal(await registry.read.tierOf([a.account.address]), 1); // bronze
-    await registry.write.registerArbiter({ value: MIN_STAKE * 2n, account: b.account });
+    await registry.write.registerArbiter({ value: MIN_STAKE * 10n, account: b.account });
     assert.equal(await registry.read.tierOf([b.account.address]), 2); // silver
-    await registry.write.registerArbiter({ value: MIN_STAKE * 5n, account: c.account });
+    await registry.write.registerArbiter({ value: MIN_STAKE * 100n, account: c.account });
     assert.equal(await registry.read.tierOf([c.account.address]), 3); // gold
   });
 
@@ -299,11 +299,11 @@ describe("ArbiterRegistry — stake tiers", () => {
     const a = arbiters[0]!;
     await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
     assert.equal(await registry.read.tierOf([a.account.address]), 1);
-    await registry.write.addStake({ value: MIN_STAKE, account: a.account }); // 2x → silver
+    await registry.write.addStake({ value: MIN_STAKE * 9n, account: a.account }); // 10x → silver
     assert.equal(await registry.read.tierOf([a.account.address]), 2);
 
     const owner = (await viem.getWalletClients())[0]!;
-    await registry.write.setTierThresholds([MIN_STAKE * 3n, MIN_STAKE * 6n], { account: owner.account });
+    await registry.write.setTierThresholds([MIN_STAKE * 11n, MIN_STAKE * 12n], { account: owner.account });
     assert.equal(await registry.read.tierOf([a.account.address]), 1); // back to bronze
     await assert.rejects(
       registry.write.setTierThresholds([MIN_STAKE - 1n, MIN_STAKE * 6n], { account: owner.account }),

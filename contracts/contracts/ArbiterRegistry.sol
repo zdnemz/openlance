@@ -145,8 +145,9 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     ///         called — the exit cooldown gates the REQUEST, not the payout:
     ///         once requested, `withdrawStake` releases immediately.
     uint256 public unstakeCooldown;
-    /// @notice Tier floors (wei): bronze = minStake, silver/gold upgrade selection
-    ///         weight + fee share. Invariant: minStake <= tierSilver <= tierGold.
+    /// @notice Tier floors (wei): bronze = minStake (0.1 ETH default),
+    ///         silver = 10x (1 ETH), gold = 100x (10 ETH). Silver/gold upgrade
+    ///         selection weight + fee share. Invariant: minStake <= tierSilver <= tierGold.
     uint256 public tierSilver;
     uint256 public tierGold;
 
@@ -196,8 +197,8 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         treasury = treasury_ == address(0) ? owner_ : treasury_;
         minStakeDuration = minStakeDuration_;
         unstakeCooldown = unstakeCooldown_;
-        tierSilver = minStake_ * 2;
-        tierGold = minStake_ * 5;
+        tierSilver = minStake_ * 10; // Silver at 1 ETH with the default 0.1 floor
+        tierGold = minStake_ * 100; // Gold at 10 ETH with the default 0.1 floor
         emit MinStakeDurationUpdated(0, minStakeDuration_);
         emit UnstakeCooldownUpdated(0, unstakeCooldown_);
     }
