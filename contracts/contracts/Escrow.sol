@@ -374,6 +374,22 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      *         an extra reward contribution.
      */
     function openDispute(uint256 milestoneId) external payable nonReentrant {
+        address[3] memory none;
+        _openDispute(milestoneId, none);
+    }
+
+    /**
+     * @notice Same as `openDispute`, but the opener may nominate up to 3
+     *         mutually-agreed arbiters (e.g. locked at project start). Each
+     *         nominee must still be eligible and not a party — anything else is
+     *         skipped and the round is filled at random (fallback), so a stale
+     *         pick can never brick dispute opening.
+     */
+    function openDisputeWith(uint256 milestoneId, address[3] calldata preferred) external payable nonReentrant {
+        _openDispute(milestoneId, [preferred[0], preferred[1], preferred[2]]);
+    }
+
+    function _openDispute(uint256 milestoneId, address[3] memory preferred) private {
         Milestone storage m = _m(milestoneId);
         address opener = _msgSender();
         if (opener != m.client && opener != m.freelancer) revert NotParty();
@@ -388,18 +404,33 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
         emit DisputeOpened(milestoneId, opener, m.amount);
 
-        _startRound(milestoneId, m, 0);
+        _startRound(milestoneId, m, 0, preferred);
     }
 
     /**
-     * @notice Select up to MAX_ARBITERS eligible, non-party arbiters for a new
-     *         round using `prevrandao`. Reverts if fewer than QUORUM are available.
+     * @notice Select up to MAX_ARBITERS arbiters for a new round: preferred
+     *         nominees first (when eligible), then random fill. Reverts if
+     *         fewer than QUORUM are available.
      * @dev    Randomness caveat: see the contract-level note. Draws are without
      *         replacement from the eligible set.
      */
-    function _startRound(uint256 milestoneId, Milestone storage m, uint8 round) private {
+    function _startRound(uint256 milestoneId, Milestone storage m, uint8 round, address[3] memory preferred) private {
         address[3] memory picked;
-        uint8 count = _selectArbiters(milestoneId, m.client, m.freelancer, round, picked);
+        uint8 count;
+        for (uint8 i = 0; i < MAX_ARBITERS; i++) {
+            address nominee = preferred[i];
+            if (
+                nominee != address(0) &&
+                nominee != m.client &&
+                nominee != m.freelancer &&
+                !_alreadyPicked(picked, count, nominee) &&
+                _isEligible(nominee)
+            ) {
+                picked[count] = nominee;
+                count++;
+            }
+        }
+        count = _selectArbiters(milestoneId, m.client, m.freelancer, round, picked, count);
 
         if (count < QUORUM) revert NotEnoughArbiters(count);
 
@@ -442,8 +473,9 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         address client,
         address freelancer,
         uint8 round,
-        address[3] memory picked
-    ) private view returns (uint8 count) {
+        address[3] memory picked,
+        uint8 count
+    ) private view returns (uint8) {
         uint256 len = _rosterLength();
         if (len < QUORUM) return 0; // not enough arbiters to ever reach quorum
 
@@ -729,7 +761,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         d.fee = msg.value; // appeal fee becomes the new reward pot
 
         emit AppealOpened(milestoneId, newRound, appellant, msg.value);
-        _startRound(milestoneId, m, newRound);
+        address[3] memory none; // appeals re-draw fully at random
+        _startRound(milestoneId, m, newRound, none);
     }
 
     /**

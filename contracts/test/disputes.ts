@@ -19,6 +19,13 @@ const SPLIT = 2;
 
 /** Fund a milestone and open a dispute with N registered arbiters available. */
 async function setupDispute(arbitersAvailable = 3) {
+  const ctx = await setupFunded(arbitersAvailable);
+  await ctx.escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: ctx.client.account });
+  return ctx;
+}
+
+/** Same roster + funding, without opening — for openDisputeWith tests. */
+async function setupFunded(arbitersAvailable = 3) {
   const ctx = await deployWithEoaOwner();
   const { registry, escrow, deployer, client, freelancer, arbiters } = ctx;
   // Register the requested number of arbiters (self-register with stake).
@@ -30,7 +37,6 @@ async function setupDispute(arbitersAvailable = 3) {
   await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
   await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
   await escrow.write.submit([1n], { account: freelancer.account });
-  await escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account });
   return { ...ctx, arbiterWallets };
 }
 
@@ -45,6 +51,37 @@ describe("Escrow — multi-arbiter disputes", () => {
       assert.notEqual(a, freelancer.account.address.toLowerCase());
     }
     void arbiters;
+  });
+
+  it("honours mutually-agreed arbiters via openDisputeWith, random-fills the rest", async function () {
+    const { escrow, arbiters, client } = await setupFunded(4);
+    const ZERO = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+    const nom0 = arbiters[0]!.account.address;
+    const nom1 = arbiters[1]!.account.address;
+    await escrow.write.openDisputeWith([1n, [nom0, nom1, ZERO]], { value: DISPUTE_FEE, account: client.account });
+    const r = await getRound(escrow, 1n, 0);
+    assert.equal(r.arbiterCount, 3);
+    const selected = r.arbiters.map((a) => a.toLowerCase());
+    assert.ok(selected.includes(nom0.toLowerCase()), "first nominee must be selected");
+    assert.ok(selected.includes(nom1.toLowerCase()), "second nominee must be selected");
+  });
+
+  it("skips ineligible nominees (party, duplicate) and fills at random", async function () {
+    const { escrow, arbiters, client } = await setupFunded(4);
+    const ZERO = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+    const nom = arbiters[0]!.account.address;
+    // client is a party (skipped), nom appears twice (second copy skipped).
+    await escrow.write.openDisputeWith(
+      [1n, [client.account.address, nom, nom]],
+      { value: DISPUTE_FEE, account: client.account },
+    );
+    const r = await getRound(escrow, 1n, 0);
+    assert.ok(r.arbiterCount >= 2, `quorum must still fill, got ${r.arbiterCount}`);
+    const selected = r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
+    assert.ok(!selected.includes(client.account.address.toLowerCase()), "party must never be selected");
+    assert.ok(selected.includes(nom.toLowerCase()), "eligible nominee must be selected");
+    assert.equal(new Set(selected).size, selected.length, "no duplicate selection");
+    void ZERO;
   });
 
   it("requires at least a 2-arbiter pool to open a dispute", async function () {

@@ -90,6 +90,7 @@ describe("Event-surface lock", () => {
     // Multi-arbiter dispute surface.
     for (const required of [
       "openDispute",
+      "openDisputeWith",
       "commitVote",
       "revealVote",
       "resolveDispute",
