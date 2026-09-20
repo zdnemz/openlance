@@ -391,115 +391,133 @@ export function ArbiterStakeHub() {
         )}
       </div>
 
-      {/* ── RIGHT: actions ──────────────────────────────────────────── */}
-      <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
-        <h2 className="text-[16px] font-medium tracking-tight">{registered ? "Manage collateral" : "Join the pool"}</h2>
-        <p className="mt-1 text-[12px] leading-relaxed text-faint">
-          {registered
-            ? "Top up your stake, bench yourself from selection, or withdraw immediately once requested."
-            : "Deposit at least the minimum to mint your soulbound badge and enter the selection pool."}
-        </p>
+      {/* ── RIGHT: action forms ───────────────────────────────────────── */}
+      <div className="space-y-6">
         {kycStatus && kycStatus !== "verified" && (
-          <p className="mt-3 rounded-2xl border border-line bg-white/[0.02] px-3.5 py-2.5 text-[12px] leading-relaxed text-faint">
+          <p className="rounded-3xl border border-line bg-white/[0.012] px-6 py-4 text-[12px] leading-relaxed text-faint">
             On-chain selection needs stake only, but product standing needs enhanced KYC too — you’re <span className="num text-dim">KYC {kycStatus}</span>.{" "}
             <Link href="/onboarding" className="text-dim underline underline-offset-2 hover:text-foreground">Verify identity</Link>.
           </p>
         )}
 
-        <div className="mt-5 space-y-3">
-          {!(state && state.registered) ? (
-            <Button
-              onClick={() => setStakeModalOpen(true)}
-              className="w-full rounded-full bg-rose-accent py-2.5 text-[13px] font-medium hover:bg-rose-bright"
-            >
-              Stake &amp; join the pool
-            </Button>
-          ) : (
-            <>
-              <div>
-                <label htmlFor="topup" className="num mb-1.5 block text-[11px] uppercase tracking-wider text-faint">Add collateral</label>
-                <div className="flex gap-2">
-                  <Input
-                    id="topup"
-                    value={topUpInput}
-                    onChange={(e) => setTopUpInput(e.target.value)}
-                    placeholder="0.0"
-                    inputMode="decimal"
-                    className="h-10 border-line bg-white/[0.03] text-sm"
-                  />
-                  <Button
-                    disabled={active || ethToWei(topUpInput) <= 0n}
-                    onClick={() => add(ethToWei(topUpInput))}
-                    className="shrink-0 rounded-full border border-line px-5 text-dim hover:text-foreground"
-                    variant="ghost"
-                  >
-                    Add stake
-                  </Button>
-                </div>
-              </div>
-
-              {!state.unstakeRequested ? (
-                <Button
-                  disabled={active || requestBlocked}
-                  onClick={() => requestUnstake()}
-                  title={
-                    busy ? `You are serving ${state.activeDisputes} active dispute${state.activeDisputes === 1 ? "" : "s"}`
-                      : locked ? `Locked: score ${state.trustScore} < floor ${minScore}`
-                        : requestLocked ? `Stake must age ${cooldownDays}d before you can request unstake`
-                          : "Request unstake — withdrawal pays out immediately"
-                  }
-                  className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
-                  variant="ghost"
-                >
-                  {busy
-                    ? `Bench blocked — serving ${state.activeDisputes} dispute${state.activeDisputes === 1 ? "" : "s"}`
-                    : locked
-                      ? `Stake locked — score ${state.trustScore} < ${minScore}`
-                      : requestLocked
-                        ? `Unstake in ${fmtDuration(secsToRequestable)}`
-                        : "Request unstake (withdraw immediate)"}
-                </Button>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 rounded-2xl border border-line bg-white/[0.02] px-3 py-2 text-[12px] text-faint">
-                    <Clock className="h-3.5 w-3.5" />
-                    <>Unstaked — you can withdraw your collateral now, no waiting period.</>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+        {!(state && state.registered) ? (
+          <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+            <h2 className="text-[16px] font-medium tracking-tight">Join the pool</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-faint">
+              Deposit at least the minimum to mint your soulbound badge and enter the selection pool.
+            </p>
+            <div className="mt-5 space-y-3">
+              <Button
+                onClick={() => setStakeModalOpen(true)}
+                className="w-full rounded-full bg-rose-accent py-2.5 text-[13px] font-medium hover:bg-rose-bright"
+              >
+                Stake &amp; join the pool
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ── Stake form: top up collateral ─────────────────────────── */}
+            <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+              <h2 className="text-[16px] font-medium tracking-tight">Stake</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-faint">
+                Top up your collateral to climb tiers — Silver at 1 ETH, Gold at 10 ETH.
+              </p>
+              <div className="mt-5 space-y-3">
+                <div>
+                  <label htmlFor="topup" className="num mb-1.5 block text-[11px] uppercase tracking-wider text-faint">Add collateral</label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="topup"
+                      value={topUpInput}
+                      onChange={(e) => setTopUpInput(e.target.value)}
+                      placeholder="0.0"
+                      inputMode="decimal"
+                      className="h-10 border-line bg-white/[0.03] text-sm"
+                    />
                     <Button
-                      disabled={active}
-                      onClick={() => cancelUnstake()}
-                      className="rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+                      disabled={active || ethToWei(topUpInput) <= 0n}
+                      onClick={() => add(ethToWei(topUpInput))}
+                      className="shrink-0 rounded-full border border-line px-5 text-dim hover:text-foreground"
                       variant="ghost"
                     >
-                      Cancel unstake
-                    </Button>
-                    <Button
-                      disabled={active || exitBlocked}
-                      onClick={() => withdraw()}
-                      title={
-                        busy ? "You are serving an active dispute"
-                          : locked ? `Locked: score ${state.trustScore} < floor ${minScore}` : undefined
-                      }
-                      className="rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium hover:bg-white/20 disabled:opacity-50"
-                    >
-                      Withdraw stake
+                      Add stake
                     </Button>
                   </div>
-                </>
-              )}
+                </div>
+              </div>
+            </div>
 
-              <p className="flex items-start gap-2 pt-1 text-[11.5px] leading-relaxed text-faint">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>
-                  Withdrawing returns your collateral and removes you from the roster — your soulbound badge stays
-                  as history. Re-joining mints a <span className="num">fresh</span> badge and restarts the{" "}
-                  {minStakeDays}d eligibility clock.
-                </span>
+            {/* ── Unstake form: request, cancel, withdraw ───────────────── */}
+            <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+              <h2 className="text-[16px] font-medium tracking-tight">Unstake</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-faint">
+                Bench yourself from selection, then withdraw immediately — no waiting period after the request.
               </p>
-            </>
-          )}
-        </div>
+              <div className="mt-5 space-y-3">
+                {!state.unstakeRequested ? (
+                  <Button
+                    disabled={active || requestBlocked}
+                    onClick={() => requestUnstake()}
+                    title={
+                      busy ? `You are serving ${state.activeDisputes} active dispute${state.activeDisputes === 1 ? "" : "s"}`
+                        : locked ? `Locked: score ${state.trustScore} < floor ${minScore}`
+                          : requestLocked ? `Stake must age ${cooldownDays}d before you can request unstake`
+                            : "Request unstake — withdrawal pays out immediately"
+                    }
+                    className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
+                    variant="ghost"
+                  >
+                    {busy
+                      ? `Bench blocked — serving ${state.activeDisputes} dispute${state.activeDisputes === 1 ? "" : "s"}`
+                      : locked
+                        ? `Stake locked — score ${state.trustScore} < ${minScore}`
+                        : requestLocked
+                          ? `Unstake in ${fmtDuration(secsToRequestable)}`
+                          : "Request unstake (withdraw immediate)"}
+                  </Button>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 rounded-2xl border border-line bg-white/[0.02] px-3 py-2 text-[12px] text-faint">
+                      <Clock className="h-3.5 w-3.5" />
+                      <>Unstaked — you can withdraw your collateral now, no waiting period.</>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        disabled={active}
+                        onClick={() => cancelUnstake()}
+                        className="rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+                        variant="ghost"
+                      >
+                        Cancel unstake
+                      </Button>
+                      <Button
+                        disabled={active || exitBlocked}
+                        onClick={() => withdraw()}
+                        title={
+                          busy ? "You are serving an active dispute"
+                            : locked ? `Locked: score ${state.trustScore} < floor ${minScore}` : undefined
+                        }
+                        className="rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium hover:bg-white/20 disabled:opacity-50"
+                      >
+                        Withdraw stake
+                      </Button>
+                    </div>
+                  </>
+                )}
+
+                <p className="flex items-start gap-2 pt-1 text-[11.5px] leading-relaxed text-faint">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Withdrawing returns your collateral and removes you from the roster — your soulbound badge stays
+                    as history. Re-joining mints a <span className="num">fresh</span> badge and restarts the{" "}
+                    {minStakeDays}d eligibility clock.
+                  </span>
+                </p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Stake confirmation modal ─────────────────────────────────── */}
