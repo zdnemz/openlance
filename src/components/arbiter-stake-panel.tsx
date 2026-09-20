@@ -110,11 +110,11 @@ function TonePill({ label, tone, icon, className }: { label: string; tone: strin
 function useStakeContext() {
   const { address } = useWallet();
   const hydrated = useWalletHydrated();
-  const { state, register, add, requestUnstake, cancelUnstake, withdraw, chain, refresh } = useArbiterStaking();
+  const { state, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh } = useArbiterStaking();
   const { minStakeWei, minScoreToWithdraw } = useRuntime();
   const registryKnown = useRuntime((s) => !!s.registry);
   const loadRuntime = useRuntime((s) => s.load);
-  return { address, hydrated, state, register, add, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime };
+  return { address, hydrated, state, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime };
 }
 
 /** Safe wei parser — tolerates undefined/empty from a still-loading runtime. */
@@ -277,12 +277,14 @@ export function ArbiterStakeSummary() {
 /* ── Hub (for /stake) ─────────────────────────────────────────────────────── */
 
 export function ArbiterStakeHub() {
-  const { address, hydrated, state, register, add, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime } = useStakeContext();
+  const { address, hydrated, state, register, add, reduce, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime } = useStakeContext();
   const kycStatus = useSession((s) => s.user?.kycStatus);
   const [stakeModalOpen, setStakeModalOpen] = useState(false);
   const [stakeInput, setStakeInput] = useState("");
   const [topUpModalOpen, setTopUpModalOpen] = useState(false);
   const [topUpInput, setTopUpInput] = useState("");
+  const [reduceModalOpen, setReduceModalOpen] = useState(false);
+  const [reduceInput, setReduceInput] = useState("");
   const [retrying, setRetrying] = useState(false);
   const active = chain.phase !== "idle" && chain.phase !== "done";
 
@@ -319,12 +321,26 @@ export function ArbiterStakeHub() {
     }
   }, [topUpModalOpen, chain.phase]);
 
+  // Same for the reduce modal: close once the reduce tx settles.
+  useEffect(() => {
+    if (reduceModalOpen && chain.phase === "done") {
+      setReduceModalOpen(false);
+      setReduceInput("");
+    }
+  }, [reduceModalOpen, chain.phase]);
+
   // Open on a clean slate: a previous action may have left phase "done",
   // which would instantly trip the closer above.
   const openTopUp = () => {
     chain.reset();
     setTopUpInput("");
     setTopUpModalOpen(true);
+  };
+
+  const openReduce = () => {
+    chain.reset();
+    setReduceInput("");
+    setReduceModalOpen(true);
   };
 
   // Resulting tier for the pending top-up (mirrors Registry.tierOf).
@@ -340,6 +356,18 @@ export function ArbiterStakeHub() {
   const newTotalWei = toWei(state?.stakeWei) + topUpWei;
   const newTier = tierForTotal(newTotalWei);
   const currentTier = state?.tier ?? 0;
+
+  // Pending partial exit, validated like the contract (reduceStake reverts
+  // otherwise): positive, strictly partial, remainder above the floor.
+  const reduceWei = ethToWei(reduceInput);
+  const stakeTotal = toWei(state?.stakeWei);
+  const minFloor = toWei(state?.minStakeWei);
+  const reduceRemaining = stakeTotal - reduceWei;
+  const reduceTier = tierForTotal(reduceRemaining >= 0n ? reduceRemaining : 0n);
+  const reduceInvalid = reduceWei <= 0n ? "Enter an amount above 0."
+    : !minKnown ? "Live registry reads unavailable — check your wallet network."
+    : reduceWei >= stakeTotal ? "To exit fully, request unstake below instead."
+    : reduceRemaining < minFloor ? `Must keep at least ${formatEth(minFloor)} ETH staked.` : null;
 
   if (!hydrated) {
     return (
@@ -504,14 +532,22 @@ export function ArbiterStakeHub() {
                 Top up your collateral to climb tiers — Silver at {formatEth(state.tierSilverWei)} ETH, Gold at{" "}
                 {formatEth(state.tierGoldWei)} ETH.
               </p>
-              <div className="mt-5 space-y-3">
+              <div className="mt-5 grid grid-cols-2 gap-2">
                 <Button
                   disabled={active}
                   onClick={openTopUp}
-                  className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
+                  className="rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
                   variant="ghost"
                 >
                   Add more stake
+                </Button>
+                <Button
+                  disabled={active}
+                  onClick={openReduce}
+                  className="rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
+                  variant="ghost"
+                >
+                  Reduce stake
                 </Button>
               </div>
             </div>
@@ -587,6 +623,90 @@ export function ArbiterStakeHub() {
           </>
         )}
       </div>
+
+      {/* ── Reduce confirmation modal ────────────────────────────────── */}
+      <Dialog open={reduceModalOpen} onOpenChange={(v) => { if (!active) setReduceModalOpen(v); }}>
+        <DialogContent className="glass-raised max-w-md gap-0 rounded-3xl border-line p-0">
+          <DialogHeader className="space-y-2 px-7 pb-4 pt-7">
+            <DialogTitle className="text-xl tracking-tight">Reduce your stake</DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-dim">
+              Pull out collateral while staying in the pool. The remainder must stay above the minimum.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 px-7 pb-6 pt-1">
+            <div>
+              <label htmlFor="reduce-amount" className="num mb-1.5 block text-[11px] uppercase tracking-wider text-faint">
+                amount (ETH)
+              </label>
+              <Input
+                id="reduce-amount"
+                value={reduceInput}
+                onChange={(e) => setReduceInput(e.target.value)}
+                placeholder="0.0"
+                inputMode="decimal"
+                autoFocus
+                disabled={active}
+                className="h-11 flex-1 border-line bg-white/[0.03] text-base"
+              />
+              {reduceInvalid && (
+                <p className="mt-1.5 text-[11.5px] text-faint">{reduceInvalid}</p>
+              )}
+            </div>
+
+            <div className="space-y-2 rounded-2xl border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
+              <div className="flex items-center justify-between">
+                <span className="text-faint">Current stake</span>
+                <span className="num text-dim">{formatEth(stakeTotal)} ETH</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-faint">You receive</span>
+                <span className="num text-dim">{reduceInput ? `${reduceInput} ETH` : "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-faint">Remaining</span>
+                <span className="num text-dim">
+                  {formatEth(reduceRemaining >= 0n ? reduceRemaining : 0n)} ETH · {(TIER_NAMES[reduceTier] ?? "Unstaked").toLowerCase()}
+                  {reduceTier < currentTier && <span className="ml-1 text-state-disputed">· tier down</span>}
+                </span>
+              </div>
+            </div>
+
+            {chain.error && (
+              <p className="rounded-2xl border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
+                {chain.error}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="hairline-t flex-col-reverse gap-2 px-7 py-5 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={active}
+              onClick={() => setReduceModalOpen(false)}
+              className="rounded-full border border-line px-5 text-dim hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={active || reduceInvalid !== null}
+              onClick={() => reduce(reduceWei)}
+              className="rounded-full bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
+            >
+              {active ? (
+                <span className="inline-flex items-center gap-2">
+                  <SpinnerGap className="h-4 w-4 animate-spin" />
+                  {PHASE_LABEL[chain.phase] ?? "Working…"}
+                </span>
+              ) : (
+                "Confirm reduction"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Top-up confirmation modal ────────────────────────────────── */}
       <Dialog open={topUpModalOpen} onOpenChange={(v) => { if (!active) setTopUpModalOpen(v); }}>

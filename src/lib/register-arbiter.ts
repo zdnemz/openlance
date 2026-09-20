@@ -23,7 +23,7 @@ import type { ArbiterView } from "@/lib/types";
 import { REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { toWei } from "@/lib/format";
 import {
-  useChainAction, registerArbiterWithStakeAction, addStakeAction,
+  useChainAction, registerArbiterWithStakeAction, addStakeAction, reduceStakeAction,
   requestUnstakeAction, cancelUnstakeAction, withdrawStakeAction,
 } from "@/lib/chain-actions";
 
@@ -256,6 +256,35 @@ export function useArbiterStaking() {
     return res;
   }, [chain.run, state?.stakeWei, synced, awaitMirror, mine]);
 
+  const reduce = useCallback(async (amountWei: bigint) => {
+    const stake = toWei(state?.stakeWei ?? "0");
+    const min = toWei(state?.minStakeWei ?? "0");
+    if (!state?.minStakeKnown) {
+      toast.error("Registry unreachable", { description: "Couldn't read the live minimum — check your wallet network and retry." });
+      return { ok: false };
+    }
+    if (amountWei <= 0n) {
+      toast.error("Nothing to reduce", { description: "Enter an amount above 0." });
+      return { ok: false };
+    }
+    if (amountWei >= stake) {
+      toast.error("Use full unstake to exit completely", { description: "Reducing keeps you on the roster — request unstake below to leave." });
+      return { ok: false };
+    }
+    if (stake - amountWei < min) {
+      toast.error("Remainder below minimum", { description: `At least ${min.toString()} wei must stay staked.` });
+      return { ok: false };
+    }
+    const res = await reduceStakeAction(chain.run)(amountWei);
+    if (!res.ok) return res;
+    await synced(() => awaitMirror((l) => {
+      const e = mine(l);
+      if (!e) return false;
+      try { return BigInt(e.stakeWei) <= stake - amountWei; } catch { return false; }
+    }));
+    return res;
+  }, [chain.run, state?.stakeWei, state?.minStakeWei, state?.minStakeKnown, synced, awaitMirror, mine]);
+
   const requestUnstake = useCallback(async () => {
     const res = await requestUnstakeAction(chain.run)();
     if (!res.ok) return res;
@@ -277,5 +306,5 @@ export function useArbiterStaking() {
     return res;
   }, [chain.run, synced, awaitMirror, mine]);
 
-  return { chain, state, address, register, add, requestUnstake, cancelUnstake, withdraw, refresh };
+  return { chain, state, address, register, add, reduce, requestUnstake, cancelUnstake, withdraw, refresh };
 }

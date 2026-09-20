@@ -288,6 +288,18 @@ export function addStakeAction(run: ReturnType<typeof useChainAction>["run"]) {
     });
 }
 
+/** Partial exit: pull out collateral while staying on the roster. */
+export function reduceStakeAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (amountWei: bigint) =>
+    run({
+      label: "Reduce stake",
+      contract: "registry",
+      functionName: "reduceStake",
+      args: [amountWei],
+      successMessage: "Stake reduced — remainder keeps working",
+    });
+}
+
 /** Request to leave; benched from selection immediately, withdrawable at once. */
 export function requestUnstakeAction(run: ReturnType<typeof useChainAction>["run"]) {
   return () =>

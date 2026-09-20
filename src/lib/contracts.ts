@@ -59,6 +59,7 @@ export const REGISTRY_ABI = [
   { type: "function", name: "register", stateMutability: "payable", inputs: [{ name: "arbiter", type: "address" }], outputs: [] },
   { type: "function", name: "registerArbiter", stateMutability: "payable", inputs: [], outputs: [] },
   { type: "function", name: "addStake", stateMutability: "payable", inputs: [], outputs: [] },
+  { type: "function", name: "reduceStake", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
   { type: "function", name: "requestUnstake", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "cancelUnstake", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "withdrawStake", stateMutability: "nonpayable", inputs: [], outputs: [] },
