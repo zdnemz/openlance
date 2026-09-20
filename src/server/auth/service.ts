@@ -6,6 +6,7 @@ import { validate } from '../lib/http'
 import { denySession, signSession, verifySession } from '../lib/jwt'
 import { requireAuth } from './middleware'
 import { issueNonce, verifySiwe } from './siwe'
+import { sponsorshipChallenge as getSponsorship, storeSponsorshipSession as storeSponsorship } from '../modules/sponsorship'
 import { users } from '../db/schema'
 import { env } from '../config'
 
@@ -74,4 +75,19 @@ export async function logout(request: Request) {
     if (claims) await denySession(claims.jti)
   }
   return { loggedOut: true }
+}
+
+// ── Gasless sponsorship (bound to the login session) ────────────────────────
+
+/** The EIP-712 challenge the client signs once at login to enable gasless actions. */
+export async function getSponsorshipChallenge(request: Request) {
+  const user = await requireAuth(request)
+  return getSponsorship(user.id, user.walletAddress)
+}
+
+/** Persist the signed sponsorship-session voucher returned by the client. */
+export async function postSponsorshipSession(request: Request) {
+  const user = await requireAuth(request)
+  const body = await request.json().catch(() => ({}))
+  return storeSponsorship(user.id, user.walletAddress, body)
 }

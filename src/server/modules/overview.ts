@@ -87,6 +87,17 @@ export function runtimeConfig() {
       escrow: adapter.escrowAddress,
       arbiterRegistry: adapter.registryAddress,
       timelock: env.TIMELOCK_ADDRESS ?? null,
+      sponsorshipForwarder: env.sponsorship.forwarderAddress,
+    },
+    // Gasless sponsorship: when enabled, signed-in users pay no gas (relayer
+    // fronts it). The client uses `enabled` to decide whether to route money
+    // actions through /api/relay.
+    sponsorship: {
+      enabled: env.sponsorship.enabled,
+      sessionTtlSeconds: env.sponsorship.sessionTtlSeconds,
+      eip712: {
+        domain: { name: 'OpenLance SponsorshipForwarder', version: '1' },
+      },
     },
   }
 }
