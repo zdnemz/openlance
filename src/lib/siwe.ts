@@ -8,6 +8,8 @@
 import { get, post } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { signMessage, useWallet } from "@/lib/wallet";
+import { beginSponsorshipSession } from "@/lib/sponsorship";
+import { useSponsorship } from "@/lib/sponsorship-store";
 import { getAddress } from "viem";
 import type { PublicUser } from "@/lib/types";
 
@@ -65,6 +67,9 @@ export async function loginWithWallet(address: string): Promise<void> {
     signature,
   });
   useSession.getState().setSession(result.token, result.user, address.toLowerCase());
+  // Gasless onboarding: ONE extra EIP-712 signature enables fee-free (sponsored)
+  // money actions for the life of this session. Non-fatal if declined/disabled.
+  await beginSponsorshipSession();
 }
 
 /**
@@ -79,5 +84,6 @@ export async function disconnectAndLogout(): Promise<void> {
     /* token already dead — clearing locally is what matters */
   }
   useSession.getState().clear();
+  useSponsorship.getState().clear();
   useWallet.getState().disconnect();
 }

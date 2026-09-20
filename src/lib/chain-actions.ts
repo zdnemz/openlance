@@ -11,6 +11,8 @@
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { sendContractCall, waitForReceipt } from "@/lib/wallet";
+import { relayForwardRequest } from "@/lib/sponsorship";
+import { useSponsorship } from "@/lib/sponsorship-store";
 import { ESCROW_ABI, REGISTRY_ABI } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import { get } from "@/lib/api";
@@ -57,14 +59,45 @@ export function useChainAction() {
       setPhase("signing");
       try {
         const abi = opts.contract === "escrow" ? ESCROW_ABI : REGISTRY_ABI;
-        const hash = await sendContractCall({
-          to: address,
-          abi: abi as never,
-          functionName: opts.functionName,
-          args: opts.args,
-          value: opts.value,
-          expectedChainId: chainId,
-        });
+        // Gasless path: when a sponsorship session is active, the user signs an
+        // EIP-712 ForwardRequest and the relayer pays the gas. Falls back to a
+        // normal user-paid call if sponsorship is unavailable.
+        const sponsored = useSponsorship.getState().isActive();
+        let hash: string;
+        if (sponsored) {
+          try {
+            hash = await relayForwardRequest({
+              to: address,
+              abi: abi as never,
+              functionName: opts.functionName,
+              args: opts.args,
+              value: opts.value,
+            });
+          } catch (relayErr) {
+            // Session lapsed / relayer hiccup → transparent user-paid fallback.
+            if (!useSponsorship.getState().isActive()) {
+              hash = await sendContractCall({
+                to: address,
+                abi: abi as never,
+                functionName: opts.functionName,
+                args: opts.args,
+                value: opts.value,
+                expectedChainId: chainId,
+              });
+            } else {
+              throw relayErr;
+            }
+          }
+        } else {
+          hash = await sendContractCall({
+            to: address,
+            abi: abi as never,
+            functionName: opts.functionName,
+            args: opts.args,
+            value: opts.value,
+            expectedChainId: chainId,
+          });
+        }
         setTxHash(hash);
         setPhase("mining");
         const receipt = await waitForReceipt(hash);

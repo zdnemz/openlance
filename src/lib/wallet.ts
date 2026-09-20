@@ -201,6 +201,35 @@ export async function signMessage(message: string): Promise<string> {
   return (await window.ethereum!.request({ method: "personal_sign", params: [hex, state.address] })) as string;
 }
 
+/**
+ * EIP-712 `eth_signTypedData_v4` via the injected provider.
+ *
+ * Used by gasless sponsorship: the user signs a SponsorshipSession voucher once
+ * at login and a ForwardRequest per money action. Unlike `personal_sign` this
+ * shows structured data (human-readable) in the wallet, which is the whole point
+ * of using EIP-712 rather than a replayable hash.
+ */
+export async function signTypedData(args: {
+  domain: Record<string, unknown>;
+  types: Record<string, unknown>;
+  primaryType: string;
+  message: Record<string, unknown>;
+}): Promise<string> {
+  const state = useWallet.getState();
+  if (!state.address) throw new Error("No wallet connected");
+  if (typeof window === "undefined" || !window.ethereum) throw new Error("No injected wallet detected");
+  const payload = JSON.stringify({
+    domain: args.domain,
+    types: { EIP712Domain: [], ...args.types },
+    primaryType: args.primaryType,
+    message: args.message,
+  });
+  return (await window.ethereum.request({
+    method: "eth_signTypedData_v4",
+    params: [state.address, payload],
+  })) as string;
+}
+
 /** Sign + send a contract call. Returns the tx hash. */
 export async function sendContractCall(opts: {
   to: string;
