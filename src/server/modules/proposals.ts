@@ -65,6 +65,11 @@ export async function createProposal(request: Request, jobId: string) {
   if (job.posterId === user.id) throw Errors.conflict('own_job', 'You cannot bid on your own job')
 
   const body = await validate(request, proposalSchema)
+  // Bids above the locked budgetMax can never be funded from the vault.
+  const bidTotal = body.milestones.reduce((acc, m) => acc + BigInt(toWei(m.amount)), 0n)
+  if (bidTotal > BigInt(job.budgetMaxWei)) {
+    throw Errors.badRequest(`Bid total (${toEth(bidTotal.toString())} ETH) exceeds the job budget max (${toEth(job.budgetMaxWei)} ETH)`)
+  }
   const db = getDb()
 
   // One proposal per freelancer per job (PRD F2) — enforced by unique index too.
@@ -133,6 +138,15 @@ export async function acceptProposal(request: Request, proposalId: string) {
       .sort((a, b) => a.position - b.position)
     if (ms.length === 0) throw Errors.precondition('proposal_has_no_milestones', 'Cannot award a proposal without milestones')
 
+    // Surplus refund: the vault locked budgetMax at publish; only the winning
+    // bid total stays escrowed. The remainder returns to the client.
+    // ponytail: recorded as ledger intent (depositAmountWei drawdown); actual
+    // on-chain custody move lands with the JobVault contract.
+    const locked = BigInt(lockedJob!.depositAmountWei ?? lockedJob!.budgetMaxWei)
+    const bid = ms.reduce((acc, m) => acc + BigInt(m.amountWei), 0n)
+    if (bid > locked) throw Errors.conflict('bid_exceeds_deposit', 'Winning bid exceeds the locked deposit')
+    const surplus = locked - bid
+
     const [project] = await tx.insert(projects).values({
       jobId: job.id, proposalId: proposal.id, clientId: user.id, freelancerId: freelancer.id,
     }).returning()
@@ -147,16 +161,16 @@ export async function acceptProposal(request: Request, proposalId: string) {
     for (const l of losers.filter((l) => l.id !== proposal.id)) {
       await tx.update(proposals).set({ status: 'rejected', updatedAt: new Date() }).where(eq(proposals.id, l.id))
     }
-    await tx.update(jobs).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(jobs.id, job.id))
+    await tx.update(jobs).set({ status: 'in_progress', depositAmountWei: bid.toString(), updatedAt: new Date() }).where(eq(jobs.id, job.id))
 
-    return { project, milestones: ms.length, rejected: losers.filter((l) => l.id !== proposal.id).length }
+    return { project, milestones: ms.length, rejected: losers.filter((l) => l.id !== proposal.id).length, surplusRefundedWei: surplus.toString() }
   })
 
   await emitNotification({
     type: 'proposal.accepted',
     actorAddress: user.walletAddress,
     projectId: result.project.id,
-    payload: { jobId: job.id, jobTitle: job.title, proposalId: proposal.id, freelancer: freelancer.walletAddress },
+    payload: { jobId: job.id, jobTitle: job.title, proposalId: proposal.id, freelancer: freelancer.walletAddress, surplusRefundedWei: result.surplusRefundedWei },
   })
   await emitNotification({
     type: 'project.created',
@@ -169,5 +183,6 @@ export async function acceptProposal(request: Request, proposalId: string) {
     project: result.project,
     milestonesCreated: result.milestones,
     proposalsRejected: result.rejected,
+    surplusRefundedWei: result.surplusRefundedWei,
   }
 }
