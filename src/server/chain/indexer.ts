@@ -15,6 +15,7 @@ import { eq, sql } from 'drizzle-orm'
 import { env } from '../config'
 import { getDb, type Db } from '../db'
 import { logger } from '../lib/logger'
+import { invalidate } from '../lib/cache'
 import { getKv } from '../lib/kv'
 import { getQueues } from '../lib/queue'
 import {
@@ -95,6 +96,10 @@ export async function ingestEvents(logs: RawChainLog[]): Promise<IngestResult> {
     }
   }
   if (sorted.length) log.info('ingest complete', { ...result, logs: sorted.length })
+  // The read-model caches (arbiters list, overview) must not outlive the
+  // mirror they project: bust them whenever events actually applied, or the
+  // UI keeps serving pre-tx rows until the TTL expires.
+  if (result.applied > 0) await invalidate('read:arbiters:list', 'read:overview')
   return result
 }
 
