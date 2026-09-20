@@ -58,15 +58,27 @@ export async function overview() {
  */
 export function runtimeConfig() {
   const adapter = getChainAdapter()
+  const minStakeWei = env.MIN_STAKE_WEI
+  let tierSilverWei = '0'
+  let tierGoldWei = '0'
+  try {
+    tierSilverWei = (BigInt(minStakeWei) * 2n).toString()
+    tierGoldWei = (BigInt(minStakeWei) * 5n).toString()
+  } catch { /* env guard rails on malformed wei */ }
   return {
     chainMode: adapter.mode,
     chainId: env.CHAIN_ID,
     feeBps: env.PLATFORM_FEE_BPS,
     disputeFeeWei: env.DISPUTE_FEE_WEI,
-    minStakeWei: env.MIN_STAKE_WEI,
+    minStakeWei,
+    tierSilverWei,
+    tierGoldWei,
     minScoreToWithdraw: env.MIN_SCORE_TO_WITHDRAW,
     minStakeDurationSeconds: env.MIN_STAKE_DURATION_SECONDS,
     unstakeCooldownSeconds: env.UNSTAKE_COOLDOWN_SECONDS,
+    commitWindowSeconds: env.COMMIT_WINDOW_SECONDS,
+    revealWindowSeconds: env.REVEAL_WINDOW_SECONDS,
+    appealWindowSeconds: env.APPEAL_WINDOW_SECONDS,
     dbDriver: env.databaseDriver,
     storageDriver: env.storageDriver,
     queueMode: env.queueMode,
@@ -83,7 +95,22 @@ export function runtimeConfig() {
 const EMPTY_COUNTS = { users: 0, jobs: 0, projects: 0, proposals: 0, messages: 0, reviews: 0, ledgerEvents: 0 }
 
 async function loadOverview() {
-  const config = runtimeConfig()
+  const config = runtimeConfig() as Record<string, unknown> & { tierSilverWei: string; tierGoldWei: string; minStakeDurationSeconds: number; unstakeCooldownSeconds: number }
+
+  // KV-synced registry tuning (setTierThresholds / setMinStakeDuration /
+  // setUnstakeCooldown) overrides env defaults so /overview stays pixel-perfect
+  // with tierOf/isEligible after admin retunes. KV failure → env defaults.
+  try {
+    const kv = await getKv()
+    const [s, g, d, c] = await Promise.all([
+      kv.get('registry:tierSilver'), kv.get('registry:tierGold'),
+      kv.get('registry:minStakeDuration'), kv.get('registry:unstakeCooldown'),
+    ])
+    if (s) config.tierSilverWei = s
+    if (g) config.tierGoldWei = g
+    if (d && Number(d) >= 0) config.minStakeDurationSeconds = Number(d)
+    if (c && Number(c) >= 0) config.unstakeCooldownSeconds = Number(c)
+  } catch { /* env defaults stand */ }
 
   // Everything below is DATA, not config. If the database is unreachable we
   // still return a valid response with empty data — so the client always gets

@@ -80,6 +80,15 @@ const schema = z.object({
   MIN_STAKE_DURATION_SECONDS: z.coerce.number().int().nonnegative().default(7 * 24 * 60 * 60), // 7 days
   UNSTAKE_COOLDOWN_SECONDS: z.coerce.number().int().nonnegative().default(3 * 24 * 60 * 60), // 3 days
   ARBITER_FEE_SHARE_BPS: z.coerce.number().int().min(0).max(10_000).default(2000), // 20% of the fee
+  /**
+   * Display-only mirrors of the escrow's dispute windows (seconds).
+   * The contract reads are authoritative for signing; these seed the UI copy
+   * and let the indexer stamp commit/reveal deadlines (events carry no timestamps).
+   * Match contracts/scripts/deploy.ts: local 120/120/600, prod 86400/86400/172800.
+   */
+  COMMIT_WINDOW_SECONDS: z.coerce.number().int().nonnegative().default(86400),
+  REVEAL_WINDOW_SECONDS: z.coerce.number().int().nonnegative().default(86400),
+  APPEAL_WINDOW_SECONDS: z.coerce.number().int().nonnegative().default(172800),
   INDEXER_POLL_MS: z.coerce.number().int().positive().default(10_000),
   INDEXER_CONFIRMATIONS: z.coerce.number().int().positive().default(5),
   INDEXER_CHUNK_BLOCKS: z.coerce.number().int().positive().default(2000),
