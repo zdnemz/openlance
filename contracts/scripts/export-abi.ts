@@ -19,12 +19,13 @@ const root = resolve(here, "..");
 const outDir = resolve(root, "exports");
 mkdirSync(outDir, { recursive: true });
 
-const CONTRACTS = ["Escrow", "ArbiterRegistry", "IArbiterRegistry", "OpenLanceTimelock"];
+const CONTRACTS = ["Escrow", "ArbiterRegistry", "IArbiterRegistry", "OpenLanceTimelock", "SponsorshipForwarder"];
 const ARTIFACTS: Record<string, string> = {
   Escrow: "artifacts/contracts/Escrow.sol/Escrow.json",
   ArbiterRegistry: "artifacts/contracts/ArbiterRegistry.sol/ArbiterRegistry.json",
   IArbiterRegistry: "artifacts/contracts/IArbiterRegistry.sol/IArbiterRegistry.json",
   OpenLanceTimelock: "artifacts/contracts/OpenLanceTimelock.sol/OpenLanceTimelock.json",
+  SponsorshipForwarder: "artifacts/contracts/SponsorshipForwarder.sol/SponsorshipForwarder.json",
 };
 
 for (const name of CONTRACTS) {

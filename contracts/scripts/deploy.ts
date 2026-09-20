@@ -103,7 +103,13 @@ async function main() {
   ]);
   console.log(`✓ OpenLanceTimelock           ${timelock.address}`);
 
-  // ── 2. Proxies (owner = timelock) ─────────────────────────────────────────
+  // ── 2. Sponsorship forwarder (ERC-2771 gasless meta-txs) ──────────────────
+  // Not upgradeable on purpose: it holds no funds, only verifies user-signed
+  // session vouchers and forwards calls. Replacing it = redeploy + repoint.
+  const forwarder = await viem.deployContract("SponsorshipForwarder", []);
+  console.log(`✓ SponsorshipForwarder       ${forwarder.address}`);
+
+  // ── 3. Proxies (owner = timelock) ─────────────────────────────────────────
   const { upgrades } = await import("@openzeppelin/hardhat-upgrades/viem");
   const upgradesApi = await upgrades(hre, connection as never);
 
@@ -118,6 +124,7 @@ async function main() {
       treasury, // treasury
       minStakeDuration, // minStakeDuration (seconds)
       unstakeCooldown, // unstakeCooldown (seconds)
+      forwarder.address, // trustedForwarder (ERC-2771)
     ],
     { kind: "uups" },
   );
@@ -134,12 +141,13 @@ async function main() {
       commitWindow, // commit window
       revealWindow, // reveal window
       appealWindow, // appeal window
+      forwarder.address, // trustedForwarder (ERC-2771)
     ],
     { kind: "uups" },
   );
   console.log(`✓ Escrow proxy                ${escrow.address}`);
 
-  // ── 3. Wire registry.setEscrow(escrow) through the timelock ───────────────
+  // ── 4. Wire registry.setEscrow(escrow) through the timelock ───────────────
   // setEscrow is onlyOwner; owner is the timelock, so it must be scheduled.
   const registryAbi = registry.abi;
   const calldata = encodeFunctionData({
@@ -171,7 +179,7 @@ async function main() {
         `     After it does, claim the wiring with:\n\n` +
         `     npx hardhat run scripts/execute-timelock.ts --network ${networkName}\n`,
     );
-    printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, finalAdmin, networkName });
+    printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, forwarder: forwarder.address, finalAdmin, networkName });
     return;
   }
 
@@ -182,13 +190,14 @@ async function main() {
   await publicClient.waitForTransactionReceipt({ hash: execHash });
   console.log(`✓ registry.setEscrow wired (tx ${execHash})`);
 
-  printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, finalAdmin, networkName });
+  printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, forwarder: forwarder.address, finalAdmin, networkName });
 }
 
 function printSummary(a: {
   registry: string;
   escrow: string;
   timelock: string;
+  forwarder: string;
   finalAdmin: string;
   networkName: string;
 }) {
@@ -203,6 +212,7 @@ function printSummary(a: {
         escrow: a.escrow,
         arbiterRegistry: a.registry,
         timelock: a.timelock,
+        sponsorshipForwarder: a.forwarder,
         treasury: (process.env.TREASURY ?? a.finalAdmin),
         finalAdmin: a.finalAdmin,
         deployedAt: new Date().toISOString(),
@@ -219,6 +229,7 @@ function printSummary(a: {
   console.log(`ESCROW_ADDRESS=${a.escrow}`);
   console.log(`ARBITER_REGISTRY_ADDRESS=${a.registry}`);
   console.log(`TIMELOCK_ADDRESS=${a.timelock}`);
+  console.log(`SPONSORSHIP_FORWARDER_ADDRESS=${a.forwarder}`);
   console.log(`════════════════════════════════════════════════════════\n`);
   console.log(`Next: hand the timelock to the final admin (${a.finalAdmin}) —`);
   console.log(`      grant PROPOSER/EXECUTOR/CANCELLER + ADMIN roles, then renounce`);

@@ -15,7 +15,7 @@ OZ **TimelockController** · native ETH.
 ```
 npm install
 npx hardhat build                 # compile
-npx hardhat test                  # 52 tests (unit + security + event-surface lock)
+npx hardhat test                  # 72 tests (unit + security + event-surface + sponsorship)
 npx hardhat run scripts/deploy.ts --network localhost      # anvil devnet
 npx hardhat run scripts/deploy.ts --network baseSepolia    # testnet
 ```
@@ -113,6 +113,34 @@ openDispute{value: disputeFee}   →   picks up to 3 eligible, non-party arbiter
 A zero-overhead subclass of OZ `TimelockController` (no extra storage/logic) that
 gives the deployment scripts a project-owned artifact.
 
+### `SponsorshipForwarder.sol` — gasless money actions (ERC-2771)
+
+Lets a signed-in user move money without paying gas. The user signs an EIP-712
+`SponsorshipSession` voucher **once at login**; every action is then a signed
+`ForwardRequest` submitted by the server relayer, which fronts the gas (and the
+principal on testnet).
+
+```
+login   → SponsorshipSession{owner,issuedAt,expiry,sessionId}   (EIP-712)
+action  → ForwardRequest{from,to,value,gas,nonce,deadline,data} (EIP-712)
+relayer → execute(req, sessionId, sig)
+             ├─ nonce matches OZ Nonces(from)
+             ├─ req signed by `from`
+             ├─ session registered + unexpired
+             └─ to.call{value}(data || from)   ← ERC-2771 suffix
+```
+
+- **On-chain authority** — the contract re-verifies the session voucher, request
+  signature, and nonce on every execution; nothing about a call is trusted from
+  the backend. A leaked relayer key can only relay calls users already signed.
+- **Targets trust it** — `Escrow` / `ArbiterRegistry` inherit
+  `ERC2771ContextLite` (storage-based trusted forwarder for UUPS) and read the
+  real caller via `_msgSender()`, so `client == user` on-chain, never the relayer.
+  Direct user-paid calls are unchanged (forwarder unset → plain `msg.sender`).
+- **Eviction** — callers may overpay `msg.value`; the excess is refunded. The
+  forwarder is not upgradeable (it holds no funds); repoint targets via
+  `setTrustedForwarder` (owner/timelock) to migrate.
+
 ## Layout
 
 ```
@@ -120,11 +148,13 @@ contracts/            Solidity sources
   Escrow.sol          milestone escrow (UUPS)
   ArbiterRegistry.sol soulbound arbiter registry (UUPS)
   IArbiterRegistry.sol interface the escrow depends on
+  SponsorshipForwarder.sol  ERC-2771 gasless meta-tx forwarder + EIP-712 sessions
+  ERC2771ContextLite.sol    ERC-2771 _msgSender support for UUPS proxies
   OpenLanceTimelock.sol  OZ TimelockController (owner of both proxies)
   test/ReentrancyAttacker.sol  test-only probe
-test/                 TypeScript + viem test suite (52 tests)
+test/                 TypeScript + viem test suite (72 tests)
 scripts/
-  deploy.ts           timelock + both proxies + wiring (Base Sepolia / localhost)
+  deploy.ts           timelock + forwarder + both proxies + wiring (Base Sepolia / localhost)
   execute-timelock.ts execute a queued timelock op
   handoff-timelock.ts hand control to a Safe multisig
   export-abi.ts       emit ABI JSON the backend can import
