@@ -18,7 +18,8 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWallet, readContract } from "@/lib/wallet";
 import { useRuntime } from "@/lib/runtime";
-import { qk } from "@/lib/queries";
+import { get, qk } from "@/lib/queries";
+import type { ArbiterView } from "@/lib/types";
 import { REGISTRY_ABI, ESCROW_ABI } from "@/lib/contracts";
 import { toWei } from "@/lib/format";
 import {
@@ -204,11 +205,29 @@ export function useArbiterStaking() {
   // Chain reads + off-chain mirrors converge after every stake tx; without
   // this the panel keeps offering "join" for a registered arbiter (whose next
   // register would revert AlreadyRegistered).
-  const synced = useCallback(() => {
-    refresh();
+  const synced = useCallback(async (wait?: () => Promise<void>) => {
+    refresh(); // chain truth first — the panel flips immediately
+    if (wait) await wait(); // …then invalidate once the mirror caught up
     void qc.invalidateQueries({ queryKey: qk.arbiters });
     void qc.invalidateQueries({ queryKey: qk.overview });
   }, [refresh, qc]);
+
+  /** Poll the off-chain mirror until it reflects the just-mined tx (~20s max —
+   *  the list polls anyway). Invalidating before the mirror flips just
+   *  re-caches stale rows: the "must reload" complaint. */
+  const awaitMirror = useCallback(async (pred: (list: ArbiterView[]) => boolean) => {
+    for (let i = 0; i < 13; i++) {
+      try {
+        if (pred(await get<ArbiterView[]>("/arbiters"))) return;
+      } catch { /* transient — keep polling */ }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }, []);
+
+  const mine = useCallback((list: ArbiterView[]) => {
+    const me = (address ?? "").toLowerCase();
+    return me ? list.find((a) => a.address.toLowerCase() === me) : undefined;
+  }, [address]);
 
   const register = useCallback(async (stakeWei: bigint) => {
     if (!state?.minStakeKnown) {
@@ -221,33 +240,41 @@ export function useArbiterStaking() {
       return { ok: false };
     }
     const res = await registerArbiterWithStakeAction(chain.run)(stakeWei);
-    if (res.ok) synced();
+    if (!res.ok) return res;
+    await synced(() => awaitMirror((l) => mine(l)?.registered === true));
     return res;
-  }, [chain.run, state?.minStakeWei, state?.minStakeKnown, synced]);
+  }, [chain.run, state?.minStakeWei, state?.minStakeKnown, synced, awaitMirror, mine]);
 
   const add = useCallback(async (amountWei: bigint) => {
+    const before = toWei(state?.stakeWei ?? "0");
     const res = await addStakeAction(chain.run)(amountWei);
-    if (res.ok) synced();
+    if (!res.ok) return res;
+    await synced(() => awaitMirror((l) => {
+      try { return BigInt(mine(l)?.stakeWei ?? "0") >= before + amountWei; } catch { return false; }
+    }));
     return res;
-  }, [chain.run, synced]);
+  }, [chain.run, state?.stakeWei, synced, awaitMirror, mine]);
 
   const requestUnstake = useCallback(async () => {
     const res = await requestUnstakeAction(chain.run)();
-    if (res.ok) synced();
+    if (!res.ok) return res;
+    await synced(() => awaitMirror((l) => mine(l)?.unstakeRequested === true));
     return res;
-  }, [chain.run, synced]);
+  }, [chain.run, synced, awaitMirror, mine]);
 
   const cancelUnstake = useCallback(async () => {
     const res = await cancelUnstakeAction(chain.run)();
-    if (res.ok) synced();
+    if (!res.ok) return res;
+    await synced(() => awaitMirror((l) => { const e = mine(l); return !!e && !e.unstakeRequested; }));
     return res;
-  }, [chain.run, synced]);
+  }, [chain.run, synced, awaitMirror, mine]);
 
   const withdraw = useCallback(async () => {
     const res = await withdrawStakeAction(chain.run)();
-    if (res.ok) synced();
+    if (!res.ok) return res;
+    await synced(() => awaitMirror((l) => { const e = mine(l); return !e || !e.registered; }));
     return res;
-  }, [chain.run, synced]);
+  }, [chain.run, synced, awaitMirror, mine]);
 
   return { chain, state, address, register, add, requestUnstake, cancelUnstake, withdraw, refresh };
 }
