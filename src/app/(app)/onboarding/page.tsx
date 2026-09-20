@@ -4,7 +4,8 @@
  * Onboarding — connect → pick role → verify KYC → enter app.
  * Strict step machine: the role is only submitted via the step-2 confirm
  * button, and the identity form (step 3) never renders before that. Single
- * switchable role; arbiter stakes LATER (on the stake page), never upfront.
+ * permanent role (locked once KYC starts); arbiter stakes LATER (on the
+ * stake page), never upfront.
  * Step state derives from the server user + a local confirm flag, so a
  * reload resumes where the user left off.
  */
@@ -129,7 +130,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
       toast.success(`Role → ${selectedRole}`);
       onConfirm();
     } catch (err) {
-      toast.error("Role switch failed", { description: err instanceof Error ? err.message : "Unknown error" });
+      toast.error("Role save failed", { description: err instanceof Error ? err.message : "Unknown error" });
     } finally {
       setBusy(false);
     }
@@ -137,7 +138,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
   const selected = ROLES.find((r) => r.id === selectedRole);
   return (
     <div>
-      <h2 className="text-lg font-medium">2 — Pick your seat (switchable anytime)</h2>
+      <h2 className="text-lg font-medium">2 — Pick your seat (permanent)</h2>
       <p className="mt-1 text-sm text-dim">One active role. Writes are gated to it; reads stay open. Confirm to continue to identity.</p>
       <div className="mt-4 grid gap-2" role="radiogroup" aria-label="Role">
         {ROLES.map((r) => {

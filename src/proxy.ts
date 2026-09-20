@@ -28,7 +28,15 @@ function corsHeaders(origin: string | null): HeadersInit {
 export function proxy(request: NextRequest) {
   if (!request.nextUrl.pathname.startsWith('/api')) {
     const p = request.nextUrl.pathname
-    const isPublic = p === '/' || p === '/onboarding' || p.startsWith('/onboarding/')
+    const isOnboarding = p === '/onboarding' || p.startsWith('/onboarding/')
+    // One-way flow: verified users can't re-enter onboarding (role is locked).
+    if (isOnboarding && request.cookies.get(ONBOARDED_COOKIE)?.value === '1') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
+    const isPublic = p === '/' || isOnboarding
     if (!isPublic && request.cookies.get(ONBOARDED_COOKIE)?.value !== '1') {
       const url = request.nextUrl.clone()
       url.pathname = '/onboarding'
@@ -59,5 +67,7 @@ export const config = {
     '/settings/:path*',
     '/admin/:path*',
     '/console/:path*',
+    '/onboarding',
+    '/onboarding/:path*',
   ],
 }
