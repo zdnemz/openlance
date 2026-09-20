@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { RoleGate } from "@/components/role-gate";
 import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
 import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
@@ -94,6 +95,7 @@ export default function NewJobPage() {
   }
 
   return (
+    <RoleGate>
     <div className="mx-auto max-w-3xl">
       <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Break the work into escrowable chunks.</h1>
       <p className="mt-3 max-w-[62ch] text-sm leading-relaxed text-dim">
@@ -222,5 +224,6 @@ export default function NewJobPage() {
         </Button>
       </div>
     </div>
+    </RoleGate>
   );
 }

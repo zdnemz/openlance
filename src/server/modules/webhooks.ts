@@ -4,7 +4,7 @@ import { and, count, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { pagination, validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { getQueues } from '../lib/queue'
 import { NOTIFICATION_TYPES } from '../domain/notifications'
@@ -41,7 +41,7 @@ export async function listWebhooks(request: Request) {
 }
 
 export async function createWebhook(request: Request) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const body = await validate(request, z.object({
     url: z.string().url().refine((u) => u.startsWith('http://') || u.startsWith('https://'), 'http(s) URL required'),
     eventTypes: z.array(z.enum(NOTIFICATION_TYPES)).max(20).default([]), // empty = all events
@@ -58,7 +58,7 @@ export async function createWebhook(request: Request) {
 }
 
 export async function deleteWebhook(request: Request, webhookId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const [sub] = await db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, webhookId)).limit(1)
   if (!sub) throw Errors.notFound('Webhook subscription')
@@ -69,7 +69,7 @@ export async function deleteWebhook(request: Request, webhookId: string) {
 
 /** Rotate the HMAC secret; the new value is returned exactly once. */
 export async function rotateSecret(request: Request, webhookId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const sub = await ownedSubscription(user.id, webhookId)
   const secret = randomBytes(24).toString('hex')
@@ -84,7 +84,7 @@ export async function rotateSecret(request: Request, webhookId: string) {
  * one attempt — giving the user a way to validate their endpoint end-to-end.
  */
 export async function testWebhook(request: Request, webhookId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const sub = await ownedSubscription(user.id, webhookId)
 
@@ -120,7 +120,7 @@ export async function testWebhook(request: Request, webhookId: string) {
 
 /** Re-enqueue a terminal delivery for another attempt (resets the backoff). */
 export async function redeliver(request: Request, webhookId: string, deliveryId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const sub = await ownedSubscription(user.id, webhookId)
   const [delivery] = await db.select().from(webhookDeliveries)

@@ -2,6 +2,8 @@
 
 /** /dashboard — role-aware control room: work in flight, money state. */
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useProjects, useJobs, useDisputes, useProject, useJob, useLedger } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText, press } from "@/components/design";
@@ -15,17 +17,26 @@ import { TrendDown } from "@phosphor-icons/react/dist/csr/TrendDown";
 
 export default function DashboardPage() {
   const session = useSession();
+  const router = useRouter();
   const { data: projects, isLoading } = useProjects();
   const { data: allJobs } = useJobs();
   const { data: disputes } = useDisputes();
   const { data: ledger } = useLedger({ limit: "8" });
+
+  // Belt over the proxy gate's suspenders: unfinished onboarding bounces
+  // instantly (covers a stale gate cookie; the proxy is the enforcer).
+  useEffect(() => {
+    if (session.token && session.user && session.user.kycStatus !== "verified") {
+      router.replace("/onboarding");
+    }
+  }, [session.token, session.user, router]);
 
   if (!session.token) {
     return (
       <EmptyState
         className="mt-16"
         title="Your dashboard lives behind your key"
-        body="Connect a wallet and prove ownership — projects, escrow states, and earnings are scoped to your address. Pick a devnet persona for an instant view."
+        body="Connect a wallet and prove ownership — projects, escrow states, and earnings are scoped to your address. Then pick a role and verify identity in onboarding."
         action={<Link href="/jobs" className="text-sm text-rose-bright hover:underline">Browse jobs meanwhile</Link>}
       />
     );
@@ -39,6 +50,16 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-10">
+      {me.kycStatus !== "verified" && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-line bg-white/[0.012] px-6 py-4">
+          <p className="text-[13px] text-dim">
+            {me.kycStatus === "pending" ? "KYC pending — approve it to unlock posting and proposing." : "Finish onboarding — pick your seat and verify identity to unlock posting and proposing."}
+          </p>
+          <Link href="/onboarding" className="rounded-full bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white hover:bg-rose-bright">
+            {me.kycStatus === "pending" ? "Review KYC" : "Finish onboarding"}
+          </Link>
+        </div>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">

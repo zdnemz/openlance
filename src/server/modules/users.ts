@@ -3,24 +3,92 @@ import { desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc } from '../auth/middleware'
 import { publicUser } from '../auth/service'
 import { users, reviews } from '../db/schema'
 import { Errors } from '../lib/errors'
 
 export async function updateMe(request: Request) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const body = await validate(request, z.object({
     displayName: z.string().min(1).max(80).optional(),
     avatarUrl: z.string().url().max(500).optional(),
     bio: z.string().max(2000).optional(),
     skills: z.array(z.string().min(1).max(40)).max(20).optional(),
     links: z.record(z.string(), z.string().url()).optional(),
-    role: z.enum(['client', 'freelancer', 'both']).optional(),
   }))
   const db = getDb()
   const [updated] = await db.update(users).set({ ...body, updatedAt: new Date() })
     .where(eq(users.id, user.id)).returning()
+  return publicUser(updated!)
+}
+
+/**
+ * Switch the single active role (client / freelancer / arbiter).
+ * Free to switch (stake-later onboarding); WRITES are gated separately:
+ * jobs/proposals require verified KYC, the stake page requires the arbiter
+ * seat, and dispute votes are decided on-chain by selection.
+ */
+export async function switchRole(request: Request) {
+  const user = await requireAuth(request)
+  const body = await validate(request, z.object({ role: z.enum(['client', 'freelancer', 'arbiter']) }))
+  // Stepping UP (client → freelancer → arbiter) invalidates the lighter KYC —
+  // the new seat's enhanced check must be redone. Stepping down keeps it.
+  const rank = { client: 1, freelancer: 2, arbiter: 3 } as const
+  const needsReverify = rank[body.role] > rank[user.role as keyof typeof rank]
+  const db = getDb()
+  const [updated] = await db.update(users)
+    .set({
+      role: body.role,
+      ...(needsReverify ? { kycStatus: 'none' as const, kycLevel: null, kycUpdatedAt: null } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, user.id)).returning()
+  return publicUser(updated!)
+}
+
+const KYC_LEVELS = { client: 'light', freelancer: 'standard', arbiter: 'enhanced' } as const
+
+/**
+ * Simulated KYC submission — per-role depth, no real provider.
+ *  · client:     name + country → auto-verified instantly.
+ *  · freelancer: + idType + idNumber → pending (demo auto-approves on next read).
+ *  · arbiter:    + idNumber + liveness checkbox → pending, needs enhanced review.
+ */
+export async function submitKyc(request: Request) {
+  const user = await requireAuth(request)
+  const body = await validate(request, z.object({
+    fullName: z.string().min(2).max(120),
+    country: z.string().min(2).max(80),
+    idType: z.enum(['passport', 'drivers_license', 'national_id']).optional(),
+    idNumber: z.string().min(4).max(40).optional(),
+    livenessConfirmed: z.boolean().optional(),
+  }).strict())
+  if (user.role === 'freelancer' && !body.idType) throw Errors.badRequest('Freelancer KYC needs an ID type')
+  if (user.role === 'arbiter') {
+    if (!body.idType || !body.idNumber || !body.livenessConfirmed) {
+      throw Errors.badRequest('Arbiter KYC needs ID type + number + liveness confirmation')
+    }
+  }
+  const instant = user.role === 'client'
+  const db = getDb()
+  const [updated] = await db.update(users).set({
+    kycStatus: instant ? 'verified' : 'pending',
+    kycLevel: KYC_LEVELS[user.role as keyof typeof KYC_LEVELS] ?? 'light',
+    kycUpdatedAt: new Date(),
+    updatedAt: new Date(),
+  }).where(eq(users.id, user.id)).returning()
+  return { user: publicUser(updated!), simulated: true, autoVerified: instant }
+}
+
+/** Demo reviewer: approve the caller's own pending KYC (simulates the ops queue). */
+export async function approveOwnKyc(request: Request) {
+  const user = await requireAuth(request)
+  if (user.kycStatus !== 'pending') throw Errors.conflict('kyc_not_pending', `KYC is ${user.kycStatus}`)
+  const db = getDb()
+  const [updated] = await db.update(users).set({
+    kycStatus: 'verified', kycUpdatedAt: new Date(), updatedAt: new Date(),
+  }).where(eq(users.id, user.id)).returning()
   return publicUser(updated!)
 }
 

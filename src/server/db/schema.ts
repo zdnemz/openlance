@@ -13,7 +13,9 @@ import {
 } from 'drizzle-orm/pg-core'
 
 // ── Enums ───────────────────────────────────────────────────────────────────
-export const userRole = pgEnum('user_role', ['client', 'freelancer', 'both'])
+export const userRole = pgEnum('user_role', ['client', 'freelancer', 'arbiter'])
+/** Mock-KYC lifecycle for every role (simulated, never a real provider). */
+export const kycStatus = pgEnum('kyc_status', ['none', 'pending', 'verified', 'rejected'])
 export const jobStatus = pgEnum('job_status', ['open', 'in_progress', 'completed', 'cancelled'])
 export const proposalStatus = pgEnum('proposal_status', ['submitted', 'accepted', 'rejected', 'withdrawn'])
 export const projectStatus = pgEnum('project_status', ['active', 'completed', 'cancelled'])
@@ -47,7 +49,15 @@ export const users = pgTable('users', {
   bio: text('bio'),
   skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
   links: jsonb('links').notNull().default(sql`'{}'::jsonb`),
-  role: userRole('role').notNull().default('both'),
+  role: userRole('role').notNull().default('client'),
+  // ── Onboarding: single switchable role + simulated per-role KYC ──────────
+  /** none → pending → verified (arbiter needs verified + on-chain tier ≥ bronze). */
+  kycStatus: kycStatus('kyc_status').notNull().default('none'),
+  /** light (client) | standard (freelancer) | enhanced (arbiter). */
+  kycLevel: text('kyc_level'),
+  kycUpdatedAt: timestamp('kyc_updated_at', { withTimezone: true }),
+  /** Mirror of ArbiterRegistry.tierOf (0 none … 3 gold). */
+  arbiterTier: integer('arbiter_tier').notNull().default(0),
   // Mirror of the on-chain ArbiterRegistry (indexer-maintained).
   isArbiter: boolean('is_arbiter').notNull().default(false),
   // Derived stats — computed from chain settlement events, never client-writable.

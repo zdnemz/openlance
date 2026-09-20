@@ -11,7 +11,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc, requireRole } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { isValidEthAmount, toWei, toEth } from '../lib/money'
 import { emitNotification } from './notify'
@@ -58,7 +58,8 @@ export async function listProposals(request: Request, jobId: string) {
 }
 
 export async function createProposal(request: Request, jobId: string) {
-  const user = await requireAuth(request)
+  const user = await requireRole(request, ['freelancer'])
+  await requireKyc(request)
   const { job } = await loadJobWithTemplate(jobId)
   if (job.status !== 'open') throw Errors.conflict('job_not_open', 'Only open jobs accept proposals')
   if (job.posterId === user.id) throw Errors.conflict('own_job', 'You cannot bid on your own job')
@@ -97,7 +98,7 @@ export async function createProposal(request: Request, jobId: string) {
 
 /** Withdraw — freelancer, while submitted. */
 export async function withdrawProposal(request: Request, proposalId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1)
   if (!p) throw Errors.notFound('Proposal')
@@ -110,7 +111,7 @@ export async function withdrawProposal(request: Request, proposalId: string) {
 
 /** ACCEPT — the bridge event (see module doc). */
 export async function acceptProposal(request: Request, proposalId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const [proposal] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1)
   if (!proposal) throw Errors.notFound('Proposal')

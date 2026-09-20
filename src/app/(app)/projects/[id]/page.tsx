@@ -67,7 +67,7 @@ export default function ProjectRoomPage({ params }: { params: Promise<{ id: stri
     return (
       <EmptyState
         title="Project not found, or it is not yours to see"
-        body="Projects are visible to their participants only. Sign in with the client or freelancer wallet (try a devnet persona)."
+        body="Projects are visible to their participants only. Sign in with the participating client or freelancer wallet."
       />
     );
   }

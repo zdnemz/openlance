@@ -134,7 +134,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <section>
               <ListHead>Proposals · {proposals?.length ?? 0}</ListHead>
               {!proposals?.length ? (
-                <EmptyState className="mt-4" title="No proposals yet" body="Freelancers see this job the moment it's open. The seeded personas are active on the devnet." />
+                <EmptyState className="mt-4" title="No proposals yet" body="Freelancers see this job the moment it's open. Switch to the freelancer seat to propose." />
               ) : (
                 <div className="mt-4 space-y-4">
                   {proposals.map((p) => (
@@ -143,8 +143,15 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 </div>
               )}
             </section>
-          ) : job.status === "open" && session.token ? (
+          ) : job.status === "open" && session.token && session.user?.role === "freelancer" ? (
             <ProposeForm jobId={id} />
+          ) : job.status === "open" && session.token ? (
+            <div className="glass rounded-3xl p-6 text-sm text-dim">
+              <span className="flex items-center gap-2.5">
+                <Lock className="h-4 w-4 text-faint" /> Proposing needs the freelancer seat —{" "}
+                <Link href="/onboarding" className="text-rose-bright hover:underline">switch role</Link>.
+              </span>
+            </div>
           ) : (
             <div className="glass rounded-3xl p-6 text-sm text-dim">
               {job.status !== "open" ? (

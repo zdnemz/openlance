@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { env } from '../config'
 import { getDb } from '../db'
 import { validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { attachments } from '../db/schema'
 import { requireParticipant } from './helpers'
@@ -57,7 +57,7 @@ function signedLocalUrl(attachmentId: string): string {
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 export async function initAttachment(request: Request, projectId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const project = await requireParticipant(projectId, user)
   const body = await validate(request, z.object({
     filename: z.string().min(1).max(200).regex(/^[\w\-. ()]+$/, 'Filename contains forbidden characters'),
@@ -102,7 +102,7 @@ export async function initAttachment(request: Request, projectId: string) {
 
 /** Confirm the upload landed (HEAD via driver). */
 export async function confirmAttachment(request: Request, attachmentId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const [att] = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1)
   if (!att) throw Errors.notFound('Attachment')
@@ -136,7 +136,7 @@ export async function attachmentUrl(request: Request, attachmentId: string) {
 
 /** Local-driver upload (Bearer auth, size-capped). */
 export async function putAttachmentRaw(request: Request, attachmentId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const db = getDb()
   const [att] = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1)
   if (!att) throw Errors.notFound('Attachment')

@@ -5,7 +5,7 @@
  * validation and pagination so route handlers stay one-liners.
  */
 import { z } from 'zod'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc } from '../auth/middleware'
 import { pagination, validate } from '../lib/http'
 import { NOTIFICATION_TYPES } from '../domain/notifications'
 import {
@@ -30,7 +30,7 @@ export async function getUnreadCount(request: Request) {
 }
 
 export async function markNotificationsRead(request: Request) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const body = await validate(request, z.object({
     ids: z.array(z.string().uuid()).max(200).optional(),
   }).strict().default({}))
@@ -47,7 +47,7 @@ export async function getPreferences(request: Request) {
 }
 
 export async function updatePreference(request: Request) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const body = await validate(request, z.object({
     eventType: z.union([z.literal('*'), z.enum(NOTIFICATION_TYPES)]),
     muted: z.boolean(),

@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireKyc } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { unlocksReviews } from '../domain/state-machine'
 import { getChainAdapter } from '../chain/adapter'
@@ -18,7 +18,7 @@ import { reviews, users } from '../db/schema'
 import { loadMilestone } from './helpers'
 
 export async function createReview(request: Request, milestoneId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const { milestone, project } = await loadMilestone(milestoneId)
 
   // reviewer must be a party to the milestone's project

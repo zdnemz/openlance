@@ -57,10 +57,10 @@ async function main() {
     skills: ['typescript', 'next.js', 'solidity'],
   })
   const arbiter = await upsertUser(WALLETS.arbiter, {
-    displayName: 'Ines (Arbiter)', bio: 'Independent arbiter. 72h SLA or my score pays for it.', role: 'both',
+    displayName: 'Ines (Arbiter)', bio: 'Independent arbiter. 72h SLA or my score pays for it.', role: 'arbiter',
     skills: ['arbitration', 'defi'],
   })
-  await upsertUser(WALLETS.admin, { displayName: 'OpenLance Admin', role: 'both' })
+  await upsertUser(WALLETS.admin, { displayName: 'OpenLance Admin', role: 'client' })
   console.log('[seed] users seeded')
 
   // job with 2-milestone template

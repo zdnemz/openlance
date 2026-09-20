@@ -10,14 +10,14 @@ import { desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { emitNotification } from './notify'
 import { attachments, projectMilestones, submissionAttachments, submissions } from '../db/schema'
 import { loadMilestone, requireParticipant } from './helpers'
 
 export async function createSubmission(request: Request, projectId: string, milestoneId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   await requireParticipant(projectId, user)
   const { milestone, project } = await loadMilestone(milestoneId)
   if (milestone.projectId !== project.id) throw Errors.notFound('Milestone in this project')
@@ -65,7 +65,7 @@ export async function createSubmission(request: Request, projectId: string, mile
 
 /** Client-side soft "request changes" — chain stays `Submitted`. */
 export async function requestChanges(request: Request, projectId: string, milestoneId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   await requireParticipant(projectId, user)
   const { milestone, project } = await loadMilestone(milestoneId)
   if (milestone.projectId !== project.id) throw Errors.notFound('Milestone in this project')

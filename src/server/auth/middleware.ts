@@ -38,3 +38,22 @@ export async function requireAdmin(request: Request): Promise<User> {
   }
   return user
 }
+
+export type AppRole = 'client' | 'freelancer' | 'arbiter'
+
+/** Role gate for writes: the user's active role must be in the allowlist. */
+export async function requireRole(request: Request, roles: AppRole[]): Promise<User> {
+  const user = await requireAuth(request)
+  if (!roles.includes(user.role as AppRole)) {
+    throw Errors.forbidden(`Role "${user.role}" cannot perform this action — switch to ${roles.join(' / ')} in onboarding`)
+  }
+  return user
+}
+
+/** KYC gate: verified (or pending-allowed) status required before money moves. */
+export async function requireKyc(request: Request, allowPending = false): Promise<User> {
+  const user = await requireAuth(request)
+  if (user.kycStatus === 'verified') return user
+  if (allowPending && user.kycStatus === 'pending') return user
+  throw Errors.forbidden('Complete KYC verification first (Onboarding → Verify identity)')
+}

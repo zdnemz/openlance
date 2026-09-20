@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { env } from '../config'
 import { getDb } from '../db'
 import { validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { isDisputable } from '../domain/state-machine'
 import { emitNotification } from './notify'
@@ -24,7 +24,7 @@ const ADDRESS = z.string().regex(/^0x[0-9a-fA-F]{40}$/)
 void ADDRESS
 
 export async function openDispute(request: Request, projectId: string, milestoneId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const project = await requireParticipant(projectId, user)
   const { milestone } = await loadMilestone(milestoneId)
   if (milestone.projectId !== project.id) throw Errors.notFound('Milestone in this project')

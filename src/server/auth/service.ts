@@ -20,7 +20,11 @@ export function publicUser(u: typeof users.$inferSelect) {
     skills: u.skills,
     links: u.links,
     role: u.role,
+    kycStatus: u.kycStatus,
+    kycLevel: u.kycLevel,
+    arbiterTier: u.arbiterTier,
     isArbiter: u.isArbiter,
+    isAdmin: env.adminWallets.includes(u.walletAddress),
     stats: {
       totalEarnedWei: u.totalEarnedWei,
       totalPaidWei: u.totalPaidWei,
@@ -64,8 +68,10 @@ export async function me(request: Request) {
 }
 
 export async function logout(request: Request) {
-  const header = request.headers.get('authorization')!
-  const claims = await verifySession(header.slice(7))
-  if (claims) await denySession(claims.jti)
+  const header = request.headers.get('authorization')
+  if (header?.startsWith('Bearer ')) {
+    const claims = await verifySession(header.slice(7))
+    if (claims) await denySession(claims.jti)
+  }
   return { loggedOut: true }
 }

@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server'
 import type { ZodType } from 'zod'
 import { AppError, Errors } from './errors'
 import { logger } from './logger'
+import { env } from '../config'
 import type { User } from '../db/schema'
 
 export type RouteContext = {
@@ -20,6 +21,32 @@ export type RouteContext = {
 
 export function ok<T>(data: T, status = 200, init?: ResponseInit): NextResponse {
   return NextResponse.json({ data }, { status, ...init })
+}
+
+/**
+ * Onboarding-gate cookie read by the edge proxy (`src/proxy.ts`):
+ * value '1' ⇔ KYC verified. httpOnly — only the proxy needs it.
+ * Keep the literal in sync with proxy.ts (deliberately not imported there —
+ * the proxy must stay free of node-only modules).
+ */
+export const ONBOARDED_COOKIE = 'el_onboarded'
+
+/** Stamp the gate cookie on an `ok()` response (auth verify / role / KYC). */
+export function withOnboardedCookie(res: NextResponse, verified: boolean): NextResponse {
+  res.cookies.set(ONBOARDED_COOKIE, verified ? '1' : '0', {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: env.SESSION_TTL_SECONDS,
+    ...(process.env.NODE_ENV === 'production' ? { secure: true } : {}),
+  })
+  return res
+}
+
+/** Expire the gate cookie (logout — always succeeds, even unauthenticated). */
+export function clearOnboardedCookie(res: NextResponse): NextResponse {
+  res.cookies.set(ONBOARDED_COOKIE, '', { path: '/', maxAge: 0 })
+  return res
 }
 
 /** 201 Created envelope — parity with the original Hono routes. */

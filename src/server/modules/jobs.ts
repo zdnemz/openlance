@@ -3,7 +3,7 @@ import { and, count, desc, eq, ilike, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { pagination, validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc, requireRole } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { isValidEthAmount, toWei, toEth } from '../lib/money'
 import { jobMilestones, jobs, users } from '../db/schema'
@@ -81,7 +81,8 @@ export async function listJobs(request: Request) {
 
 // ── Create ──────────────────────────────────────────────────────────────────
 export async function createJob(request: Request) {
-  const user = await requireAuth(request)
+  const user = await requireRole(request, ['client'])
+  await requireKyc(request)
   const body = await validate(request, createJobSchema)
   if (BigInt(toWei(body.budgetMin)) > BigInt(toWei(body.budgetMax))) {
     throw Errors.badRequest('budgetMin must be ≤ budgetMax')
@@ -120,7 +121,7 @@ export async function getJob(jobId: string) {
 
 // ── Edit (poster only, while open — PRD F1) ────────────────────────────────
 export async function updateJob(request: Request, jobId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const { job } = await loadJobWithTemplate(jobId)
   if (job.posterId !== user.id) throw Errors.forbidden('Only the poster may edit this job')
   if (job.status !== 'open') throw Errors.conflict('job_locked', 'Job can only be edited while open')
@@ -159,7 +160,7 @@ export async function updateJob(request: Request, jobId: string) {
 
 // ── Cancel (poster only, while open — no funds involved pre-award) ─────────
 export async function cancelJob(request: Request, jobId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const { job } = await loadJobWithTemplate(jobId)
   if (job.posterId !== user.id) throw Errors.forbidden('Only the poster may cancel this job')
   if (job.status !== 'open') throw Errors.conflict('job_locked', 'Only open jobs can be cancelled')

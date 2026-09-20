@@ -5,6 +5,7 @@
  * The calm interior: generous spacing, hairlines over boxes, mono numbers.
  */
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { WalletButton } from "@/components/wallet/wallet-button";
@@ -13,7 +14,7 @@ import { useSession, useSessionHydrated } from "@/lib/session";
 import { useDisputes, useProjects, useNotifications } from "@/lib/queries";
 import { AddressAvatar, StatusDot } from "@/components/design";
 import { shortAddress } from "@/lib/format";
-import { personaForAddress } from "@/lib/wallet";
+import { useRuntime } from "@/lib/runtime";
 import { Compass } from "@phosphor-icons/react/dist/csr/Compass";
 import { SquaresFour } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { Layout } from "@phosphor-icons/react/dist/csr/Layout";
@@ -27,27 +28,23 @@ import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
 export function Logo({ size = "md", withMark = true }: { size?: "sm" | "md"; withMark?: boolean }) {
   return (
     <span className="flex items-center gap-2.5">
-      {withMark && (
-        <span className="relative grid h-8 w-8 place-items-center rounded-xl bg-rose-accent/15 ring-1 ring-rose-accent/30">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-            <path d="M2 8.5L6 12.5L14 3.5" stroke="#f43f5e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
-      )}
+      {/* Real brand mark — src/app/icon.svg, served at /icon.svg (single source of truth, also the favicon). */}
+      {withMark && <Image src="/icon.svg" alt="OpenLance" width={32} height={32} priority className="h-8 w-8 rounded-lg" />}
       <span className={cn("font-semibold tracking-tight", size === "md" ? "text-[17px]" : "text-[15px]")}>
-        Escrow<span className="text-rose-bright">Lance</span>
+        Open<span className="text-rose-bright">Lance</span>
       </span>
     </span>
   );
 }
 
-function railItems(admin: boolean, disputesCount: number, unread: number) {
+function railItems(admin: boolean, disputesCount: number, unread: number, kycNone: boolean) {
   return [
     { href: "/jobs", label: "Explore", icon: Compass },
     { href: "/jobs/new", label: "Post a job", icon: SquaresFour },
     { href: "/dashboard", label: "Dashboard", icon: Layout },
     { href: "/disputes", label: "Disputes", icon: Gavel, badge: disputesCount || undefined },
     { href: "/arbiters", label: "Arbiters", icon: Scales },
+    ...(kycNone ? [{ href: "/onboarding", label: "Onboarding", icon: ShieldStar }] : []),
     { href: "/settings/notifications", label: "Notifications", icon: Bell, badge: unread || undefined },
     ...(admin ? [{ href: "/admin", label: "Admin", icon: ShieldStar }] : []),
   ];
@@ -57,16 +54,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const session = useSession();
   const sessionHydrated = useSessionHydrated();
-  const isAdmin = sessionHydrated && session.user?.walletAddress === "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+  const chainId = useRuntime((s) => s.chainId);
+  const isAdmin = sessionHydrated && !!session.user?.isAdmin;
   const { data: disputes } = useDisputes();
   const openDisputes = (disputes ?? []).filter((d) => d.status !== "resolved").length;
   const { data: notifications } = useNotifications();
   const unread = notifications?.unread ?? 0;
-  const items = railItems(isAdmin, openDisputes, unread);
+  const kycNone = sessionHydrated && !!session.token && session.user?.kycStatus === "none";
+  const items = railItems(isAdmin, openDisputes, unread, kycNone);
   // Gate the persisted-session-derived chip: the server always sees an empty
   // session, so rendering it before localStorage rehydrates would mismatch.
   const address = sessionHydrated ? session.user?.walletAddress : undefined;
-  const persona = personaForAddress(address);
+  const roleLine = session.user ? `${session.user.role} · kyc ${session.user.kycStatus}` : "member";
   const isBackable = pathname !== "/dashboard" && pathname !== "/jobs";
 
   return (
@@ -113,13 +112,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </a>
             {address && (
               <Link
-                href={`/profile/${address}`}
+                href="/profile/me"
                 className="mt-1 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] text-dim hover:bg-white/[0.04] hover:text-foreground"
               >
                 <AddressAvatar address={address} size={26} />
                 <span className="min-w-0">
                   <span className="block truncate leading-tight">{session.user?.displayName ?? shortAddress(address)}</span>
-                  <span className="block text-[11px] leading-tight text-faint">{persona?.role ?? "member"}</span>
+                  <span className="block text-[11px] leading-tight text-faint">{roleLine}</span>
                 </span>
               </Link>
             )}
@@ -150,7 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11px] text-dim">
               <StatusDot color="#34d399" pulse />
-              <span className="num">anvil devnet · 31337</span>
+              <span className="num">{chainId === 84532 ? "base sepolia · 84532" : `env chain · ${chainId}`} · testnet, no real funds</span>
             </span>
             {sessionHydrated && session.token && <NotificationBell />}
             <WalletButton />

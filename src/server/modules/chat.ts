@@ -9,7 +9,7 @@ import { and, desc, eq, lt } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { validate } from '../lib/http'
-import { requireAuth } from '../auth/middleware'
+import { requireAuth, requireKyc } from '../auth/middleware'
 import { Errors } from '../lib/errors'
 import { attachments, messages } from '../db/schema'
 import { requireParticipant } from './helpers'
@@ -37,7 +37,7 @@ export async function listMessages(request: Request, projectId: string) {
 }
 
 export async function createMessage(request: Request, projectId: string) {
-  const user = await requireAuth(request)
+  const user = await requireKyc(request)
   const project = await requireParticipant(projectId, user)
   const body = await validate(request, z.object({
     body: z.string().min(1).max(8000),

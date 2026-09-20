@@ -26,7 +26,7 @@ interface ReconciliationRun {
 export default function AdminPage() {
   const session = useSession();
   const { address } = useWallet();
-  const isAdmin = session.user?.walletAddress === "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+  const isAdmin = !!session.user?.isAdmin;
   const { data: overview } = useOverview();
   const { data: ledger } = useLedger({ type: "FeeWithdrawn", limit: "10" });
   const [runs, setRuns] = useState<ReconciliationRun[] | null>(null);
@@ -58,7 +58,7 @@ export default function AdminPage() {
               <div>
                 <div className="text-[14px] font-medium">Operator gate</div>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-faint">
-                  Sign in as devnet persona <span className="text-dim">Mara Voss</span> — anvil #0, the deployer — to open
+                  Sign in with the operator wallet (ADMIN_WALLETS) to open
                   reconciliation runs, fee exit, and the solvency check.
                 </p>
               </div>

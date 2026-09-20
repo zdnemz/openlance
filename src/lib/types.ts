@@ -16,7 +16,8 @@ export type ProjectStatus = "active" | "completed" | "cancelled";
 export type DisputeStatus = "open" | "agreed" | "assigned" | "resolved";
 /** On-chain round phase (Escrow.Phase) mirrored by the indexer. */
 export type DisputePhase = "none" | "commit" | "reveal" | "resolved";
-export type UserRole = "client" | "freelancer" | "both";
+export type UserRole = "client" | "freelancer" | "arbiter";
+export type KycStatus = "none" | "pending" | "verified" | "rejected";
 
 export interface PublicUser {
   id: string;
@@ -27,7 +28,12 @@ export interface PublicUser {
   skills: string[];
   links: Record<string, string>;
   role: UserRole;
+  kycStatus: KycStatus;
+  kycLevel: string | null;
+  /** Mirror of ArbiterRegistry.tierOf (0 none … 3 gold). */
+  arbiterTier: number;
   isArbiter: boolean;
+  isAdmin?: boolean;
   stats: {
     totalEarnedWei: string;
     totalPaidWei: string;
