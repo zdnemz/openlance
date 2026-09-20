@@ -148,8 +148,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           ) : job.status === "open" && session.token ? (
             <div className="glass rounded-3xl p-6 text-sm text-dim">
               <span className="flex items-center gap-2.5">
-                <Lock className="h-4 w-4 text-faint" /> Proposing needs the freelancer seat —{" "}
-                <Link href="/onboarding" className="text-rose-bright hover:underline">switch role</Link>.
+                <Lock className="h-4 w-4 text-faint" /> Proposing needs the freelancer seat — your account is locked to the {session.user?.role} seat.
               </span>
             </div>
           ) : (

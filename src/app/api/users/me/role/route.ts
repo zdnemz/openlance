@@ -1,4 +1,4 @@
-/** POST /api/users/me/role — switch the single active role. */
+/** POST /api/users/me/role — set the initial role during onboarding (one-way). */
 import { route } from '@/server/lib/route'
 import { writeRateLimit } from '@/server/lib/rate-limit'
 import { ok, withOnboardedCookie } from '@/server/lib/http'
@@ -11,7 +11,7 @@ export const POST = route(async (request) => {
   const user = await requireAuth(request)
   await writeRateLimit(request, user.id)
   const updated = await switchRole(request)
-  // Stepping up a role resets KYC → the gate cookie must follow, or the
-  // proxy would keep a stale 'verified' pass.
+  // Initial pick only: KYC is always 'none' here, so this never verifies —
+  // the onboarded cookie stays '0' until the KYC step completes.
   return withOnboardedCookie(ok(updated), updated.kycStatus === 'verified')
 })

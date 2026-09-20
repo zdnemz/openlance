@@ -24,25 +24,20 @@ export async function updateMe(request: Request) {
 }
 
 /**
- * Switch the single active role (client / freelancer / arbiter).
- * Free to switch (stake-later onboarding); WRITES are gated separately:
- * jobs/proposals require verified KYC, the stake page requires the arbiter
- * seat, and dispute votes are decided on-chain by selection.
+ * Set the initial role (client / freelancer / arbiter) during onboarding.
+ * One-way: once KYC has started (pending) or completed (verified) the role
+ * is locked — there is no change-role feature. The proxy additionally
+ * refuses re-entry to /onboarding once verified.
  */
 export async function switchRole(request: Request) {
   const user = await requireAuth(request)
+  if (user.kycStatus !== 'none') {
+    throw Errors.forbidden('Role is locked after onboarding started — contact support to change seats')
+  }
   const body = await validate(request, z.object({ role: z.enum(['client', 'freelancer', 'arbiter']) }))
-  // Stepping UP (client → freelancer → arbiter) invalidates the lighter KYC —
-  // the new seat's enhanced check must be redone. Stepping down keeps it.
-  const rank = { client: 1, freelancer: 2, arbiter: 3 } as const
-  const needsReverify = rank[body.role] > rank[user.role as keyof typeof rank]
   const db = getDb()
   const [updated] = await db.update(users)
-    .set({
-      role: body.role,
-      ...(needsReverify ? { kycStatus: 'none' as const, kycLevel: null, kycUpdatedAt: null } : {}),
-      updatedAt: new Date(),
-    })
+    .set({ role: body.role, updatedAt: new Date() })
     .where(eq(users.id, user.id)).returning()
   return publicUser(updated!)
 }

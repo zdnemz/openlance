@@ -50,7 +50,7 @@ export const users = pgTable('users', {
   skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
   links: jsonb('links').notNull().default(sql`'{}'::jsonb`),
   role: userRole('role').notNull().default('client'),
-  // ── Onboarding: single switchable role + simulated per-role KYC ──────────
+  // ── Onboarding: single permanent role + simulated per-role KYC ──────────
   /** none → pending → verified (arbiter needs verified + on-chain tier ≥ bronze). */
   kycStatus: kycStatus('kyc_status').notNull().default('none'),
   /** light (client) | standard (freelancer) | enhanced (arbiter). */
