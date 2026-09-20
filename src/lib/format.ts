@@ -84,6 +84,7 @@ export function timeUntil(iso: string | null | undefined): string {
 }
 
 export const MILESTONE_LABELS: Record<string, string> = {
+  draft: "Draft — unpublished",
   pending_funding: "Awaiting funding",
   funded: "In escrow",
   submitted: "Under review",
@@ -96,6 +97,7 @@ export const MILESTONE_LABELS: Record<string, string> = {
 };
 
 export const STATE_COLORS: Record<string, string> = {
+  draft: "var(--color-state-pending)",
   pending_funding: "var(--color-state-pending)",
   funded: "var(--color-state-funded)",
   submitted: "var(--color-state-submitted)",

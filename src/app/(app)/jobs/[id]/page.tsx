@@ -8,7 +8,9 @@ import { useSession } from "@/lib/session";
 import {
   AddressAvatar, Chip, EthAmount, Skeleton, EmptyState, press, ListHead, StatusBadge, AddressText,
 } from "@/components/design";
-import { formatEth, timeAgo } from "@/lib/format";
+import { formatEth, timeAgo, toWei } from "@/lib/format";
+import { useRuntime } from "@/lib/runtime";
+import { sendTransfer, waitForReceipt } from "@/lib/wallet";
 import { toast } from "sonner";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { Check } from "@phosphor-icons/react/dist/csr/Check";
@@ -32,12 +34,15 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   async function accept(proposalId: string) {
     setAwarding(proposalId);
     try {
-      const result = await post<{ project: { id: string } }>(`/proposals/${proposalId}/accept`);
+      const result = await post<{ project: { id: string }; surplusRefundedWei: string }>(`/proposals/${proposalId}/accept`);
       invalidate.job(id);
       invalidate.proposals(id);
       invalidate.projects();
+      const surplus = result.surplusRefundedWei && BigInt(result.surplusRefundedWei) > 0n
+        ? ` Surplus ${formatEth(result.surplusRefundedWei)} ETH returns to your wallet.`
+        : "";
       toast.success("Proposal accepted — project created", {
-        description: "Milestones spawned from the winning breakdown. Fund the first one from the project room.",
+        description: `Milestones spawned from the winning breakdown.${surplus} Fund the first one from the project room.`,
         action: { label: "Open project", onClick: () => (window.location.href = `/projects/${result.project.id}`) },
       });
     } catch (err) {
@@ -128,8 +133,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </section>
         </div>
 
-        {/* right: proposals / propose */}
+        {/* right: deposit gate (draft) / proposals / propose */}
         <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          {isPoster && job.status === "draft" && <DepositPanel jobId={id} budgetMaxWei={job.budget.maxWei} />}
           {isPoster ? (
             <section>
               <ListHead>Proposals · {proposals?.length ?? 0}</ListHead>
@@ -167,6 +173,62 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── deposit gate (poster view, draft only) ─────────────────────────────── */
+
+function DepositPanel({ jobId, budgetMaxWei }: { jobId: string; budgetMaxWei: string }) {
+  const vault = useRuntime((s) => s.vault);
+  const chainId = useRuntime((s) => s.chainId);
+  const invalidate = useInvalidate();
+  const [phase, setPhase] = useState<"idle" | "depositing" | "publishing">("idle");
+
+  async function depositAndPublish() {
+    setPhase("depositing");
+    try {
+      let depositTxHash: string;
+      if (vault) {
+        const hash = await sendTransfer({ to: vault, value: BigInt(budgetMaxWei), expectedChainId: chainId });
+        const receipt = await waitForReceipt(hash);
+        if (receipt.status !== "success") throw new Error("Deposit transaction reverted on-chain");
+        depositTxHash = hash;
+      } else {
+        // Dev mode (no vault configured): the server accepts the hash shape
+        // alone; real mode verifies the transfer on-chain before publishing.
+        depositTxHash = `0x${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}`;
+      }
+      setPhase("publishing");
+      await post(`/jobs/${jobId}/publish`, { depositTxHash });
+      invalidate.job(jobId);
+      toast.success("Job published", { description: "Deposit locked — it's live in the marketplace." });
+    } catch (err) {
+      toast.error("Could not publish", { description: err instanceof Error ? err.message : "Unknown error" });
+    } finally {
+      setPhase("idle");
+    }
+  }
+
+  return (
+    <section className="glass-raised rounded-3xl p-6">
+      <ListHead>Publish — deposit first</ListHead>
+      <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
+        This draft is private. Publishing locks <EthAmount wei={budgetMaxWei} className="text-foreground" /> (the
+        budget max) as the funding guarantee — only then do freelancers see it.
+      </p>
+      {vault ? (
+        <p className="num mt-3 break-all text-[11px] text-faint">vault {vault}</p>
+      ) : (
+        <p className="mt-3 text-[11px] text-faint">Dev mode: no vault configured, publishing records a simulated deposit.</p>
+      )}
+      <Button
+        disabled={phase !== "idle"}
+        onClick={depositAndPublish}
+        className="mt-4 w-full rounded-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
+      >
+        {phase === "idle" ? `Deposit ${formatEth(budgetMaxWei)} ETH + publish` : phase === "depositing" ? "Waiting for deposit…" : "Publishing…"}
+      </Button>
+    </section>
   );
 }
 
