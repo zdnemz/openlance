@@ -151,6 +151,46 @@ function TrustMeter({ score, floor, tone }: { score: number; floor: number; tone
   );
 }
 
+/** Progress toward the next rank — floors come from the live registry reads,
+ *  so a retune moves the goalpost automatically. Gold shows no bar. */
+function RankProgress({ stakeWei, tier, minWei, silverWei, goldWei }: {
+  stakeWei: string; tier: number; minWei: string; silverWei: string; goldWei: string;
+}) {
+  if (tier >= 3) {
+    return (
+      <div className="mt-4 flex items-baseline justify-between">
+        <span className="num text-[11px] uppercase tracking-wider text-faint">rank</span>
+        <span className="num text-[12.5px] font-medium text-state-released">Gold · top rank</span>
+      </div>
+    );
+  }
+  const stake = toWei(stakeWei);
+  const floor = tier === 2 ? toWei(silverWei) : tier === 1 ? toWei(minWei) : 0n;
+  const next = tier === 2 ? toWei(goldWei) : tier === 1 ? toWei(silverWei) : toWei(minWei);
+  const nextName = TIER_NAMES[Math.min(tier + 1, 3)] ?? "Bronze";
+  if (next <= 0n) return null;
+  const span = next > floor ? next - floor : 1n;
+  const done = stake > floor ? stake - floor : 0n;
+  const pct = Math.max(0, Math.min(100, Number((done * 10000n) / span) / 100));
+  const remaining = stake >= next ? 0n : next - stake;
+  return (
+    <div className="mt-4">
+      <div className="flex items-baseline justify-between">
+        <span className="num text-[11px] uppercase tracking-wider text-faint">next rank</span>
+        <span className="num text-[12.5px] text-dim">
+          {remaining > 0n ? <>{formatEth(remaining)} ETH to {nextName}</> : <>{nextName} reached</>}
+        </span>
+      </div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${pct}%`, background: "var(--color-state-released)" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ── Summary band (for /arbiters) ──────────────────────────────────────────── */
 
 export function ArbiterStakeSummary() {
@@ -341,6 +381,14 @@ export function ArbiterStakeHub() {
               </span>
             </div>
 
+            <RankProgress
+              stakeWei={state.stakeWei}
+              tier={state.tier ?? 0}
+              minWei={state.minStakeWei}
+              silverWei={state.tierSilverWei}
+              goldWei={state.tierGoldWei}
+            />
+
             <div className="mt-6">
               <div className="flex items-baseline justify-between">
                 <span className="num text-[11px] uppercase tracking-wider text-faint">trust score</span>
@@ -421,7 +469,8 @@ export function ArbiterStakeHub() {
             <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
               <h2 className="text-[16px] font-medium tracking-tight">Stake</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-faint">
-                Top up your collateral to climb tiers — Silver at 1 ETH, Gold at 10 ETH.
+                Top up your collateral to climb tiers — Silver at {formatEth(state.tierSilverWei)} ETH, Gold at{" "}
+                {formatEth(state.tierGoldWei)} ETH.
               </p>
               <div className="mt-5 space-y-3">
                 <div>
