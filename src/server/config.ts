@@ -61,6 +61,25 @@ const schema = z.object({
   ARBITER_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   /** TimelockController that owns the UUPS proxies (informational). */
   TIMELOCK_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+
+  // ── Gasless sponsorship (ERC-2771 forwarder + relayer) ─────────────────────
+  /** The deployed SponsorshipForwarder (trusted ERC-2771 forwarder). */
+  SPONSORSHIP_FORWARDER_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  /**
+   * Private key of the relayer wallet that submits sponsored meta-txs and pays
+   * gas (+ principal on testnet). Server-only; NEVER exposed to the client.
+   * Absent → sponsorship is disabled and money actions fall back to user-paid.
+   */
+  RELAYER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional(),
+  /**
+   * Lifetime of a sponsorship session voucher (seconds). Mirrors the JWT TTL by
+   * default so the on-chain session and the login session expire together.
+   */
+  SPONSORSHIP_SESSION_TTL_SECONDS: z.coerce.number().int().positive().optional(),
+  /**
+   * Max sponsored meta-txs per user per rolling hour — a relayer-drain guard.
+   */
+  SPONSORSHIP_RATE_LIMIT_PER_HOUR: z.coerce.number().int().positive().default(60),
   /** Display-only mirror of the contract's fee; the contract is the authority. */
   PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(250),
   /**
@@ -157,6 +176,14 @@ if (chainMode === 'real' && (!raw.ESCROW_ADDRESS || !raw.ARBITER_REGISTRY_ADDRES
   chainMode = 'mock'
 }
 
+// Sponsorship is live only when the relayer key AND the forwarder are set. The
+// session TTL tracks the session TTL so the on-chain voucher and the JWT expire
+// together (bound-to-session, per the feature spec).
+const sponsorshipEnabled = !!(raw.RELAYER_PRIVATE_KEY && raw.SPONSORSHIP_FORWARDER_ADDRESS)
+if (!sponsorshipEnabled && (raw.RELAYER_PRIVATE_KEY || raw.SPONSORSHIP_FORWARDER_ADDRESS)) {
+  console.warn('[config] gasless sponsorship needs BOTH RELAYER_PRIVATE_KEY and SPONSORSHIP_FORWARDER_ADDRESS — disabling')
+}
+
 if (raw.NODE_ENV === 'production' && raw.SUPABASE_JWT_SECRET.includes('do-not-use-in-prod')) {
   console.error('[config] SUPABASE_JWT_SECRET must be set to a real secret in production')
 }
@@ -169,6 +196,16 @@ export const env = {
   queueMode,
   appDomain: appUrl.host,
   adminWallets: raw.ADMIN_WALLETS.split(',').map((w) => w.trim().toLowerCase()).filter(Boolean),
+  /**
+   * Gasless sponsorship config — resolved once. `enabled` is false unless a
+   * relayer key + forwarder address are both present.
+   */
+  sponsorship: {
+    enabled: sponsorshipEnabled,
+    forwarderAddress: raw.SPONSORSHIP_FORWARDER_ADDRESS?.toLowerCase() ?? null,
+    sessionTtlSeconds: raw.SPONSORSHIP_SESSION_TTL_SECONDS ?? raw.SESSION_TTL_SECONDS,
+    rateLimitPerHour: raw.SPONSORSHIP_RATE_LIMIT_PER_HOUR,
+  },
   /**
    * Resolved storage system config — one place every consumer reads from.
    * `configured` reflects whether the selected driver has real credentials.

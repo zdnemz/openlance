@@ -69,6 +69,37 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+// ── Gasless sponsorship sessions ────────────────────────────────────────────
+/**
+ * A login-time EIP-712 `SponsorshipSession` voucher. The user signs once at
+ * login (scoped by a server-generated `sessionId`); the relay registers it
+ * on-chain on first use and every sponsored meta-tx is verified against it.
+ *
+ * The SESSION IS THE AUTHORIZATION: the contract checks the signature + expiry
+ * on-chain, so this row is a CACHE the backend uses to (a) know a session
+ * exists, (b) register it on-chain, and (c) quote/UX. It is never the sole
+ * authority for moving money. `expiresAt` mirrors the JWT TTL.
+ */
+export const sponsorshipSessions = pgTable('sponsorship_sessions', {
+  /** On-chain sessionId (bytes32 hex, lowercase) — the whole point of the row. */
+  id: text('id').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  address: text('address').notNull(), // signer wallet, lowercase
+  issuedAt: timestamp('issued_at', { withTimezone: true }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  /** EIP-712 signature over the SponsorshipSession digest (kept for on-chain registration). */
+  signature: text('signature').notNull(),
+  /** Whether the voucher has been registered with the forwarder contract yet. */
+  registeredOnchain: boolean('registered_onchain').notNull().default(false),
+  /** Sponsored meta-tx counter, for the per-user drain guard. */
+  sponsoredTxCount: integer('sponsored_tx_count').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('sponsorship_sessions_user_idx').on(t.userId),
+  index('sponsorship_sessions_expires_idx').on(t.expiresAt),
+])
+
 // ── Marketplace ─────────────────────────────────────────────────────────────
 export const jobs = pgTable('jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -394,3 +425,4 @@ export type NotificationRecipient = typeof notificationRecipients.$inferSelect
 export type NotificationPreference = typeof notificationPreferences.$inferSelect
 export type WebhookSubscription = typeof webhookSubscriptions.$inferSelect
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect
+export type SponsorshipSession = typeof sponsorshipSessions.$inferSelect

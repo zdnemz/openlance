@@ -127,3 +127,68 @@ export async function devWithdrawFees(request: Request) {
   const log = await getMockAdapter().withdrawFees(body.to)
   return { txHash: log.txHash, block: log.blockNumber }
 }
+
+/**
+ * Sponsored (gasless) forward, MOCK chain only. Decodes the intended target
+ * call from the ForwardRequest `data` and replays it through the same mock
+ * adapter the /dev/chain endpoints use — so the full login→sign→relay→indexer
+ * path is exercisable with zero infrastructure. The real path lives in
+ * src/server/chain/relayer.ts (viem → forwarder.execute).
+ */
+export async function devSponsoredFunding(
+  req: { to: string; data: string; value: string },
+  from: string,
+): Promise<string> {
+  assertDevChainEnabled()
+  const adapter = getMockAdapter()
+  const escrow = adapter.escrowAddress.toLowerCase()
+  const registry = adapter.registryAddress.toLowerCase()
+  const target = req.to.toLowerCase()
+
+  const { decodeFunctionData } = await import('viem')
+  const { ESCROW_ABI, REGISTRY_ABI } = await import('@/lib/contracts')
+
+  if (target === escrow) {
+    const { functionName, args } = decodeFunctionData({ abi: ESCROW_ABI as never, data: req.data as `0x${string}` })
+    switch (functionName) {
+      case 'fund': {
+        const [ref, freelancer] = args as [`0x${string}`, `0x${string}`]
+        const log = await adapter.fund(ref, from, freelancer, req.value)
+        return log.txHash
+      }
+      case 'submit': {
+        const [onchainId] = args as [bigint]
+        return (await adapter.submit(Number(onchainId), from)).txHash
+      }
+      case 'approve': {
+        const [onchainId] = args as [bigint]
+        return (await adapter.approve(Number(onchainId), from)).txHash
+      }
+      case 'cancel': {
+        const [onchainId] = args as [bigint]
+        return (await adapter.cancel(Number(onchainId), from)).txHash
+      }
+      case 'withdrawFees': {
+        const [to] = args as [`0x${string}`]
+        return (await adapter.withdrawFees(to)).txHash
+      }
+      default:
+        throw Errors.precondition('unsupported_sponsored_call', `Mock sponsorship does not support escrow.${String(functionName)}`)
+    }
+  }
+
+  if (target === registry) {
+    const { functionName } = decodeFunctionData({ abi: REGISTRY_ABI as never, data: req.data as `0x${string}` })
+    switch (functionName) {
+      case 'registerArbiter':
+        return (await adapter.registerArbiter(from, req.value)).txHash
+      case 'requestUnstake':
+      case 'withdrawStake':
+        return (await adapter.deregisterArbiter(from)).txHash
+      default:
+        throw Errors.precondition('unsupported_sponsored_call', `Mock sponsorship does not support registry.${String(functionName)}`)
+    }
+  }
+
+  throw Errors.badRequest('ForwardRequest target is not a known OpenLance contract')
+}
