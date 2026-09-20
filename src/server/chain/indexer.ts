@@ -138,6 +138,7 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'TrustScoreUpdated': return applyTrustScore(tx, evt)
     case 'ScoreChanged': return applyScoreChanged(tx, evt)
     case 'StakeDeposited': return applyStakeDeposited(tx, evt)
+    case 'StakeReduced': return applyStakeReduced(tx, evt)
     case 'StakeWithdrawn': return applyStakeWithdrawn(tx, evt)
     case 'StakeLocked': return applyStakeLocked(tx, evt)
     case 'StakeSlashed': return applyStakeSlashed(tx, evt)
@@ -546,6 +547,20 @@ async function applyStakeDeposited(tx: Tx, evt: RawChainLog): Promise<PlannedNot
     set: { stakeWei: total, registered: true, updatedAt: evt.blockTime },
   })
   await syncUserArbiter(tx, address, total, true)
+  return null
+}
+
+async function applyStakeReduced(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const address = str(evt.args.arbiter).toLowerCase()
+  const remaining = str(evt.args.remaining)
+  // Partial exit: the arbiter stays on the roster with a smaller position.
+  await tx.insert(arbiters).values({
+    address, registered: true, stakeWei: remaining, trustScore: 100, registeredAt: evt.blockTime,
+  }).onConflictDoUpdate({
+    target: arbiters.address,
+    set: { stakeWei: remaining, registered: true, updatedAt: evt.blockTime },
+  })
+  await syncUserArbiter(tx, address, remaining, true)
   return null
 }
 

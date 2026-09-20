@@ -21,7 +21,7 @@ export type ChainEventName =
   | 'AppealOpened' | 'AppealResolved' | 'ArbiterRewarded' | 'ArbiterPenalized'
   | 'NoQuorumFallback' | 'RewardsDeposited'
   | 'FeeWithdrawn' | 'ArbiterRegistered' | 'ArbiterDeregistered' | 'TrustScoreUpdated'
-  | 'ScoreChanged' | 'StakeDeposited' | 'StakeWithdrawn' | 'StakeSlashed' | 'StakeLocked'
+  | 'ScoreChanged' | 'StakeDeposited' | 'StakeReduced' | 'StakeWithdrawn' | 'StakeSlashed' | 'StakeLocked'
   | 'UnstakeRequested' | 'UnstakeCancelled' | 'TierThresholdsUpdated'
   | 'MinStakeUpdated' | 'MinScoreToWithdrawUpdated' | 'MinStakeDurationUpdated'
   | 'UnstakeCooldownUpdated' | 'EscrowSet'

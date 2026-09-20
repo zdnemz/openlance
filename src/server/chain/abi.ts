@@ -46,6 +46,7 @@ export const ESCROW_ABI = parseAbi([
   'event TrustScoreUpdated(address indexed arbiter, int256 delta, uint256 newScore, bool withinSla)',
   'event ScoreChanged(address indexed arbiter, uint256 oldScore, uint256 newScore, uint8 reason)',
   'event StakeDeposited(address indexed arbiter, uint256 amount, uint256 totalStake)',
+  'event StakeReduced(address indexed arbiter, uint256 amount, uint256 remaining)',
   'event StakeLocked(address indexed arbiter, uint256 amount, uint256 score)',
   'event UnstakeRequested(address indexed arbiter, uint256 amount)',
   'event UnstakeCancelled(address indexed arbiter)',
