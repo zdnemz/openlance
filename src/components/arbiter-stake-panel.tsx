@@ -109,9 +109,11 @@ function TonePill({ label, tone, icon, className }: { label: string; tone: strin
 function useStakeContext() {
   const { address } = useWallet();
   const hydrated = useWalletHydrated();
-  const { state, register, add, requestUnstake, cancelUnstake, withdraw, chain } = useArbiterStaking();
+  const { state, register, add, requestUnstake, cancelUnstake, withdraw, chain, refresh } = useArbiterStaking();
   const { minStakeWei, minScoreToWithdraw } = useRuntime();
-  return { address, hydrated, state, register, add, requestUnstake, cancelUnstake, withdraw, chain, minStakeWei, minScoreToWithdraw };
+  const registryKnown = useRuntime((s) => !!s.registry);
+  const loadRuntime = useRuntime((s) => s.load);
+  return { address, hydrated, state, register, add, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime };
 }
 
 /** Safe wei parser — tolerates undefined/empty from a still-loading runtime. */
@@ -234,11 +236,12 @@ export function ArbiterStakeSummary() {
 /* ── Hub (for /stake) ─────────────────────────────────────────────────────── */
 
 export function ArbiterStakeHub() {
-  const { address, hydrated, state, register, add, requestUnstake, cancelUnstake, withdraw, chain, minStakeWei, minScoreToWithdraw } = useStakeContext();
+  const { address, hydrated, state, register, add, requestUnstake, cancelUnstake, withdraw, chain, refresh, minStakeWei, minScoreToWithdraw, registryKnown, loadRuntime } = useStakeContext();
   const kycStatus = useSession((s) => s.user?.kycStatus);
   const [stakeModalOpen, setStakeModalOpen] = useState(false);
   const [stakeInput, setStakeInput] = useState("");
   const [topUpInput, setTopUpInput] = useState("");
+  const [retrying, setRetrying] = useState(false);
   const active = chain.phase !== "idle" && chain.phase !== "done";
 
   const stakeWei = ethToWei(stakeInput);
@@ -247,6 +250,15 @@ export function ArbiterStakeHub() {
   // minStakeKnown=false means the registry reads failed: any minimum shown is
   // a guess, so Confirm stays shut instead of sending a reverting stake.
   const minKnown = state?.minStakeKnown ?? false;
+  const retryReads = async () => {
+    setRetrying(true);
+    try {
+      await loadRuntime();
+    } finally {
+      refresh();
+      setRetrying(false);
+    }
+  };
 
   // Close the modal once the stake tx has fully settled, and reset the amount.
   useEffect(() => {
@@ -540,7 +552,17 @@ export function ArbiterStakeHub() {
               </p>
               {!minKnown && (
                 <p className="mt-1.5 text-[11.5px] text-state-disputed">
-                  Live registry reads are unavailable — tiers and minimums are estimates. Check your wallet network before confirming.
+                  {!registryKnown
+                    ? "App config still loading — contract addresses unknown."
+                    : "Live registry reads are unavailable — tiers and minimums are estimates. Check your wallet network before confirming."}{" "}
+                  <button
+                    type="button"
+                    disabled={retrying}
+                    onClick={() => void retryReads()}
+                    className="underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                  >
+                    {retrying ? "Retrying…" : "Retry connection"}
+                  </button>
                 </p>
               )}
             </div>
