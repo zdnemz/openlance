@@ -281,11 +281,13 @@ export function ArbiterStakeHub() {
   const kycStatus = useSession((s) => s.user?.kycStatus);
   const [stakeModalOpen, setStakeModalOpen] = useState(false);
   const [stakeInput, setStakeInput] = useState("");
+  const [topUpModalOpen, setTopUpModalOpen] = useState(false);
   const [topUpInput, setTopUpInput] = useState("");
   const [retrying, setRetrying] = useState(false);
   const active = chain.phase !== "idle" && chain.phase !== "done";
 
   const stakeWei = ethToWei(stakeInput);
+  const topUpWei = ethToWei(topUpInput);
   const minStake = state?.minStakeWei ?? minStakeWei;
   const belowMin = stakeWei < toWei(minStake);
   // minStakeKnown=false means the registry reads failed: any minimum shown is
@@ -308,6 +310,36 @@ export function ArbiterStakeHub() {
       setStakeInput("");
     }
   }, [stakeModalOpen, chain.phase, state?.registered]);
+
+  // Same for the top-up modal: close once the add-stake tx settles.
+  useEffect(() => {
+    if (topUpModalOpen && chain.phase === "done") {
+      setTopUpModalOpen(false);
+      setTopUpInput("");
+    }
+  }, [topUpModalOpen, chain.phase]);
+
+  // Open on a clean slate: a previous action may have left phase "done",
+  // which would instantly trip the closer above.
+  const openTopUp = () => {
+    chain.reset();
+    setTopUpInput("");
+    setTopUpModalOpen(true);
+  };
+
+  // Resulting tier for the pending top-up (mirrors Registry.tierOf).
+  const tierForTotal = (total: bigint): number => {
+    const min = toWei(state?.minStakeWei);
+    if (min <= 0n || total < min) return 0;
+    const gold = toWei(state?.tierGoldWei);
+    if (gold > 0n && total >= gold) return 3;
+    const silver = toWei(state?.tierSilverWei);
+    if (silver > 0n && total >= silver) return 2;
+    return 1;
+  };
+  const newTotalWei = toWei(state?.stakeWei) + topUpWei;
+  const newTier = tierForTotal(newTotalWei);
+  const currentTier = state?.tier ?? 0;
 
   if (!hydrated) {
     return (
@@ -473,27 +505,14 @@ export function ArbiterStakeHub() {
                 {formatEth(state.tierGoldWei)} ETH.
               </p>
               <div className="mt-5 space-y-3">
-                <div>
-                  <label htmlFor="topup" className="num mb-1.5 block text-[11px] uppercase tracking-wider text-faint">Add collateral</label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="topup"
-                      value={topUpInput}
-                      onChange={(e) => setTopUpInput(e.target.value)}
-                      placeholder="0.0"
-                      inputMode="decimal"
-                      className="h-10 border-line bg-white/[0.03] text-sm"
-                    />
-                    <Button
-                      disabled={active || ethToWei(topUpInput) <= 0n}
-                      onClick={() => add(ethToWei(topUpInput))}
-                      className="shrink-0 rounded-full border border-line px-5 text-dim hover:text-foreground"
-                      variant="ghost"
-                    >
-                      Add stake
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  disabled={active}
+                  onClick={openTopUp}
+                  className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
+                  variant="ghost"
+                >
+                  Add more stake
+                </Button>
               </div>
             </div>
 
@@ -568,6 +587,83 @@ export function ArbiterStakeHub() {
           </>
         )}
       </div>
+
+      {/* ── Top-up confirmation modal ────────────────────────────────── */}
+      <Dialog open={topUpModalOpen} onOpenChange={(v) => { if (!active) setTopUpModalOpen(v); }}>
+        <DialogContent className="glass-raised max-w-md gap-0 rounded-3xl border-line p-0">
+          <DialogHeader className="space-y-2 px-7 pb-4 pt-7">
+            <DialogTitle className="text-xl tracking-tight">Add to your stake</DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-dim">
+              Top up collateral to climb tiers. Takes effect on-chain as soon as the transaction mines.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 px-7 pb-6 pt-1">
+            <div>
+              <label htmlFor="topup-amount" className="num mb-1.5 block text-[11px] uppercase tracking-wider text-faint">
+                amount (ETH)
+              </label>
+              <Input
+                id="topup-amount"
+                value={topUpInput}
+                onChange={(e) => setTopUpInput(e.target.value)}
+                placeholder="0.0"
+                inputMode="decimal"
+                autoFocus
+                disabled={active}
+                className="h-11 flex-1 border-line bg-white/[0.03] text-base"
+              />
+            </div>
+
+            <div className="space-y-2 rounded-2xl border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
+              <div className="flex items-center justify-between">
+                <span className="text-faint">Current stake</span>
+                <span className="num text-dim">{formatEth(toWei(state?.stakeWei))} ETH</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-faint">New total</span>
+                <span className="num text-dim">
+                  {formatEth(newTotalWei)} ETH · {(TIER_NAMES[newTier] ?? "Unstaked").toLowerCase()}
+                  {newTier > currentTier && <span className="ml-1 text-state-released">· rank up</span>}
+                </span>
+              </div>
+            </div>
+
+            {chain.error && (
+              <p className="rounded-2xl border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
+                {chain.error}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="hairline-t flex-col-reverse gap-2 px-7 py-5 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={active}
+              onClick={() => setTopUpModalOpen(false)}
+              className="rounded-full border border-line px-5 text-dim hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={active || topUpWei <= 0n}
+              onClick={() => add(topUpWei)}
+              className="rounded-full bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
+            >
+              {active ? (
+                <span className="inline-flex items-center gap-2">
+                  <SpinnerGap className="h-4 w-4 animate-spin" />
+                  {PHASE_LABEL[chain.phase] ?? "Working…"}
+                </span>
+              ) : (
+                "Confirm top-up"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Stake confirmation modal ─────────────────────────────────── */}
       <Dialog open={stakeModalOpen} onOpenChange={(v) => { if (!active) setStakeModalOpen(v); }}>
