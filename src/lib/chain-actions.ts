@@ -288,7 +288,7 @@ export function addStakeAction(run: ReturnType<typeof useChainAction>["run"]) {
     });
 }
 
-/** Request to leave; benched from selection immediately. */
+/** Request to leave; benched from selection immediately, withdrawable at once. */
 export function requestUnstakeAction(run: ReturnType<typeof useChainAction>["run"]) {
   return () =>
     run({
@@ -296,7 +296,7 @@ export function requestUnstakeAction(run: ReturnType<typeof useChainAction>["run
       contract: "registry",
       functionName: "requestUnstake",
       args: [],
-      successMessage: "Unstake requested — you're out of the selection pool",
+      successMessage: "Unstake requested — withdraw your collateral anytime",
     });
 }
 

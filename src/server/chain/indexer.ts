@@ -570,8 +570,8 @@ async function applyStakeSlashed(tx: Tx, evt: RawChainLog): Promise<PlannedNotif
 
 async function applyUnstakeRequested(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
   const address = str(evt.args.arbiter).toLowerCase()
-  // Benched from selection immediately; the cooldown clock lives on-chain and
-  // is read directly by the UI (unstakeReadyAt).
+  // Benched from selection immediately; withdrawal needs no further wait (the
+  // cooldown gates the request itself) — unstakeReadyAt is already past.
   await tx.update(arbiters).set({ unstakeRequested: true, updatedAt: evt.blockTime }).where(eq(arbiters.address, address))
   return null
 }

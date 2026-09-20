@@ -18,9 +18,10 @@
  *   addStake()         requires registered, value > 0
  *   requestUnstake()   reverts when: not registered · already requested · stake 0
  *                      · busy (activeDisputes > 0) · score < minScoreToWithdraw
+ *                      · stake younger than unstakeCooldown (UnstakeTooEarly)
  *   cancelUnstake()    requires a pending request
- *   withdrawStake()    reverts when: not registered · not requested · busy
- *                      · cooldown not elapsed · score < minScoreToWithdraw
+ *   withdrawStake()    immediate — reverts when: not registered · not requested
+ *                      · busy · score < minScoreToWithdraw
  *                      → on success it DEREGISTERS the arbiter (leaves the
  *                        roster) but the soulbound badge stays as history.
  *
@@ -300,7 +301,14 @@ export function ArbiterStakeHub() {
   // Unknown dispute count (failed escrow read) blocks exits like a busy one —
   // the contract reverts requestUnstake/withdrawStake while serving.
   const exitBlocked = busy || locked || (registered && state?.busyKnown === false);
-  const cooldownActive = Boolean(state?.unstakeRequested && minsToWithdraw > 0);
+  // The cooldown gates the REQUEST (stakedAt + unstakeCooldown), derivable from
+  // the selectability clock: stakedAt = eligibleAt - minStakeDuration.
+  // unstakeReadyAt is already past once requested — withdrawal is immediate.
+  const secsToRequestable = registered && state
+    ? Math.max(0, state.eligibleAt - state.minStakeDurationSeconds + state.unstakeCooldownSeconds - nowSec)
+    : 0;
+  const requestLocked = registered && secsToRequestable > 0;
+  const requestBlocked = exitBlocked || requestLocked;
   const st = state ? standingOf(state, minsToEligible, minsToWithdraw) : null;
   // isEligible covers stake floor + duration + score + bench; when the clock
   // has passed but stake < min the user is NOT selectable — surface top-up.
@@ -352,9 +360,10 @@ export function ArbiterStakeHub() {
             <dl className="mt-6 space-y-2.5 border-t border-line pt-5 text-[12.5px]">
               <RuleRow label="Selectable after" value={selectableValue} hint={selectableHint} accent={belowMinStake} />
               <RuleRow
-                label="Exit cooldown"
-                value={state.unstakeRequested ? (cooldownActive ? `${fmtDuration(minsToWithdraw * 60)} left` : "ready") : `${cooldownDays}d`}
-                accent={state.unstakeRequested && !cooldownActive}
+                label="Unstakeable after"
+                value={state.unstakeRequested ? "requested" : requestLocked ? `${fmtDuration(secsToRequestable)}` : "now"}
+                hint={state.unstakeRequested ? "withdraw below" : `${cooldownDays}d staked`}
+                accent={state.unstakeRequested}
               />
               <RuleRow label="Collateral locked" value={locked ? "yes" : "no"} accent={locked} />
             </dl>
@@ -377,7 +386,7 @@ export function ArbiterStakeHub() {
             <RuleRow label="Selectable after" value={`${minStakeDays}d continuous`} />
             <RuleRow label="Lock floor" value={`${minScore} / 100`} hint="below this the stake locks" />
             <RuleRow label="Zero score" value="full slash" hint="stake → treasury" accent />
-            <RuleRow label="Unstake cooldown" value={`${cooldownDays}d`} />
+            <RuleRow label="Unstakeable after" value={`${cooldownDays}d staked`} hint="then withdraw immediate" />
           </dl>
         )}
       </div>
@@ -387,7 +396,7 @@ export function ArbiterStakeHub() {
         <h2 className="text-[16px] font-medium tracking-tight">{registered ? "Manage collateral" : "Join the pool"}</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-faint">
           {registered
-            ? "Top up your stake, bench yourself from selection, or withdraw once the cooldown clears."
+            ? "Top up your stake, bench yourself from selection, or withdraw immediately once requested."
             : "Deposit at least the minimum to mint your soulbound badge and enter the selection pool."}
         </p>
         {kycStatus && kycStatus !== "verified" && (
@@ -431,12 +440,13 @@ export function ArbiterStakeHub() {
 
               {!state.unstakeRequested ? (
                 <Button
-                  disabled={active || exitBlocked}
+                  disabled={active || requestBlocked}
                   onClick={() => requestUnstake()}
                   title={
                     busy ? `You are serving ${state.activeDisputes} active dispute${state.activeDisputes === 1 ? "" : "s"}`
                       : locked ? `Locked: score ${state.trustScore} < floor ${minScore}`
-                        : `Cooldown ${cooldownDays}d before withdrawal`
+                        : requestLocked ? `Stake must age ${cooldownDays}d before you can request unstake`
+                          : "Request unstake — withdrawal pays out immediately"
                   }
                   className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
                   variant="ghost"
@@ -445,15 +455,15 @@ export function ArbiterStakeHub() {
                     ? `Bench blocked — serving ${state.activeDisputes} dispute${state.activeDisputes === 1 ? "" : "s"}`
                     : locked
                       ? `Stake locked — score ${state.trustScore} < ${minScore}`
-                      : `Unstake (starts ${cooldownDays}d cooldown)`}
+                      : requestLocked
+                        ? `Unstake in ${fmtDuration(secsToRequestable)}`
+                        : "Request unstake (withdraw immediate)"}
                 </Button>
               ) : (
                 <>
                   <div className="flex items-center gap-2 rounded-2xl border border-line bg-white/[0.02] px-3 py-2 text-[12px] text-faint">
                     <Clock className="h-3.5 w-3.5" />
-                    {cooldownActive
-                      ? <>Unstake requested — collateral unlocks in <span className="num text-dim">{fmtDuration(minsToWithdraw * 60)}</span>.</>
-                      : <>Cooldown complete — you can withdraw your collateral now.</>}
+                    <>Unstaked — you can withdraw your collateral now, no waiting period.</>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
@@ -465,16 +475,15 @@ export function ArbiterStakeHub() {
                       Cancel unstake
                     </Button>
                     <Button
-                      disabled={active || exitBlocked || cooldownActive}
+                      disabled={active || exitBlocked}
                       onClick={() => withdraw()}
                       title={
                         busy ? "You are serving an active dispute"
-                          : locked ? `Locked: score ${state.trustScore} < floor ${minScore}`
-                            : cooldownActive ? `Wait ${fmtDuration(minsToWithdraw * 60)} for the cooldown` : undefined
+                          : locked ? `Locked: score ${state.trustScore} < floor ${minScore}` : undefined
                       }
                       className="rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium hover:bg-white/20 disabled:opacity-50"
                     >
-                      {cooldownActive ? `Withdraw (${fmtDuration(minsToWithdraw * 60)} left)` : "Withdraw stake"}
+                      Withdraw stake
                     </Button>
                   </div>
                 </>
@@ -500,7 +509,8 @@ export function ArbiterStakeHub() {
             <DialogTitle className="text-xl tracking-tight">Stake collateral</DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-dim">
               Deposit ETH to join the arbiter pool. Your collateral is locked while you serve — it can be
-              slashed if you misbehave, and released only after a {cooldownDays}d unstake cooldown.
+              slashed if you misbehave. You may request unstake after {cooldownDays}d of staking, and withdrawal
+              then pays out immediately.
             </DialogDescription>
           </DialogHeader>
 
@@ -580,8 +590,12 @@ export function ArbiterStakeHub() {
                 <span className="num text-dim">{minStakeDays}d of staking</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-faint">Unstake cooldown</span>
-                <span className="num text-dim">{cooldownDays}d</span>
+                <span className="text-faint">Unstakeable after</span>
+                <span className="num text-dim">{cooldownDays}d staked</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-faint">Withdrawal</span>
+                <span className="num text-dim">immediate</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-faint">Starting trust score</span>

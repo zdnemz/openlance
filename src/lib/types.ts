@@ -251,7 +251,7 @@ export interface RuntimeConfig {
   minScoreToWithdraw: number;
   /** Seconds of continuous stake required before an arbiter is selectable. */
   minStakeDurationSeconds: number;
-  /** Seconds between requestUnstake and withdrawStake. */
+  /** Seconds staked before requestUnstake may be called (withdraw is immediate). */
   unstakeCooldownSeconds: number;
   /** Dispute windows (seconds): commit / reveal / appeal. */
   commitWindowSeconds?: number;

@@ -7,8 +7,10 @@
  *
  * Staking rules (enforced on-chain, explained here for the UI):
  *   · register needs >= MIN_STAKE; new arbiters start at trust score 100.
- *   · requestUnstake benches you from selection; withdraw needs an idle arbiter
- *     with score >= minScoreToWithdraw (else StakeIsLocked).
+ *   · requestUnstake needs a stake aged >= unstakeCooldown and benches you
+ *     from selection; withdrawStake then pays out immediately (no second wait).
+ *   · withdraw needs an idle arbiter with score >= minScoreToWithdraw
+ *     (else StakeIsLocked).
  *   · score 0 slashes the whole stake to the treasury.
  */
 import { useCallback, useEffect, useState } from "react";
@@ -43,7 +45,7 @@ export interface MyArbiterState {
   minScoreToWithdraw: number;
   /** Seconds of continuous stake required before selection. */
   minStakeDurationSeconds: number;
-  /** Seconds between requestUnstake and withdrawStake. */
+  /** Seconds staked before requestUnstake may be called (withdraw is immediate). */
   unstakeCooldownSeconds: number;
   /** Unix seconds when the arbiter becomes eligible for selection (0 if unregistered). */
   eligibleAt: number;
