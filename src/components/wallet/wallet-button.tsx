@@ -2,9 +2,9 @@
 
 /** Header wallet control: connect → sign-in → session chip with menu. */
 import { useEffect, useState } from "react";
-import { useWallet, useWalletHydrated, fetchBalance, personaForAddress } from "@/lib/wallet";
+import { useWallet, useWalletHydrated, fetchBalance } from "@/lib/wallet";
 import { useSession } from "@/lib/session";
-import { loginWithWallet, logout } from "@/lib/siwe";
+import { loginWithWallet, disconnectAndLogout } from "@/lib/siwe";
 import { ConnectPanel } from "@/components/wallet/connect-panel";
 import { AddressAvatar, press } from "@/components/design";
 import { shortAddress } from "@/lib/format";
@@ -25,11 +25,10 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
   const [signing, setSigning] = useState(false);
   const [copied, setCopied] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
-  const { address, disconnect } = useWallet();
+  const { address } = useWallet();
   const hydrated = useWalletHydrated();
   const session = useSession();
 
-  const persona = personaForAddress(address);
   const signedIn = !!session.token && !!address && session.boundAddress === address.toLowerCase();
 
   useEffect(() => {
@@ -117,17 +116,17 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
             className={`flex items-center gap-2.5 rounded-full border border-line bg-white/[0.04] py-1.5 pl-1.5 pr-3.5 text-left hover:border-line-strong ${press}`}
           >
             <AddressAvatar address={address} size={28} />
-            <span className="min-w-0">
-              <span className="flex items-center gap-1.5">
-                <span className="truncate text-[13px] font-medium leading-tight">
-                  {session.user?.displayName ?? persona?.name ?? shortAddress(address, 4)}
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-[13px] font-medium leading-tight">
+                    {session.user?.displayName ?? shortAddress(address, 4)}
+                  </span>
+                  {session.user?.kycStatus === "verified" && <SealCheck weight="fill" className="h-3 w-3 shrink-0 text-state-released" />}
                 </span>
-                {persona && <SealCheck weight="fill" className="h-3 w-3 shrink-0 text-rose-bright" />}
+                <span className="num block text-[11px] leading-tight text-faint">
+                  {session.user ? `${session.user.role} · kyc ${session.user.kycStatus}` : shortAddress(address, 4)}
+                </span>
               </span>
-              <span className="num block text-[11px] leading-tight text-faint">
-                {persona ? persona.role : shortAddress(address, 4)}
-              </span>
-            </span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="glass-raised w-56 rounded-2xl border-line">
@@ -146,15 +145,14 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-white/[0.06]" />
           <DropdownMenuItem asChild className="gap-2 rounded-lg text-sm">
-            <Link href={`/profile/${address}`}>
-              <UserCircle className="h-4 w-4" /> Public profile
+            <Link href="/profile/me">
+              <UserCircle className="h-4 w-4" /> My profile
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2 rounded-lg text-sm"
             onClick={async () => {
-              await logout();
-              disconnect();
+              await disconnectAndLogout();
               toast("Signed out");
             }}
           >

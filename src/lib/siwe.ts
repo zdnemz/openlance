@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * SIWE → API JWT session (EIP-4361), wallet-agnostic:
- * dev personas sign locally; injected browser wallets sign via their provider.
+ * SIWE → API JWT session (EIP-4361), real injected wallets only.
  * The nonce endpoint returns the server's expected domain/chainId/statement,
  * so the message always matches verification no matter which host serves UI.
  */
 import { get, post } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { signMessage } from "@/lib/wallet";
+import { signMessage, useWallet } from "@/lib/wallet";
 import { getAddress } from "viem";
 import type { PublicUser } from "@/lib/types";
 
@@ -68,11 +67,17 @@ export async function loginWithWallet(address: string): Promise<void> {
   useSession.getState().setSession(result.token, result.user, address.toLowerCase());
 }
 
-export async function logout() {
+/**
+ * Full logout: revoke the server JWT first (otherwise it stays replayable for
+ * its 12h life), then drop the local session + wallet. Every disconnect button
+ * must go through here — clearing the wallet alone is not a logout.
+ */
+export async function disconnectAndLogout(): Promise<void> {
   try {
     await post("/auth/logout");
   } catch {
     /* token already dead — clearing locally is what matters */
   }
   useSession.getState().clear();
+  useWallet.getState().disconnect();
 }

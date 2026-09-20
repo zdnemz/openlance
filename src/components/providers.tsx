@@ -4,12 +4,11 @@
  * Client provider tree: TanStack Query → runtime config bootstrap →
  * session-wallet binding. The wallet layer is viem-only (see lib/wallet).
  */
-import { useEffect, useState, type ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/lib/runtime";
 import { useSession } from "@/lib/session";
 import { useWallet } from "@/lib/wallet";
-import { loginWithWallet } from "@/lib/siwe";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -43,8 +42,10 @@ export function Providers({ children }: { children: ReactNode }) {
 function SessionBinding({ children }: { children: ReactNode }) {
   const address = useWallet((s) => s.address);
   const kind = useWallet((s) => s.kind);
+  const token = useSession((s) => s.token);
   const bound = useSession((s) => s.boundAddress);
   const clear = useSession((s) => s.clear);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!bound) return;
@@ -55,18 +56,13 @@ function SessionBinding({ children }: { children: ReactNode }) {
     if (address.toLowerCase() !== bound) clear();
   }, [address, kind, bound, clear]);
 
+  // Signed out (token dropped) → drop cached API rows too, so the next
+  // account never renders the previous account's data.
+  const prevToken = useRef<string | null>(null);
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return;
-    const index = Number(new URLSearchParams(window.location.search).get("persona"));
-    if (!Number.isInteger(index) || index < 0 || index > 4) return;
-    const s = useSession.getState();
-    const w = useWallet.getState();
-    if (s.token && w.kind === "persona" && w.personaIndex === index) return;
-    void (async () => {
-      useWallet.getState().connectPersona(index);
-      await loginWithWallet(useWallet.getState().address!);
-    })().catch((e) => console.error("[dev autologin]", e));
-  }, []);
+    if (prevToken.current && !token) void queryClient.clear();
+    prevToken.current = token;
+  }, [token, queryClient]);
 
   return <>{children}</>;
 }
