@@ -9,7 +9,7 @@ Three deliverables, one repo:
 
 | Piece | Where | What it proves |
 |---|---|---|
-| **Contracts** | [`contracts/`](./contracts) | Solidity 0.8.28 + OZ 5.6 on **Hardhat 3**: `Escrow` + `ArbiterRegistry` (ERC-5194), both **UUPS-upgradeable** behind an OZ **TimelockController**. 39 tests incl. event-surface lock, upgrade-safety and reentrancy proofs; Slither clean. |
+| **Contracts** | [`contracts/`](./contracts) | Solidity 0.8.28 + OZ 5.6 on **Hardhat 3**: `Escrow` + `ArbiterRegistry` (ERC-5194) + `SponsorshipForwarder` (ERC-2771), both money contracts **UUPS-upgradeable** behind an OZ **TimelockController**. 72 tests incl. event-surface lock, upgrade-safety, reentrancy, and sponsored-meta-tx/EIP-712 proofs; Slither clean. |
 | **Backend** | [`src/server`](./src/server) + [`src/app/api`](./src/app/api) | Next.js server runtime (App Router route handlers): SIWE auth, marketplace, dispute coordination, chain indexer/mirror, transactional-outbox webhooks. Supabase Postgres + Upstash Redis caching. |
 | **Frontend** | `src/` (this app) | Next.js 16 product UI against the live stack: wallet-first auth, milestone state machine, real on-chain actions, arbiter surface. |
 
@@ -66,6 +66,33 @@ Key env vars (see [`.env.example`](./.env.example)):
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase Storage + Realtime (optional) |
 | `SUPABASE_JWT_SECRET` | HS256 secret; the SIWE session token doubles as a Supabase JWT (required in prod) |
 | `CHAIN_MODE` `CHAIN_RPC_URL` `ESCROW_ADDRESS` `ARBITER_REGISTRY_ADDRESS` | chain indexer (mock by default) |
+| `SPONSORSHIP_FORWARDER_ADDRESS` `RELAYER_PRIVATE_KEY` | gasless sponsorship (ERC-2771 forwarder + relayer). Both required; unset → user-paid gas |
+
+### Gasless money actions (sponsored meta-txs)
+
+Signed-in users pay **no gas** for money-moving actions. The design:
+
+1. **Login** — after SIWE succeeds the client signs ONE extra EIP-712
+   `SponsorshipSession` voucher (`owner, issuedAt, expiry, sessionId`). It
+   expires with the login session (JWT TTL) and is stored server-side.
+2. **Action** — the client signs an EIP-712 `ForwardRequest` (nonce + deadline
+   owned by the server) and POSTs it to `/api/relay`.
+3. **Relay** — the server relayer (`RELAYER_PRIVATE_KEY`) submits
+   `SponsorshipForwarder.execute(...)` and pays gas (+ principal on testnet).
+4. **On-chain authority** — `SponsorshipForwarder` (ERC-2771) verifies the
+   session voucher, the per-request signature, and the nonce; the target
+   contract recovers the real user via `_msgSender()`. `Escrow` and
+   `ArbiterRegistry` trust the forwarder, so `client == user` on-chain, never
+   the relayer. A leaked relayer key cannot move funds users did not sign for.
+
+Relevant files: `contracts/contracts/SponsorshipForwarder.sol`,
+`contracts/contracts/ERC2771ContextLite.sol`,
+`src/server/modules/sponsorship.ts`, `src/server/chain/relayer.ts`,
+`src/app/api/relay/**`, `src/lib/sponsorship.ts`. Tests:
+`contracts/test/sponsorship.ts`, `contracts/test/eip712-agreement.ts`.
+
+> Testnet only: the relayer fronts gas and principal, so give it test ETH only.
+> A per-user hourly cap (`SPONSORSHIP_RATE_LIMIT_PER_HOUR`) bounds relayer drain.
 
 ### Backend layout
 
@@ -76,8 +103,8 @@ src/server/           domain logic, ported 1:1 from the old Hono service
   db/                 Drizzle schema + Supabase Postgres client
   lib/                kv (Upstash), cache, jwt, rate-limit, http, errors, queue
   auth/               SIWE + session middleware
-  chain/              adapter (real/mock), events, indexer, reconcile
-  modules/            jobs, proposals, projects, disputes, files, … 
+  chain/              adapter (real/mock), relayer (sponsored meta-txs), events, indexer, reconcile
+  modules/            jobs, proposals, projects, disputes, files, sponsorship, … 
   workers/            webhook delivery + crons
   proxy.ts            CORS + OPTIONS preflight for /api/**
 scripts/              seed.ts, anvil/ (dev chain tooling); schema pushes straight

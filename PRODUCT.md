@@ -32,13 +32,21 @@ The contract is the source of truth: the off-chain layer is a mirror, and every 
 - Wallet hybrid: deterministic anvil personas sign locally in the tab (instant demo), injected wallets via window.ethereum + same-origin relay.
 - SIWE (EIP-4361) login mints a Supabase-compatible JWT; identity follows the key.
 - Three-phase chain-action UX: signing → mining → indexer mirroring (honest, with mirror-wait).
+- Gasless money actions: at login a second EIP-712 signature opens a sponsorship
+  session; every money-moving tx (fund, submit, approve, cancel, dispute,
+  stake deposit/withdraw) is then relayed as an ERC-2771 meta-tx. The signed-in
+  user pays no gas — the server relayer fronts it. Enforcement is on-chain
+  (SponsorshipForwarder verifies the session voucher + nonce; escrow/registry
+  trust it as an ERC-2771 forwarder), mirrored off-chain only for quoting.
 
 ## Capabilities and Constraints
 
 - Testnet only — no real funds, ever. Show this honestly ("anvil devnet · no real funds, real contracts").
 - One accent color (Deep Rose #e11d48); emerald + state hues exist only as milestone-state semantics.
 - English copy; mono numerals for all on-chain data (amounts, hashes, refs).
-- No attachments upload UI yet (next phase); ERC-4337 paymaster is a planned upgrade.
+- No attachments upload UI yet (next phase); gasless sponsorship ships as an
+  ERC-2771 forwarder + server relayer (a testnet faucet shape — relayer key must
+  hold test ETH only). ERC-4337 paymaster remains a future upgrade.
 
 ## Brand Commitments
 
