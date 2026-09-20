@@ -26,6 +26,8 @@ function milestoneView(m: typeof projectMilestones.$inferSelect, withTxHints: bo
     submittedAt: m.submittedAt,
     settledAt: m.settledAt,
     settlementTxHash: m.settlementTxHash,
+    withdrawnAt: m.withdrawnAt,
+    withdrawTxHash: m.withdrawTxHash,
     // funding payload for the wallet: ref travels inside the fund() tx so the
     // indexer can map the on-chain milestone back to this row.
     ...(withTxHints ? { fund: { contract: getChainAdapter().escrowAddress, chainId: env.CHAIN_ID, ref: uuidToBytes32(m.id), amountWei: m.amountWei } } : {}),
