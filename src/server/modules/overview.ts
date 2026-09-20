@@ -88,6 +88,7 @@ export function runtimeConfig() {
       escrow: adapter.escrowAddress,
       arbiterRegistry: adapter.registryAddress,
       timelock: env.TIMELOCK_ADDRESS ?? null,
+      vault: env.VAULT_ADDRESS ?? null,
       sponsorshipForwarder: env.sponsorship.forwarderAddress,
     },
     // Gasless sponsorship: when enabled, signed-in users pay no gas (relayer

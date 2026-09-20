@@ -2,6 +2,7 @@
 import { and, count, desc, eq, ilike, inArray, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db'
+import { env } from '../config'
 import { pagination, validate } from '../lib/http'
 import { requireAuth, requireKyc, requireRole } from '../auth/middleware'
 import { Errors } from '../lib/errors'
@@ -67,6 +68,12 @@ export async function listJobs(request: Request) {
   if (status && ['draft', 'open', 'in_progress', 'completed', 'cancelled'].includes(status)) conditions.push(eq(jobs.status, status as 'open'))
   // Drafts are private: the marketplace never lists them unless explicitly asked.
   else if (!status) conditions.push(ne(jobs.status, 'draft'))
+  if (status === 'draft') {
+    // Draft listing is poster-scoped: you only ever see your own drafts.
+    const viewer = await requireAuth(request).catch(() => null)
+    if (!viewer) throw Errors.unauthorized()
+    conditions.push(eq(jobs.posterId, viewer.id))
+  }
   if (category) conditions.push(eq(jobs.category, category))
   if (skill) conditions.push(sql`${skill} = ANY(${jobs.skills})`)
   if (q) conditions.push(ilike(jobs.title, `%${q}%`))
@@ -134,16 +141,35 @@ export async function publishJob(request: Request, jobId: string) {
   const { job } = await loadJobWithTemplate(jobId)
   if (job.posterId !== user.id) throw Errors.forbidden('Only the poster may publish this job')
   if (job.status !== 'draft') throw Errors.conflict('job_not_draft', 'Only draft jobs can be published')
-  // ponytail: deposit verified by amount + tx-hash anchor only; on-chain
-  // JobVault custody later if custodial trust demands it.
-  const body = await validate(request, z.object({ depositTxHash: z.string().min(10).max(120).optional() }).strict())
+  const body = await validate(request, z.object({ depositTxHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }).strict())
+  await verifyDeposit(body.depositTxHash, user.walletAddress, job.budgetMaxWei)
   const now = new Date()
   const db = getDb()
   const [updated] = await db.update(jobs).set({
-    status: 'open', depositAmountWei: job.budgetMaxWei, depositTxHash: body.depositTxHash ?? null,
+    status: 'open', depositAmountWei: job.budgetMaxWei, depositTxHash: body.depositTxHash,
     depositedAt: now, publishedAt: now, updatedAt: now,
   }).where(eq(jobs.id, job.id)).returning()
   return jobView(updated!, await templateFor(updated!.id))
+}
+
+/**
+ * The publish gate: in real mode the deposit tx must be a successful plain
+ * transfer of exactly budgetMax from the poster to VAULT_ADDRESS. Mock mode
+ * (no chain to read) accepts the hash shape alone — the format check above.
+ */
+async function verifyDeposit(txHash: string, poster: string, budgetMaxWei: string) {
+  if (env.chainMode !== 'real' || !env.CHAIN_RPC_URL) return
+  if (!env.VAULT_ADDRESS) throw Errors.precondition('vault_unconfigured', 'Publish vault is not configured')
+  const { createPublicClient, http } = await import('viem')
+  const client = createPublicClient({ transport: http(env.CHAIN_RPC_URL) })
+  const [tx, receipt] = await Promise.all([
+    client.getTransaction({ hash: txHash as `0x${string}` }).catch(() => null),
+    client.getTransactionReceipt({ hash: txHash as `0x${string}` }).catch(() => null),
+  ])
+  if (!tx || !receipt || receipt.status !== 'success') throw Errors.badRequest('Deposit transaction not found or failed')
+  if (tx.from.toLowerCase() !== poster.toLowerCase()) throw Errors.badRequest('Deposit must come from the poster wallet')
+  if ((tx.to ?? '').toLowerCase() !== env.VAULT_ADDRESS.toLowerCase()) throw Errors.badRequest('Deposit must go to the publish vault')
+  if (tx.value.toString() !== budgetMaxWei) throw Errors.badRequest('Deposit must equal the budget max')
 }
 
 // ── Edit (poster only, while draft — published budgets lock the guarantee) ──

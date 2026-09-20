@@ -61,6 +61,12 @@ const schema = z.object({
   ARBITER_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   /** TimelockController that owns the UUPS proxies (informational). */
   TIMELOCK_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  /**
+   * Job publish vault: publish requires a successful plain transfer of exactly
+   * budgetMax from the poster to this address (verified on-chain in real mode).
+   * Unset → publish is rejected in real mode; mock mode skips verification.
+   */
+  VAULT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
 
   // ── Gasless sponsorship (ERC-2771 forwarder + relayer) ─────────────────────
   /** The deployed SponsorshipForwarder (trusted ERC-2771 forwarder). */

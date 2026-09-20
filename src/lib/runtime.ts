@@ -22,6 +22,7 @@ interface RuntimeState {
   escrow: string | null;
   registry: string | null;
   timelock: string | null;
+  vault: string | null;
   chainMode: string;
   /** Resolved storage system config (bucket, driver, limits). */
   storage: StorageRuntimeConfig | null;
@@ -45,6 +46,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
   escrow: null,
   registry: null,
   timelock: null,
+  vault: null,
   chainMode: "…",
   storage: null,
   load: async () => {
@@ -70,6 +72,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
         escrow: cfg.contracts?.escrow ?? null,
         registry: cfg.contracts?.arbiterRegistry ?? null,
         timelock: cfg.contracts?.timelock ?? null,
+        vault: (cfg.contracts as { vault?: string } | undefined)?.vault ?? null,
         chainMode: cfg.chainMode ?? "…",
         storage: cfg.storage ?? null,
       });
