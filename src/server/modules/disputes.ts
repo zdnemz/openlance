@@ -79,6 +79,8 @@ export async function getDispute(request: Request, disputeId: string) {
   const db = getDb()
   const [dispute] = await db.select().from(disputes).where(eq(disputes.id, disputeId)).limit(1)
   if (!dispute) throw Errors.notFound('Dispute')
+  // Parties always; selected arbiters too (mirrors listDisputes — they vote via commit/reveal).
+  if (selectedIncludes(dispute, user.walletAddress)) return dispute
   await requireParticipant(dispute.projectId, user)
   return dispute
 }
