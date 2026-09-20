@@ -8,7 +8,7 @@
  *         block counter in KV. Powers zero-infra local dev and the
  *         /dev/chain endpoints (never mounted in production). Fees/resolutions
  *         follow the PRD rules: fee on released portion only, 50/50 split,
- *         trust score +1 within SLA / −2 late.
+ *         trust score +5 majority / −10 minority (registry deltas).
  *  real : viem public client against Base Sepolia reading real logs.
  */
 import { isNotNull } from 'drizzle-orm'
@@ -161,7 +161,7 @@ interface MockState {
   nextMilestoneId: number
   nextSbtTokenId: number
   milestones: Record<string, MockMilestone> // key: String(onchainId)
-  arbiters: Record<string, { registered: boolean; sbtTokenId: number; trustScore: number }>
+  arbiters: Record<string, { registered: boolean; sbtTokenId: number; trustScore: number; stakeWei: string; unstakeRequested: boolean; locked: boolean; registeredAt: number }>
 }
 
 const BLOCK_KEY = 'mockchain:block'
@@ -209,7 +209,15 @@ export class MockChainAdapter implements ChainAdapter {
     const arbiterState: MockState['arbiters'] = {}
     let maxSbtTokenId = 0
     for (const a of arbRows) {
-      arbiterState[a.address] = { registered: a.registered, sbtTokenId: a.sbtTokenId ?? 0, trustScore: a.trustScore }
+      arbiterState[a.address] = {
+        registered: a.registered,
+        sbtTokenId: a.sbtTokenId ?? 0,
+        trustScore: a.trustScore,
+        stakeWei: a.stakeWei ?? '0',
+        unstakeRequested: a.unstakeRequested ?? false,
+        locked: a.locked ?? false,
+        registeredAt: a.registeredAt ? new Date(a.registeredAt).getTime() / 1000 : 0,
+      }
       maxSbtTokenId = Math.max(maxSbtTokenId, a.sbtTokenId ?? 0)
     }
 
@@ -267,8 +275,11 @@ export class MockChainAdapter implements ChainAdapter {
     const kv = await getKv()
     const next = block + 1
     await kv.set(BLOCK_KEY, String(next))
+    // Registry-owned events live on the registry address (mirrors RealChainAdapter
+    // polling both contracts); everything else is escrow.
+    const registryEvents = new Set(['ArbiterRegistered', 'ArbiterDeregistered', 'TrustScoreUpdated', 'ScoreChanged', 'StakeDeposited', 'StakeWithdrawn', 'StakeLocked', 'StakeSlashed', 'UnstakeRequested', 'UnstakeCancelled', 'TierThresholdsUpdated', 'MinStakeUpdated', 'MinScoreToWithdrawUpdated', 'MinStakeDurationUpdated', 'UnstakeCooldownUpdated', 'ArbiterRewarded', 'ArbiterPenalized'])
     const log: RawChainLog = {
-      address: name.startsWith('Arbiter') || name === 'TrustScoreUpdated' ? this.registryAddress : this.escrowAddress,
+      address: registryEvents.has(name) || name.startsWith('Arbiter') ? this.registryAddress : this.escrowAddress,
       blockNumber: next,
       blockTime: new Date(),
       txHash: '0x' + crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, ''),
@@ -330,11 +341,20 @@ export class MockChainAdapter implements ChainAdapter {
     const logs: RawChainLog[] = []
     logs.push(await this.emit('DisputeOpened', { milestoneId: onchainId, by: by.toLowerCase(), lockedAmount: m.amount }, s.block))
 
-    // Model the multi-arbiter round: pick up to 3 registered, non-party arbiters
-    // deterministically (mock has no prevrandao) and emit ArbitersSelected so the
+    // Model the multi-arbiter round: pick up to 3 eligible, non-party arbiters
+    // (mirrors Escrow._selectArbiters → Registry.isEligible) deterministically
+    // (mock has no prevrandao) and emit ArbitersSelected so the
     // dispute mirror gets a phase + selected list, matching real-mode shape.
+    const nowSec = Date.now() / 1000
+    const minStake = BigInt(env.MIN_STAKE_WEI)
     const pool = Object.entries(s.arbiters)
-      .filter(([addr, a]) => a.registered && addr !== m.client && addr !== m.freelancer)
+      .filter(([addr, a]) => {
+        if (!a.registered || a.locked || a.unstakeRequested) return false
+        if (addr === m.client || addr === m.freelancer) return false
+        try { if (BigInt(a.stakeWei || '0') < minStake) return false } catch { return false }
+        if (a.registeredAt + env.MIN_STAKE_DURATION_SECONDS > nowSec) return false
+        return true
+      })
       .map(([addr]) => addr)
     const selected = pool.slice(0, 3)
     const padded: [string, string, string] = [
@@ -393,11 +413,16 @@ export class MockChainAdapter implements ChainAdapter {
     return logs
   }
 
-  async registerArbiter(address: string): Promise<RawChainLog> {
+  async registerArbiter(address: string, stakeWei?: string): Promise<RawChainLog> {
     const s = await this.state()
     const arb = address.toLowerCase()
     if (s.arbiters[arb]?.registered) throw new Error('mock: already registered')
-    return this.emit('ArbiterRegistered', { arbiter: arb, sbtTokenId: s.nextSbtTokenId }, s.block)
+    const stake = stakeWei ?? env.MIN_STAKE_WEI
+    if (BigInt(stake) < BigInt(env.MIN_STAKE_WEI)) throw new Error('mock: stake below minimum')
+    const log = await this.emit('ArbiterRegistered', { arbiter: arb, sbtTokenId: s.nextSbtTokenId }, s.block)
+    // _enroll emits Registered + Deposited atomically — mirror both so stakeWei converges.
+    await this.emit('StakeDeposited', { arbiter: arb, amount: stake, totalStake: stake }, s.block + 1)
+    return log
   }
 
   async deregisterArbiter(address: string): Promise<RawChainLog> {
