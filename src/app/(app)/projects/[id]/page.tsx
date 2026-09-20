@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -78,6 +79,7 @@ export default function ProjectRoomPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-8">
       <ProjectHeader id={id} />
+      <ArbiterPanel id={id} />
       {!isClient && !isFreelancer && (
         <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4 text-[13px] text-dim">
           <Warning className="h-4 w-4 shrink-0 text-amber-300" />
@@ -169,6 +171,123 @@ function Party({ label, who }: { label: string; who: { id: string; walletAddress
   );
 }
 
+/* ── mutual arbiter lock ─────────────────────────────────────────────── */
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+function ArbiterPanel({ id }: { id: string }) {
+  const { data: project } = useProject(id);
+  const { data: roster } = useArbiters();
+  const session = useSession();
+  const invalidate = useInvalidate();
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  if (!project) return null;
+  const locked = (project.chosenArbiters ?? []) as string[];
+  const proposal = project.arbiterProposal as { proposerId: string; addresses: string[] } | null;
+  const isParty = project.client.id === session.user?.id || project.freelancer.id === session.user?.id;
+  const mine = !!proposal && proposal.proposerId === session.user?.id;
+  const eligible = (roster ?? []).filter((a) => a.eligible).slice(0, 8);
+
+  async function propose() {
+    const addresses = draft.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    if (addresses.length < 1 || addresses.length > 3) {
+      toast.error("Propose 1–3 arbiter addresses", { description: "Comma or space separated wallet addresses." });
+      return;
+    }
+    setBusy(true);
+    try {
+      await post(`/projects/${id}/arbiters/propose`, { addresses });
+      setDraft("");
+      invalidate.project(id);
+      toast.success("Arbiters proposed", { description: "The counterparty approves to lock them in." });
+    } catch (err) {
+      toast.error("Could not propose", { description: err instanceof Error ? err.message : "Unknown error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approve() {
+    setBusy(true);
+    try {
+      await post(`/projects/${id}/arbiters/approve`, {});
+      invalidate.project(id);
+      toast.success("Arbiters locked", { description: "They seat first if a milestone ever disputes." });
+    } catch (err) {
+      toast.error("Could not lock", { description: err instanceof Error ? err.message : "Unknown error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="glass rounded-3xl p-6">
+      <div className="flex items-center gap-2.5">
+        <Scales className="h-4 w-4 text-dim" />
+        <ListHead>Mutual arbiters · {locked.length > 0 ? `${locked.length} locked` : proposal ? "awaiting approval" : "none picked"}</ListHead>
+      </div>
+      {locked.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {locked.map((a) => (
+            <div key={a} className="flex items-center gap-2.5 text-[13px]">
+              <SealCheck className="h-4 w-4 shrink-0 text-state-released" />
+              <AddressText value={a} />
+            </div>
+          ))}
+          <p className="text-[12px] text-faint">They seat first if a milestone disputes; ineligible entries fall back to random draw.</p>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {proposal && (
+            <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
+              <div className="num text-[11px] uppercase tracking-wider text-faint">{mine ? "your proposal — waiting on counterparty" : "counterparty proposal"}</div>
+              <div className="mt-2 space-y-1.5">
+                {proposal.addresses.map((a) => (
+                  <AddressText key={a} value={a} className="block text-[13px]" />
+                ))}
+              </div>
+              {!mine && isParty && (
+                <Button disabled={busy} onClick={approve} className="mt-3 rounded-full bg-state-released px-5 py-2 text-[12.5px] font-medium text-ink hover:brightness-110">
+                  Approve + lock
+                </Button>
+              )}
+            </div>
+          )}
+          {isParty && (
+            <div className="flex flex-col gap-2.5 sm:flex-row">
+              <Input
+                value={draft} onChange={(e) => setDraft(e.target.value)}
+                placeholder="0x…, 0x…  (1–3 addresses)"
+                className="num h-10 flex-1 border-line bg-white/[0.03] text-[12.5px]"
+              />
+              <Button disabled={busy || !draft.trim()} onClick={propose} className="rounded-full bg-white/10 px-5 py-2 text-[12.5px] font-medium hover:bg-white/20">
+                {proposal ? "Replace proposal" : "Propose"}
+              </Button>
+            </div>
+          )}
+          {eligible.length > 0 && isParty && locked.length === 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {eligible.map((a) => (
+                <button
+                  key={a.address} type="button"
+                  onClick={() => setDraft((d) => (d ? `${d}, ${a.address}` : a.address))}
+                  className={`num rounded-full border border-line px-2.5 py-1 text-[11px] text-dim hover:text-foreground ${press}`}
+                  title={`trust ${a.trustScore} · tier ${a.tier}`}
+                >
+                  {a.address.slice(0, 6)}…{a.address.slice(-4)}
+                </button>
+              ))}
+            </div>
+          )}
+          {!isParty && !proposal && <p className="text-[12px] text-faint">No arbiters picked yet — the parties agree up to 3 after award.</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* ── milestones tab ────────────────────────────────────────────────────── */
 
 function MilestonesTab({ projectId }: { projectId: string }) {
@@ -243,6 +362,11 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   const myReview = reviews?.find((r) => r.reviewerId === session.user?.id);
   const fee = feeOn(m.amountWei, feeBps);
   const active = chain.phase !== "idle" && chain.phase !== "done";
+  // Locked mutual arbiters seat first on-chain; otherwise the draw is random.
+  const lockedPreferred = ((project.chosenArbiters ?? []) as string[]).filter(Boolean).slice(0, 3);
+  const preferredArg = lockedPreferred.length > 0
+    ? [...lockedPreferred, ZERO_ADDR, ZERO_ADDR, ZERO_ADDR].slice(0, 3)
+    : null;
 
   const wait = (status: string | string[]) => (p: import("@/lib/types").ProjectView) =>
     (Array.isArray(status) ? status : [status]).includes(p.milestones.find((x) => x.id === m.id)!.chainStatus);
@@ -444,8 +568,8 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
             <div className="mt-4 space-y-3">
               <p className="text-[12.5px] leading-relaxed text-faint">
                 The dispute record (reason) is written off-chain, then your wallet locks the milestone on-chain and pays
-                the dispute fee. The contract then draws up to 3 random, eligible arbiters who vote commit-reveal; a
-                2-of-3 majority decides.
+                the dispute fee. {preferredArg ? "Your mutually-locked arbiters seat first; " : ""}Any remaining seats
+                draw at random from eligible arbiters who vote commit-reveal; a 2-of-3 majority decides.
               </p>
               <Textarea
                 value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
@@ -464,12 +588,14 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     () => chain.run({
                       label: "Open dispute",
                       contract: "escrow",
-                      functionName: "openDispute",
-                      args: [toWei(m.onchainId!)],
+                      functionName: preferredArg ? "openDisputeWith" : "openDispute",
+                      args: preferredArg ? [toWei(m.onchainId!), preferredArg] : [toWei(m.onchainId!)],
                       value: toWei(disputeFeeWei),
                       projectId,
                       expect: wait("disputed"),
-                      successMessage: "Dispute opened — arbiters selected on-chain",
+                      successMessage: preferredArg
+                        ? "Dispute opened — locked arbiters seated first"
+                        : "Dispute opened — arbiters selected on-chain",
                     }),
                   )
                 }
