@@ -297,7 +297,9 @@ export function ArbiterStakeHub() {
   const registered = Boolean(state?.registered);
   const busy = Boolean(state?.busy);
   const locked = Boolean(state?.locked);
-  const exitBlocked = busy || locked;
+  // Unknown dispute count (failed escrow read) blocks exits like a busy one —
+  // the contract reverts requestUnstake/withdrawStake while serving.
+  const exitBlocked = busy || locked || (registered && state?.busyKnown === false);
   const cooldownActive = Boolean(state?.unstakeRequested && minsToWithdraw > 0);
   const st = state ? standingOf(state, minsToEligible, minsToWithdraw) : null;
   // isEligible covers stake floor + duration + score + bench; when the clock

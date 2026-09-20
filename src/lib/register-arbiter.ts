@@ -51,13 +51,14 @@ export interface MyArbiterState {
   unstakeReadyAt: number;
   /** On-chain "now" at read time, so the UI can compute countdowns consistently. */
   chainNow: number;
-  /**
-   * Count of in-flight dispute rounds this arbiter is committed to
+  /** Count of in-flight dispute rounds this arbiter is committed to
    * (Escrow.activeDisputes). The registry's `_isBusy` gate reverts
    * requestUnstake/withdrawStake while this is > 0 — the UI mirrors it so a
    * user never signs a tx that will revert.
    */
   activeDisputes: number;
+  /** False when the escrow read failed — busy is unknown, exits stay shut. */
+  busyKnown: boolean;
   /** Convenience: `activeDisputes > 0` (the contract's busy condition). */
   busy: boolean;
 }
@@ -77,32 +78,64 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
     }
     let cancelled = false;
     (async () => {
-      let firstErr: string | null = null;
-      const noteErr = (fn: string, message: string) => { firstErr ??= `${fn}: ${message}`; };
-      const rc = <T,>(o: Omit<Parameters<typeof readContract>[0], "onError">) =>
-        readContract<T>({ ...o, onError: noteErr });
-      const info = await rc<readonly unknown[]>({
-        to: registry, abi: REGISTRY_ABI, functionName: "arbiterInfo", args: [address],
-      });
-      const minStakeWei = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStake" });
-      const minScore = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minScoreToWithdraw" });
-      const minStakeDuration = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStakeDuration" });
-      const unstakeCooldown = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeCooldown" });
-      const eligible = await rc<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isEligible", args: [address] });
-      const locked = await rc<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isLocked", args: [address] });
-      const eligibleAt = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "eligibleAt", args: [address] });
-      const unstakeReadyAt = await rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeReadyAt", args: [address] });
-      // Tier reads are optional (fall back to minStake×2/×5) — don't let them
-      // mask or trigger the load-bearing readError below.
-      const tier = await readContract<number>({ to: registry, abi: REGISTRY_ABI, functionName: "tierOf", args: [address] }).catch(() => 0);
-      const tierSilver = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierSilver" }).catch(() => null);
-      const tierGold = await readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierGold" }).catch(() => null);
-      // The escrow owns the "active dispute" bookkeeping the registry's _isBusy
-      // guard consults; read it directly so the UI matches the revert condition.
-      const activeDisputesRaw = escrow
-        ? await rc<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "activeDisputes", args: [address] })
-        : null;
-      const activeDisputes = Number(activeDisputesRaw ?? 0n);
+      try {
+        let firstErr: string | null = null;
+        const noteErr = (fn: string, message: string) => { firstErr ??= `${fn}: ${message}`; };
+        const rc = <T,>(o: Omit<Parameters<typeof readContract>[0], "onError">) =>
+          readContract<T>({ ...o, onError: noteErr });
+        // One parallel burst, not 13 sequential round trips. Every read is
+        // null-safe, so one failing view can't sink the batch.
+        const [
+          infoRaw, minStakeWei, minScore, minStakeDuration, unstakeCooldown,
+          eligible, locked, eligibleAt, unstakeReadyAt, activeDisputesRaw,
+          tier, tierSilver, tierGold,
+        ] = await Promise.all([
+          rc<readonly unknown[]>({ to: registry, abi: REGISTRY_ABI, functionName: "arbiterInfo", args: [address] }),
+          rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStake" }),
+          rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minScoreToWithdraw" }),
+          rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "minStakeDuration" }),
+          rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeCooldown" }),
+          rc<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isEligible", args: [address] }),
+          rc<boolean>({ to: registry, abi: REGISTRY_ABI, functionName: "isLocked", args: [address] }),
+          rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "eligibleAt", args: [address] }),
+          rc<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "unstakeReadyAt", args: [address] }),
+          escrow ? rc<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "activeDisputes", args: [address] }) : Promise.resolve(null),
+          // Tier reads are optional (fall back to minStake×2/×5) — plain reads
+          // so they neither mask nor trigger the load-bearing readError below.
+          readContract<number>({ to: registry, abi: REGISTRY_ABI, functionName: "tierOf", args: [address] }).catch(() => 0),
+          readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierSilver" }).catch(() => null),
+          readContract<bigint>({ to: registry, abi: REGISTRY_ABI, functionName: "tierGold" }).catch(() => null),
+        ]);
+        if (cancelled) return;
+        // viem decodes a NAMED-component tuple (see REGISTRY_ABI.arbiterInfo)
+        // to an object {registered, …}, not an array — positional indexing
+        // reads undefined and crashes below. Read by name, index as fallback.
+        const info = infoRaw;
+        const field = (i: number, name: string): unknown => {
+          if (Array.isArray(info)) {
+            if (info.length === 1 && info[0] !== null && typeof info[0] === "object" && !Array.isArray(info[0])) {
+              const o = info[0] as unknown as Record<string, unknown>;
+              if (name in o) return o[name];
+            }
+            return (info as readonly unknown[])[i];
+          }
+          if (info !== null && typeof info === "object") {
+            const o = info as unknown as Record<string, unknown>;
+            if (name in o) return o[name];
+          }
+          return undefined;
+        };
+        if (info === null && !firstErr) firstErr = "arbiterInfo: read failed";
+        const big = (v: unknown): bigint => (typeof v === "bigint" ? v : 0n);
+        const num = (v: unknown, fb = 0): number => {
+          if (typeof v === "bigint") return Number(v);
+          if (typeof v === "number" && Number.isFinite(v)) return v;
+          if (typeof v === "boolean") return v ? 1 : 0;
+          return fb;
+        };
+        // The escrow owns the "active dispute" bookkeeping the registry's
+        // _isBusy guard consults; a failed read means "unknown", never 0.
+        const activeDisputes = activeDisputesRaw === null ? 0 : num(activeDisputesRaw);
       const chainNow = Math.floor(Date.now() / 1000);
       if (cancelled) return;
       // tierSilver/Gold default to minStake*2/*5 (registry initialize) when the
@@ -117,16 +150,16 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
           tierGoldWei: goldFallback.toString(), locked: false, unstakeRequested: false, eligible: false,
           minStakeWei: (minStakeWei ?? 0n).toString(), minStakeKnown: minStakeWei !== null, readError: firstErr, minScoreToWithdraw: Number(minScore ?? 50n),
           minStakeDurationSeconds: Number(minStakeDuration ?? 0n), unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
-          eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false,
+          eligibleAt: 0, unstakeReadyAt: 0, chainNow, activeDisputes: 0, busy: false, busyKnown: activeDisputesRaw !== null,
         });
         return;
       }
       setState({
-        registered: Boolean(info[0]),
-        unstakeRequested: Boolean(info[1]),
-        trustScore: Number(info[3]),
-        stakeWei: (info[4] as bigint).toString(),
-        tier: Number(tier ?? 0),
+        registered: field(0, "registered") === true,
+        unstakeRequested: field(1, "unstakeRequested") === true,
+        trustScore: num(field(3, "trustScore"), 0),
+        stakeWei: big(field(4, "stake")).toString(),
+        tier: num(tier, 0),
         tierSilverWei: silverFallback.toString(),
         tierGoldWei: goldFallback.toString(),
         locked: Boolean(locked),
@@ -134,15 +167,24 @@ export function useMyArbiterState(): { state: MyArbiterState | null; refresh: ()
         minStakeWei: (minStakeWei ?? 0n).toString(),
         minStakeKnown: minStakeWei !== null,
         readError: firstErr,
-        minScoreToWithdraw: Number(minScore ?? 50n),
-        minStakeDurationSeconds: Number(minStakeDuration ?? 0n),
-        unstakeCooldownSeconds: Number(unstakeCooldown ?? 0n),
-        eligibleAt: Number(eligibleAt ?? 0n),
-        unstakeReadyAt: Number(unstakeReadyAt ?? 0n),
+        minScoreToWithdraw: num(minScore, 50),
+        minStakeDurationSeconds: num(minStakeDuration, 0),
+        unstakeCooldownSeconds: num(unstakeCooldown, 0),
+        eligibleAt: num(eligibleAt, 0),
+        unstakeReadyAt: num(unstakeReadyAt, 0),
         chainNow,
         activeDisputes,
         busy: activeDisputes > 0,
+        busyKnown: activeDisputesRaw !== null,
       });
+      } catch (err) {
+        // Never an unhandled rejection: keep the last good state and surface
+        // the reason for the next render.
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
+          setState((prev) => (prev ? { ...prev, readError: prev.readError ?? msg } : prev));
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, [registry, escrow, address, nonce]);
