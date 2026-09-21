@@ -105,6 +105,9 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
   const allRevealed = !!round && round.arbiterCount > 0 && round.revealCount >= round.arbiterCount;
   const canTally = !!round && !round.resolved && round.revealCount >= QUORUM && (now > round.revealDeadline || allRevealed);
   const canFinalize = !!round && round.resolved && !dispute.finalized && now > round.revealDeadline + windows.appeal;
+  // ponytail: derived from the live round + chain windows — the only honest finalize clock.
+  const appealEndsAt = round?.resolved && !dispute.finalized ? round.revealDeadline + windows.appeal : null;
+  const finalizeInSecs = appealEndsAt !== null ? appealEndsAt - now : 0;
   const phaseLabel = dispute.finalized ? "finalized" : round?.phase ?? dispute.phase;
 
   return (
@@ -191,16 +194,19 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
       )}
 
       {/* tally + finalize */}
-      {!dispute.finalized && (
+      {!dispute.finalized && milestone?.onchainId != null && (
         <div className="mt-5 border-t border-line pt-4">
           <div className="grid grid-cols-2 gap-2">
             <Button disabled={active || !canTally} onClick={async () => { const r = await tallyDisputeAction(chain.run)(milestone!.onchainId!, dispute.round ?? 0); if (r.ok) invalidate.disputes(); }} className="rounded-full bg-white/10 py-2.5 text-[12px] font-medium hover:bg-white/20">
               Tally round
             </Button>
             <Button disabled={active || !canFinalize} onClick={async () => { const r = await finalizeDisputeAction(chain.run)(milestone!.onchainId!, dispute.projectId, (p) => ["resolved_release", "resolved_refund", "resolved_split"].includes(p.milestones.find((m) => m.id === dispute.milestoneId)!.chainStatus)); if (r.ok) { invalidate.disputes(); invalidate.overview(); } }} className="rounded-full bg-state-released/15 py-2.5 text-[12px] font-medium text-state-released hover:bg-state-released/25">
-              Finalize payout
+              {finalizeInSecs > 0 ? `Finalize ${timeUntil(new Date(appealEndsAt! * 1000).toISOString())}` : "Finalize payout"}
             </Button>
           </div>
+          {finalizeInSecs > 0 && (
+            <p className="mt-2 text-[12px] text-faint">Payout unlocks once the appeal window closes — anyone can finalize then.</p>
+          )}
           {isParticipant && round?.resolved && !dispute.finalized && (
             <Button disabled={active} onClick={async () => { const r = await appealDisputeAction(chain.run)(milestone!.onchainId!, toWei(disputeFeeWei), dispute.projectId); if (r.ok) invalidate.disputes(); }} className="mt-2 w-full rounded-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10">
               Appeal ({formatEth(disputeFeeWei)} ETH)

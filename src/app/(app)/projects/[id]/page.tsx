@@ -718,15 +718,27 @@ function DisputePanel({
   const allRevealed = !!round && round.arbiterCount > 0 && round.revealCount >= round.arbiterCount;
   const canTally = !!round && !round.resolved && round.revealCount >= QUORUM && (now > round.revealDeadline || allRevealed);
   const canFinalize = !!round && round.resolved && !dispute.finalized && now > round.revealDeadline + windows.appeal;
+  // ponytail: derived from the live round + chain windows — the only honest finalize clock.
+  const appealEndsAt = round?.resolved && !dispute.finalized ? round.revealDeadline + windows.appeal : null;
+  const finalizeInSecs = appealEndsAt !== null ? appealEndsAt - now : 0;
   const phaseLabel = dispute.finalized ? "finalized" : round?.phase ?? dispute.phase;
 
   return (
     <ActionBlock
       icon={<Scales className="h-4 w-4" />}
-      title={dispute.finalized ? "Dispute settled" : `Disputed · ${phaseLabel} phase`}
+      title={dispute.finalized ? "Dispute settled" : round ? `Disputed · ${phaseLabel} phase` : "Dispute opening…"}
       body={dispute.reason}
     >
       <div className="space-y-4">
+        {/* Record exists but no on-chain round yet: the opener's tx never
+          landed. Nothing votable/tallizable until it does. */}
+        {!round && !dispute.finalized && (
+          <div className="num rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
+            Waiting for the on-chain open — {(isClient || isFreelancer) && ["funded", "submitted"].includes(milestone.chainStatus)
+              ? "re-send it from “Can't agree? Open the arbiter path” above."
+              : "a party still has to send the opening transaction."}
+          </div>
+        )}
         {/* phase + clocks */}
         <div className="grid grid-cols-2 gap-2.5 text-center sm:grid-cols-4">
           <Stat label="round" value={String((dispute.round ?? 0) + 1)} />
@@ -898,9 +910,12 @@ function DisputePanel({
                 }}
                 className="rounded-full bg-state-released/15 py-2.5 text-[12px] font-medium text-state-released hover:bg-state-released/25"
               >
-                Finalize payout
+                {finalizeInSecs > 0 ? `Finalize ${timeUntil(new Date(appealEndsAt! * 1000).toISOString())}` : "Finalize payout"}
               </Button>
             </div>
+            {finalizeInSecs > 0 && (
+              <p className="text-[11.5px] text-faint">Payout unlocks once the appeal window closes — anyone can finalize then.</p>
+            )}
             {(isClient || isFreelancer) && round?.resolved && !dispute.finalized && (
               <Button
                 disabled={active}
