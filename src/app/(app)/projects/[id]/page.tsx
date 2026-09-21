@@ -348,7 +348,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   const { data: reviews } = useMilestoneReviews(m.id);
   const { data: disputes } = useDisputes();
   const { data: arbiters } = useArbiters();
-  const { feeBps, disputeFeeWei } = useRuntime();
+  const { feeBps, disputeFeeWei, chainMode } = useRuntime();
   const invalidate = useInvalidate();
   const chain = useChainAction();
   const [notes, setNotes] = useState("");
@@ -367,6 +367,11 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   const preferredArg = lockedPreferred.length > 0
     ? [...lockedPreferred, ZERO_ADDR, ZERO_ADDR, ZERO_ADDR].slice(0, 3)
     : null;
+  // ponytail: warn-only pre-flight — never hard-block (registry can change
+  // pre-mine; the mock roster lives outside useArbiters, so only real mode warns).
+  const parties = new Set([project.client.walletAddress?.toLowerCase(), project.freelancer.walletAddress?.toLowerCase()]);
+  const eligibleSeats = (arbiters ?? []).filter((a) => a.eligible && !parties.has(a.address.toLowerCase())).length;
+  const quorumRisk = chainMode === "real" && arbiters !== undefined && eligibleSeats < QUORUM;
 
   const wait = (status: string | string[]) => (p: import("@/lib/types").ProjectView) =>
     (Array.isArray(status) ? status : [status]).includes(p.milestones.find((x) => x.id === m.id)!.chainStatus);
@@ -579,6 +584,11 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
               <p className="num text-[11px] text-faint">
                 dispute fee {formatEth(disputeFeeWei)} ETH · paid to the majority arbiters on resolution
               </p>
+              {quorumRisk && (
+                <p className="num rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
+                  Only {eligibleSeats} eligible arbiter{eligibleSeats === 1 ? "" : "s"} outside the parties — opening now reverts on-chain (needs {QUORUM}).
+                </p>
+              )}
               <Button
                 disabled={active || reason.trim().length < 10 || m.onchainId === null}
                 onClick={() =>
