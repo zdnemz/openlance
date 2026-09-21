@@ -16,7 +16,7 @@ import { useWallet } from "@/lib/wallet";
 import {
   useChainAction, tallyDisputeAction, finalizeDisputeAction, appealDisputeAction,
 } from "@/lib/chain-actions";
-import { useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt } from "@/lib/dispute-round";
+import { useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt, saveCommit, loadCommit, clearCommit } from "@/lib/dispute-round";
 import { DISPUTE_OUTCOME, QUORUM } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import { ListHead, Skeleton, EmptyState, StatusBadge, press, AddressText } from "@/components/design";
@@ -100,6 +100,7 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
 
   const isParticipant = project?.client.id === session.user?.id || project?.freelancer.id === session.user?.id;
   const iAmSelected = round?.arbiters.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
+  const myCommitted = dispute.committedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
   const myRevealed = dispute.revealedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
   const allRevealed = !!round && round.arbiterCount > 0 && round.revealCount >= round.arbiterCount;
   const canTally = !!round && !round.resolved && round.revealCount >= QUORUM && (now > round.revealDeadline || allRevealed);
@@ -166,23 +167,23 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
                 ))}
               </div>
               <Button
-                disabled={active}
+                disabled={active || myCommitted}
                 onClick={async () => {
                   const salt = makeSalt();
                   const hash = computeCommitHash(DISPUTE_OUTCOME[outcome], salt, address!, toWei(milestone.onchainId!), dispute.round ?? 0);
                   const r = await chain.run({ label: "Commit vote", contract: "escrow", functionName: "commitVote", args: [toWei(milestone.onchainId!), dispute.round ?? 0, hash] });
                   if (r.ok) {
-                    try { sessionStorage.setItem(`commit:${dispute.id}:${dispute.round}`, `${outcome}:${salt}`); } catch { /* noop */ }
+                    saveCommit(dispute.id, dispute.round ?? 0, outcome, salt);
                     invalidate.disputes();
                   }
                 }}
                 className="mt-3 w-full rounded-full bg-rose-accent py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright"
               >
-                Commit “{outcome === "split" ? "Split 50/50" : outcome}”
+                {myCommitted ? "Committed — wait for reveal" : `Commit “${outcome === "split" ? "Split 50/50" : outcome}”`}
               </Button>
             </>
           )}
-          {round.phase === "reveal" && !myRevealed && now <= round.revealDeadline && (
+          {round.phase === "reveal" && !myRevealed && now <= round.revealDeadline && milestone?.onchainId != null && (
             <RevealControls dispute={dispute} onchainId={milestone.onchainId} outcome={outcome} setOutcome={setOutcome} onDone={() => invalidate.disputes()} />
           )}
           {myRevealed && <p className="mt-2 text-[12px] text-state-released">Revealed. Waiting for the tally.</p>}
@@ -216,21 +217,12 @@ function RevealControls({ dispute, onchainId, outcome, setOutcome, onDone }: {
   setOutcome: (o: keyof typeof DISPUTE_OUTCOME) => void; onDone: () => void;
 }) {
   const chain = useChainAction();
-  const [salt, setSalt] = useState<`0x${string}` | null>(null);
   const active = chain.phase !== "idle" && chain.phase !== "done";
-
-  // Pull the saved salt once (from the commit step).
-  useState(() => {
-    try {
-      const saved = sessionStorage.getItem(`commit:${dispute.id}:${dispute.round}`);
-      if (saved) setSalt(saved.split(":")[1] as `0x${string}`);
-    } catch { /* noop */ }
-  });
 
   return (
     <>
       <p className="mt-1.5 text-[12px] leading-relaxed text-faint">
-        {salt ? "Reveal your committed ruling — outcome and salt must match." : "No saved commit found on this device — you can only reveal if you committed here."}
+        Reveal must match your commit exactly (same outcome + salt) — otherwise the transaction reverts.
       </p>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {(["release", "refund", "split"] as const).map((o) => (
@@ -240,11 +232,21 @@ function RevealControls({ dispute, onchainId, outcome, setOutcome, onDone }: {
         ))}
       </div>
       <Button
-        disabled={active || !salt}
+        disabled={active}
         onClick={async () => {
-          const r = await chain.run({ label: "Reveal vote", contract: "escrow", functionName: "revealVote", args: [toWei(onchainId), dispute.round ?? 0, DISPUTE_OUTCOME[outcome], salt] });
+          const saved = loadCommit(dispute.id, dispute.round ?? 0);
+          if (!saved?.salt) {
+            toast.error("No saved commit on this device", { description: "You can only reveal where you committed — the salt never leaves that browser." });
+            return;
+          }
+          if (saved.outcome !== outcome) {
+            toast.error("Outcome differs from your commit", { description: `You committed “${saved.outcome}” — switch back before revealing.` });
+            setOutcome(saved.outcome as keyof typeof DISPUTE_OUTCOME);
+            return;
+          }
+          const r = await chain.run({ label: "Reveal vote", contract: "escrow", functionName: "revealVote", args: [toWei(onchainId), dispute.round ?? 0, DISPUTE_OUTCOME[outcome], saved.salt] });
           if (r.ok) {
-            try { sessionStorage.removeItem(`commit:${dispute.id}:${dispute.round}`); } catch { /* noop */ }
+            clearCommit(dispute.id, dispute.round ?? 0);
             onDone();
           }
         }}

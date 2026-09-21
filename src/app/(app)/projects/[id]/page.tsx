@@ -20,7 +20,7 @@ import {
   finalizeDisputeAction, appealDisputeAction,
 } from "@/lib/chain-actions";
 import {
-  useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt,
+  useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt, saveCommit, loadCommit, clearCommit,
 } from "@/lib/dispute-round";
 import { DISPUTE_OUTCOME, QUORUM } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
@@ -706,7 +706,6 @@ function DisputePanel({
   const windows = useDisputeWindows();
   const now = useNow();
   const [outcome, setOutcome] = useState<keyof typeof DISPUTE_OUTCOME>("split");
-  const [revealSalt, setRevealSalt] = useState<`0x${string}` | null>(null);
   const active = chain.phase !== "idle" && chain.phase !== "done";
 
   if (!project || milestone.onchainId === null) return null;
@@ -714,6 +713,7 @@ function DisputePanel({
   const isClient = project.client.id === session.user?.id;
   const isFreelancer = project.freelancer.id === session.user?.id;
   const iAmSelected = round?.arbiters.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
+  const myCommitted = dispute.committedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
   const myRevealed = dispute.revealedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
   const allRevealed = !!round && round.arbiterCount > 0 && round.revealCount >= round.arbiterCount;
   const canTally = !!round && !round.resolved && round.revealCount >= QUORUM && (now > round.revealDeadline || allRevealed);
@@ -803,7 +803,7 @@ function DisputePanel({
                   ))}
                 </div>
                 <Button
-                  disabled={active}
+                  disabled={active || myCommitted}
                   onClick={async () => {
                     const salt = makeSalt();
                     const hash = computeCommitHash(DISPUTE_OUTCOME[outcome], salt, address!, toWei(onchainId), dispute.round ?? 0);
@@ -811,13 +811,13 @@ function DisputePanel({
                     if (result.ok) {
                       // Stash the salt so the reveal step can find it; losing it
                       // means the commit can't be revealed.
-                      try { sessionStorage.setItem(`commit:${dispute.id}:${dispute.round}`, `${outcome}:${salt}`); } catch { /* noop */ }
+                      saveCommit(dispute.id, dispute.round ?? 0, outcome, salt);
                       invalidate.disputes();
                     }
                   }}
                   className="w-full rounded-full bg-rose-accent py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright"
                 >
-                  <PhaseLabel phase={chain.phase} idle={`Commit "${outcome === "split" ? "Split 50/50" : outcome}"`} />
+                  <PhaseLabel phase={chain.phase} idle={myCommitted ? "Committed — wait for reveal" : `Commit "${outcome === "split" ? "Split 50/50" : outcome}"`} />
                 </Button>
               </>
             )}
@@ -825,9 +825,8 @@ function DisputePanel({
             {round.phase === "reveal" && !myRevealed && now <= round.revealDeadline && (
               <>
                 <p className="text-[11.5px] leading-relaxed text-faint">
-                  Reveal your committed vote. The outcome and salt must match your commit exactly.
+                  Reveal must match your commit exactly (same outcome + salt) — otherwise the transaction reverts.
                 </p>
-                <RevealForm disputeId={dispute.id} round={dispute.round ?? 0} onSalt={setRevealSalt} />
                 <div className="grid grid-cols-3 gap-2">
                   {(["release", "refund", "split"] as const).map((o) => (
                     <button
@@ -841,19 +840,29 @@ function DisputePanel({
                   ))}
                 </div>
                 <Button
-                  disabled={active || !revealSalt}
+                  disabled={active}
                   onClick={async () => {
+                    const saved = loadCommit(dispute.id, dispute.round ?? 0);
+                    if (!saved?.salt) {
+                      toast.error("No saved commit on this device", { description: "You can only reveal where you committed — the salt never leaves that browser." });
+                      return;
+                    }
+                    if (saved.outcome !== outcome) {
+                      toast.error("Outcome differs from your commit", { description: `You committed “${saved.outcome}” — switched back for you.` });
+                      setOutcome(saved.outcome as keyof typeof DISPUTE_OUTCOME);
+                      return;
+                    }
                     const result = await revealVoteAction(chain.run)(
-                      onchainId, dispute.round ?? 0, DISPUTE_OUTCOME[outcome], revealSalt!, projectId,
+                      onchainId, dispute.round ?? 0, DISPUTE_OUTCOME[outcome], saved.salt, projectId,
                     );
                     if (result.ok) {
-                      try { sessionStorage.removeItem(`commit:${dispute.id}:${dispute.round}`); } catch { /* noop */ }
+                      clearCommit(dispute.id, dispute.round ?? 0);
                       invalidate.disputes();
                     }
                   }}
                   className="w-full rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium text-foreground hover:bg-white/20"
                 >
-                  <PhaseLabel phase={chain.phase} idle={revealSalt ? `Reveal "${outcome === "split" ? "Split 50/50" : outcome}"` : "No saved commit — re-committing needed"} />
+                  <PhaseLabel phase={chain.phase} idle={`Reveal "${outcome === "split" ? "Split 50/50" : outcome}"`} />
                 </Button>
               </>
             )}
@@ -916,20 +925,6 @@ function DisputePanel({
       </div>
     </ActionBlock>
   );
-}
-
-/** Reads a saved commit salt from sessionStorage for the reveal step. */
-function RevealForm({ disputeId, round, onSalt }: { disputeId: string; round: number; onSalt: (s: `0x${string}`) => void }) {
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(`commit:${disputeId}:${round}`);
-      if (saved) {
-        const [, salt] = saved.split(":");
-        if (salt) onSalt(salt as `0x${string}`);
-      }
-    } catch { /* noop */ }
-  }, [disputeId, round, onSalt]);
-  return null;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
