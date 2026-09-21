@@ -15,6 +15,7 @@ import {
   useLedger, useInvalidate, post, patch,
 } from "@/lib/queries";
 import { useSession } from "@/lib/session";
+import { del } from "@/lib/api";
 import {
   useChainAction, commitVoteAction, revealVoteAction, tallyDisputeAction,
   finalizeDisputeAction, appealDisputeAction,
@@ -750,6 +751,24 @@ function DisputePanel({
             Waiting for the on-chain open — {(isClient || isFreelancer) && ["funded", "submitted"].includes(milestone.chainStatus)
               ? "re-send it from “Can't agree? Open the arbiter path” above."
               : "a party still has to send the opening transaction."}
+            {(isClient || isFreelancer) && (
+              <button
+                type="button"
+                disabled={active}
+                onClick={async () => {
+                  try {
+                    await del(`/projects/${projectId}/milestones/${milestone.id}/disputes`);
+                    invalidate.disputes();
+                    toast.success("Record discarded", { description: "No round existed on-chain — post again to retry the open." });
+                  } catch (err) {
+                    toast.error("Could not discard", { description: err instanceof Error ? err.message : "Unknown error" });
+                  }
+                }}
+                className="mt-1.5 block font-medium underline underline-offset-2 hover:text-amber-100 disabled:opacity-50"
+              >
+                Discard this record
+              </button>
+            )}
           </div>
         )}
         {/* phase + clocks */}

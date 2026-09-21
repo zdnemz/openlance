@@ -64,6 +64,34 @@ export async function openDispute(request: Request, projectId: string, milestone
   return { ...dispute, onchainActionRequired: 'openDispute', onchainId: milestone.onchainId }
 }
 
+/**
+ * Discard a zombie dispute record: the off-chain row was written but the
+ * opener's wallet tx never landed, so no round exists. Only when the
+ * milestone is still disputable on the mirror AND (real mode) live on-chain —
+ * deleting after the open landed would orphan the round mirror. Either party
+ * may discard (no money moved); re-posting recreates the record.
+ */
+export async function discardDispute(request: Request, projectId: string, milestoneId: string) {
+  const user = await requireKyc(request)
+  const project = await requireParticipant(projectId, user)
+  const { milestone } = await loadMilestone(milestoneId)
+  if (milestone.projectId !== project.id) throw Errors.notFound('Milestone in this project')
+  const db = getDb()
+  const [dispute] = await db.select().from(disputes).where(eq(disputes.milestoneId, milestone.id)).limit(1)
+  if (!dispute || dispute.status !== 'open' || dispute.finalized) throw Errors.notFound('Dispute')
+  if (!isDisputable(milestone.chainStatus)) {
+    throw Errors.conflict('dispute_on_chain', `Round exists on-chain (milestone is ${milestone.chainStatus}); discarding would orphan it`)
+  }
+  if (milestone.onchainId !== null && getChainAdapter().mode === 'real') {
+    const live = await getChainAdapter().getMilestoneStatus(milestone.onchainId).catch(() => null)
+    if (live && !isDisputable(live)) {
+      throw Errors.conflict('dispute_on_chain', `Chain says ${live}; discarding would orphan the round`)
+    }
+  }
+  await db.delete(disputes).where(eq(disputes.id, dispute.id))
+  return { discarded: true, disputeId: dispute.id }
+}
+
 export async function listDisputes(request: Request) {
   const user = await requireAuth(request)
   const db = getDb()

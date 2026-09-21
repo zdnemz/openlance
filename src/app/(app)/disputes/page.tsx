@@ -11,6 +11,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useDisputes, useProjects, useInvalidate, post } from "@/lib/queries";
+import { del } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useWallet } from "@/lib/wallet";
 import {
@@ -126,6 +127,38 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
         </span>
       </div>
       <p className="mt-3.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{dispute.reason}</p>
+
+      {/* No on-chain round yet: the opener's wallet tx never landed (record
+        only). Tally/finalize below stay disabled until it does — complete the
+        open from the project room, where the seat-aware call lives. */}
+      {!dispute.finalized && !round && milestone?.onchainId != null && (
+        <>
+          <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[12px] leading-relaxed text-amber-200">
+            Waiting for the on-chain open — no round exists yet, so there is nothing to vote on or tally.{" "}
+            <Link href={`/projects/${dispute.projectId}`} className="font-medium underline underline-offset-2 hover:text-amber-100">
+              Complete it in the project room
+            </Link>.
+          </p>
+          {isParticipant && (
+            <button
+              type="button"
+              disabled={active}
+              onClick={async () => {
+                try {
+                  await del(`/projects/${dispute.projectId}/milestones/${dispute.milestoneId}/disputes`);
+                  invalidate.disputes();
+                  toast.success("Record discarded", { description: "No round existed on-chain — post again to retry the open." });
+                } catch (err) {
+                  toast.error("Could not discard", { description: err instanceof Error ? err.message : "Unknown error" });
+                }
+              }}
+              className="num mt-2 text-[12px] font-medium text-amber-200 underline underline-offset-2 hover:text-amber-100 disabled:opacity-50"
+            >
+              Discard this record
+            </button>
+          )}
+        </>
+      )}
 
       {/* round summary */}
       <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-line pt-4">
