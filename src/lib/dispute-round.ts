@@ -106,12 +106,47 @@ export function arbiterNeedsAction(
 ): "commit" | "reveal" | "wait" | "none" {
   if (!round || !isSelected(round, address)) return "none";
   const a = address!.toLowerCase();
-  const hasCommitted = committed.map((x) => x.toLowerCase()).includes(a) || round.commitCount > 0;
+  const hasCommitted = committed.map((x) => x.toLowerCase()).includes(a);
   const hasRevealed = revealed.map((x) => x.toLowerCase()).includes(a);
-  if (round.phase === "commit") return "commit";
-  if (round.phase === "reveal" && !hasRevealed) return "reveal";
-  void hasCommitted;
+  if (hasRevealed) return "wait";
+  if (round.phase === "commit") return hasCommitted ? "wait" : "commit";
+  if (round.phase === "reveal") {
+    if (!hasCommitted) return "none";
+    return "reveal";
+  }
   return "wait";
+}
+
+/* ── Commit secret persistence (outcome + salt must match at reveal) ────── */
+// ponytail: localStorage (bukan sessionStorage) agar survive pindah tab;
+// masih per-device — sinkron lintas-device menyusul bila dibutuhkan.
+export function commitKey(disputeId: string, round: number): string {
+  return `commit:${disputeId}:${round}`;
+}
+
+export function saveCommit(disputeId: string, round: number, outcome: string, salt: `0x${string}`): void {
+  try {
+    localStorage.setItem(commitKey(disputeId, round), `${outcome}:${salt}`);
+  } catch {
+    try { sessionStorage.setItem(commitKey(disputeId, round), `${outcome}:${salt}`); } catch { /* noop */ }
+  }
+}
+
+export function loadCommit(disputeId: string, round: number): { outcome: string; salt: `0x${string}` } | null {
+  const read = (store: Storage | undefined): string | null => {
+    try { return store?.getItem(commitKey(disputeId, round)) ?? null; } catch { return null; }
+  };
+  const saved = read(typeof localStorage !== "undefined" ? localStorage : undefined)
+    ?? read(typeof sessionStorage !== "undefined" ? sessionStorage : undefined);
+  if (!saved) return null;
+  const [outcome, salt] = saved.split(":");
+  if (!outcome || !salt) return null;
+  return { outcome, salt: salt as `0x${string}` };
+}
+
+export function clearCommit(disputeId: string, round: number): void {
+  try { localStorage.removeItem(commitKey(disputeId, round)); } catch { /* noop */ }
+  try { sessionStorage.removeItem(commitKey(disputeId, round)); } catch { /* noop */ }
 }
 
 /** Quorum met yet? */
