@@ -726,7 +726,10 @@ function DisputePanel({
   const myCommitted = dispute.committedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
   const myRevealed = dispute.revealedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
   const allRevealed = !!round && round.arbiterCount > 0 && round.revealCount >= round.arbiterCount;
-  const canTally = !!round && !round.resolved && round.revealCount >= QUORUM && (now > round.revealDeadline || allRevealed);
+  const canTally = !!round && !round.resolved && (now > round.revealDeadline || allRevealed);
+  // Below quorum the tally is still valid — the contract refunds the opener
+  // and returns the milestone to Submitted (no-quorum fallback).
+  const tallyFallsBack = !!round && !round.resolved && round.revealCount < QUORUM;
   const canFinalize = !!round && round.resolved && !dispute.finalized && now > round.revealDeadline + windows.appeal;
   // ponytail: derived from the live round + chain windows — the only honest finalize clock.
   const appealEndsAt = round?.resolved && !dispute.finalized ? round.revealDeadline + windows.appeal : null;
@@ -925,6 +928,9 @@ function DisputePanel({
             </div>
             {finalizeInSecs > 0 && (
               <p className="text-[11.5px] text-faint">Payout unlocks once the appeal window closes — anyone can finalize then.</p>
+            )}
+            {canTally && tallyFallsBack && (
+              <p className="text-[11.5px] text-amber-300">Fewer than {QUORUM} reveals — tallying refunds the opener and returns the milestone to Submitted (no-quorum fallback).</p>
             )}
             {(isClient || isFreelancer) && round?.resolved && !dispute.finalized && (
               <Button

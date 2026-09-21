@@ -4,6 +4,7 @@
  *   pending_funding → funded → submitted → released
  *        ↘ cancelled ↘ disputed → resolved_release | resolved_refund | resolved_split
  *   funded → cancelled (client cancel, refund)
+ *   disputed → submitted (no-quorum fallback: tally with <2 reveals refunds the opener)
  *
  * The CONTRACT enforces legality; the mirror only records what the chain did.
  * If we ever observe an illegal transition, that is drift — logged loudly and
@@ -42,6 +43,7 @@ const TRANSITIONS: Partial<Record<ChainEventName, Partial<Record<MilestoneStatus
   },
   MilestoneSplit: { disputed: 'resolved_split' },
   MilestoneCancelled: { pending_funding: 'cancelled', funded: 'cancelled' },
+  NoQuorumFallback: { disputed: 'submitted' },
 }
 
 export function nextMilestoneStatus(from: MilestoneStatus, event: ChainEventName): { to: MilestoneStatus; legal: boolean } {

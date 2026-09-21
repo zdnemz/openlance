@@ -471,6 +471,13 @@ async function applyDisputeFinalized(tx: Tx, evt: RawChainLog): Promise<PlannedN
 async function applyNoQuorumFallback(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
   const { milestone, dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
   if (!milestone || !dispute) return drift('NoQuorumFallback', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  // The contract returns the milestone to Submitted (parties may retry the
+  // dispute or approve directly) — without this the mirror stays `disputed`
+  // forever and the milestone is unusable.
+  const { to, legal } = nextMilestoneStatus(milestone.chainStatus, 'NoQuorumFallback')
+  if (!legal) return drift('NoQuorumFallback (illegal from ' + milestone.chainStatus + ')', numOrNull(evt.args.milestoneId)!, evt.txHash)
+  await tx.update(projectMilestones).set({ chainStatus: to, updatedAt: evt.blockTime })
+    .where(eq(projectMilestones.id, milestone.id))
   await tx.update(disputes).set({
     phase: 'resolved', finalized: false, updatedAt: evt.blockTime,
   }).where(eq(disputes.id, dispute.id))
