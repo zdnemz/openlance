@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { deployWithEoaOwner, connection, DISPUTE_FEE, getRound, getDispute, MIN_STAKE, MIN_STAKE_DURATION } from "./fixtures.ts";
-import { commitRevealAll, walletsFor, passRevealWindow, passAppealWindow, tallyAndFinalize } from "./disputeFlow.ts";
+import { commitRevealAll, walletsFor, passCommitWindow, passRevealWindow, passAppealWindow, tallyAndFinalize } from "./disputeFlow.ts";
 import { parseEther } from "viem";
 
 const REF = `0x${"ab".repeat(32)}` as `0x${string}`;
@@ -219,6 +219,88 @@ describe("Escrow — multi-arbiter disputes", () => {
     assert.equal(await escrow.read.milestoneStatus([1n]), 2); // Submitted
     const d = await getDispute(escrow, 1n);
     void d;
+  });
+
+  it("a dispute re-opened after a no-quorum fallback settles normally", async function () {
+    // Regression: `_startRound` reused round 0's slot without clearing
+    // `resolved` / `revealCount` / `tally` / the per-arbiter vote mappings, so a
+    // re-opened dispute reverted on commitVote AND resolveDispute, and the
+    // milestone could then reach neither approve nor cancel — its ETH was stuck.
+    const { escrow, arbiters, client, freelancer } = await setupDispute(3);
+    const r = await getRound(escrow, 1n, 0);
+    const wallets = walletsFor(r, arbiters.slice(0, 3));
+
+    // Only one arbiter votes -> no quorum -> the milestone returns to Submitted.
+    const w0 = wallets[0]!;
+    const salt = `0x${"6a".repeat(32)}` as `0x${string}`;
+    const { commitHash } = await import("./fixtures.ts");
+    await escrow.write.commitVote([1n, 0, commitHash(RELEASE, salt, w0.account.address, 1n, 0)], { account: w0.account });
+    await passCommitWindow(escrow, 1n, 0);
+    await escrow.write.revealVote([1n, 0, RELEASE, salt], { account: w0.account });
+    await passRevealWindow(escrow, 1n, 0);
+    await escrow.write.resolveDispute([1n], { account: client.account });
+    assert.equal(await escrow.read.milestoneStatus([1n]), 2, "no-quorum returns the milestone to Submitted");
+
+    // Re-open: the round must be virgin, not carrying the previous round's state.
+    await escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account });
+    const r2 = await getRound(escrow, 1n, 0);
+    assert.equal(r2.resolved, false, "round 0 must not carry the previous resolved flag");
+    assert.equal(r2.revealCount, 0, "round 0 must not carry the previous reveals");
+    assert.equal(r2.commitCount, 0, "round 0 must not carry the previous commits");
+    assert.deepEqual([...r2.tally], [0, 0, 0], "round 0 must not carry the previous tally");
+
+    // A re-selected arbiter must be able to commit again (stale mapping cleared).
+    const wallets2 = walletsFor(r2, arbiters.slice(0, 3));
+    await commitRevealAll(escrow, 1n, 0, wallets2, RELEASE);
+    await passRevealWindow(escrow, 1n, 0);
+    await tallyAndFinalize(escrow, 1n, 0, client.account);
+
+    assert.equal(await escrow.read.milestoneStatus([1n]), 5, "the re-opened dispute reaches ResolvedRelease");
+    // And the principal is actually claimable, so the ETH is recoverable.
+    assert.equal(await escrow.read.claimable([1n]), (parseEther("10") * 975n) / 1000n);
+    await escrow.write.withdrawMilestone([1n], { account: freelancer.account });
+    assert.equal(await escrow.read.claimable([1n]), 0n);
+  });
+
+  it("an appeal of a no-quorum round reverts instead of burning the fee", async function () {
+    // The no-quorum fallback returns the milestone to `Submitted` and never
+    // restores `Disputed`, so an appeal opened on top of that round could not
+    // be tallied or finalized — the appeal fee was accepted and stranded.
+    const { escrow, arbiters, client } = await setupDispute(4);
+    let r = await getRound(escrow, 1n, 0);
+    const w0 = walletsFor(r, arbiters.slice(0, 4))[0]!;
+    const salt = `0x${"6b".repeat(32)}` as `0x${string}`;
+    const { commitHash } = await import("./fixtures.ts");
+    await escrow.write.commitVote([1n, 0, commitHash(RELEASE, salt, w0.account.address, 1n, 0)], { account: w0.account });
+    await passCommitWindow(escrow, 1n, 0);
+    await escrow.write.revealVote([1n, 0, RELEASE, salt], { account: w0.account });
+    await passRevealWindow(escrow, 1n, 0);
+    await escrow.write.resolveDispute([1n], { account: client.account });
+    assert.equal(await escrow.read.milestoneStatus([1n]), 2);
+
+    await assert.rejects(
+      escrow.write.appeal([1n], { value: DISPUTE_FEE, account: client.account }),
+      /NotDisputed/,
+    );
+
+    // The client can still dispute again, and an appeal on THAT round works.
+    await escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account });
+    r = await getRound(escrow, 1n, 0);
+    const wallets = walletsFor(r, arbiters.slice(0, 4));
+    await commitRevealAll(escrow, 1n, 0, wallets, RELEASE);
+    await passRevealWindow(escrow, 1n, 0);
+    await escrow.write.resolveDispute([1n], { account: client.account });
+    assert.equal(await escrow.read.milestoneStatus([1n]), 3, "still Disputed while the appeal window runs");
+
+    await escrow.write.appeal([1n], { value: DISPUTE_FEE, account: client.account });
+    const r1 = await getRound(escrow, 1n, 1);
+    const wallets1 = walletsFor(r1, arbiters.slice(0, 4));
+    await commitRevealAll(escrow, 1n, 1, wallets1, REFUND);
+    await passRevealWindow(escrow, 1n, 1);
+    await escrow.write.resolveAppeal([1n], { account: client.account });
+    await passAppealWindow(escrow, 1n, 1);
+    await escrow.write.finalizeDispute([1n], { account: client.account });
+    assert.equal(await escrow.read.milestoneStatus([1n]), 6); // ResolvedRefund
   });
 
   it("appeal overturns a decision and penalises the original majority", async function () {

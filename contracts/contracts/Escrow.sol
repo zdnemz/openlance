@@ -415,6 +415,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      *         replacement from the eligible set.
      */
     function _startRound(uint256 milestoneId, Milestone storage m, uint8 round, address[3] memory preferred) private {
+        // A round slot is not guaranteed virgin: a dispute re-opened after a
+        // no-quorum fallback reuses round 0, carrying the old `resolved` /
+        // tally / vote state. Clear it before the new selection is written.
+        _resetRound(rounds_[milestoneId][round]);
+
         address[3] memory picked;
         uint8 count;
         for (uint8 i = 0; i < MAX_ARBITERS; i++) {
@@ -505,6 +510,38 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
             scanned++;
         }
         return count;
+    }
+
+    /**
+     * @dev Wipe a round's vote state before the slot is (re)used.
+     *
+     *      Solidity rejects `delete` on a struct with mapping members, so the
+     *      per-arbiter mappings are cleared explicitly for the previous
+     *      selection — the only addresses that can hold keys — and the scalar
+     *      members are cleared individually. Bounded by MAX_ARBITERS.
+     */
+    function _resetRound(Round storage r) private {
+        address[3] memory prev = r.arbiters;
+        uint8 prevCount = r.arbiterCount;
+        for (uint8 i = 0; i < prevCount; i++) {
+            address a = prev[i];
+            if (a != address(0)) {
+                delete r.commits[a];
+                delete r.revealed[a];
+                delete r.votes[a];
+                delete r.stakeWeights[a];
+            }
+        }
+
+        delete r.arbiters;
+        delete r.arbiterCount;
+        delete r.commitCount;
+        delete r.revealCount;
+        delete r.tally;
+        delete r.commitDeadline;
+        delete r.revealDeadline;
+        delete r.resolved;
+        delete r.winningOutcome;
     }
 
     function _alreadyPicked(address[3] memory picked, uint8 count, address candidate) private pure returns (bool) {
@@ -748,6 +785,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         Milestone storage m = _m(milestoneId);
         address appellant = _msgSender();
         if (appellant != m.client && appellant != m.freelancer) revert NotParty();
+        // The no-quorum fallback already returned the milestone to `Submitted`,
+        // and that round is terminal — appealing it would charge a fee for a
+        // round that `resolveAppeal` / `finalizeDispute` can never reach (both
+        // require `Disputed`). Re-open the dispute instead.
+        if (m.status != Status.Disputed) revert NotDisputed();
         if (msg.value < disputeFee) revert DisputeFeeTooLow(msg.value, disputeFee);
 
         uint8 prevRound = d.round;
