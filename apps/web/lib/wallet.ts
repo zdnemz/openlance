@@ -209,6 +209,26 @@ export async function signMessage(message: string): Promise<string> {
 }
 
 /**
+ * EIP-712 domain field types, in the canonical order `hashTypedData` uses.
+ *
+ * The wallet MUST encode the domain with exactly this list. Sending an empty
+ * `EIP712Domain: []` (as this used to) makes it hash a domain with ZERO
+ * fields, so the signature recovers to a different address than the server's
+ * digest and every verify fails with "signature does not match". Derived from
+ * `domain` rather than hardcoded so a domain with different fields stays
+ * correct — the server derives the same list the same way.
+ */
+function eip712DomainTypes(domain: Record<string, unknown>): { name: string; type: string }[] {
+  const types: { name: string; type: string }[] = [];
+  if (domain.name !== undefined) types.push({ name: "name", type: "string" });
+  if (domain.version !== undefined) types.push({ name: "version", type: "string" });
+  if (domain.chainId !== undefined) types.push({ name: "chainId", type: "uint256" });
+  if (domain.verifyingContract !== undefined) types.push({ name: "verifyingContract", type: "address" });
+  if (domain.salt !== undefined) types.push({ name: "salt", type: "bytes32" });
+  return types;
+}
+
+/**
  * EIP-712 `eth_signTypedData_v4` via the injected provider.
  *
  * Used by gasless sponsorship: the user signs a SponsorshipSession voucher once
@@ -227,7 +247,9 @@ export async function signTypedData(args: {
   if (typeof window === "undefined" || !window.ethereum) throw new Error("No injected wallet detected");
   const payload = JSON.stringify({
     domain: args.domain,
-    types: { EIP712Domain: [], ...args.types },
+    // After the spread so a caller-supplied EIP712Domain can't reintroduce the
+    // empty-list bug, whatever it passes.
+    types: { ...args.types, EIP712Domain: eip712DomainTypes(args.domain) },
     primaryType: args.primaryType,
     message: args.message,
   });

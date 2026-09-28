@@ -10,7 +10,8 @@
     "serve": "node .next/standalone/apps/web/server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "check:login": "tsx scripts/check-login-signatures.ts"
+    "check:login": "tsx scripts/check-login-signatures.ts",
+    "check:eip712": "tsx scripts/check-eip712-payload.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
