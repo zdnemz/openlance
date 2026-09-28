@@ -8,7 +8,6 @@
 import { get, post } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { signMessage, signTypedData, useWallet } from "@/lib/wallet";
-import { beginSponsorshipSession } from "@/lib/sponsorship";
 import { useSponsorship } from "@/lib/sponsorship-store";
 import { getAddress } from "viem";
 import type { PublicUser } from "@/lib/types";
@@ -56,36 +55,44 @@ interface VoucherChallengeResponse {
 
 /** Throws Error with a human message on any failure. */
 export async function loginWithWallet(address: string): Promise<void> {
-  // One-signature path: on deployments with a configured forwarder the EIP-712
-  // sponsorship voucher doubles as the login credential — the user signs once
-  // and is immediately gasless. Anything short of a signed voucher (disabled,
-  // declined, mismatched signer) falls through to legacy SIWE below.
+  // EXACTLY ONE signature per login, whichever path runs:
+  //   • forwarder configured → one EIP-712 voucher that logs you in AND arms
+  //     gasless (same digest the contract verifies).
+  //   • no forwarder          → one SIWE personal_sign, user-paid gas.
+  //
+  // The fallback therefore covers "voucher unavailable" and nothing else. It
+  // must NOT catch a signing/verify failure: the user already declined (or we
+  // already burned their signature) and silently re-prompting with a *different*
+  // message is what turned one login into two wallet popups. Anything past the
+  // challenge fetch propagates.
+  let voucher: VoucherChallengeResponse | null = null;
   try {
-    const challenge = await get<VoucherChallengeResponse>(`/auth/voucher-challenge?address=${address}`);
-    if (challenge?.enabled && (challenge.domain as { verifyingContract?: string })?.verifyingContract && challenge.message) {
-      const signature = await signTypedData({
-        domain: challenge.domain,
-        types: challenge.types,
-        primaryType: challenge.primaryType,
-        message: { ...challenge.message },
-      });
-      const result = await post<{ token: string; user: PublicUser; sponsorship: { sessionId: string; expiresAt: string } }>("/auth/verify", {
-        sessionId: challenge.message.sessionId,
-        issuedAt: challenge.message.issuedAt,
-        expiry: challenge.message.expiry,
-        signature,
-      });
-      useSession.getState().setSession(result.token, result.user, address.toLowerCase());
-      useSponsorship.getState().setSession({
-        sessionId: result.sponsorship.sessionId as `0x${string}`,
-        expiresAt: result.sponsorship.expiresAt,
-        domain: challenge.domain,
-        forwardRequestTypes: challenge.forwardRequestTypes,
-      });
-      return;
-    }
+    voucher = await get<VoucherChallengeResponse>(`/auth/voucher-challenge?address=${address}`);
   } catch {
-    /* fall through to legacy SIWE — login must never depend on gasless */
+    /* challenge endpoint unreachable — SIWE below */
+  }
+  const voucherDomain = voucher?.domain as { verifyingContract?: string } | undefined;
+  if (voucher?.enabled && voucherDomain?.verifyingContract && voucher.message) {
+    const signature = await signTypedData({
+      domain: voucher.domain,
+      types: voucher.types,
+      primaryType: voucher.primaryType,
+      message: { ...voucher.message },
+    });
+    const result = await post<{ token: string; user: PublicUser; sponsorship: { sessionId: string; expiresAt: string } }>("/auth/verify", {
+      sessionId: voucher.message.sessionId,
+      issuedAt: voucher.message.issuedAt,
+      expiry: voucher.message.expiry,
+      signature,
+    });
+    useSession.getState().setSession(result.token, result.user, address.toLowerCase());
+    useSponsorship.getState().setSession({
+      sessionId: result.sponsorship.sessionId as `0x${string}`,
+      expiresAt: result.sponsorship.expiresAt,
+      domain: voucher.domain,
+      forwardRequestTypes: voucher.forwardRequestTypes,
+    });
+    return;
   }
 
   const nonceData = await get<NonceResponse>("/auth/nonce");
@@ -109,9 +116,15 @@ export async function loginWithWallet(address: string): Promise<void> {
     signature,
   });
   useSession.getState().setSession(result.token, result.user, address.toLowerCase());
-  // Gasless onboarding: ONE extra EIP-712 signature enables fee-free (sponsored)
-  // money actions for the life of this session. Non-fatal if declined/disabled.
-  await beginSponsorshipSession();
+  // No second signature here. This path is only reached when there is no
+  // forwarder to sign a sponsorship voucher against, so arming one would cost
+  // the user a second popup to gain nothing.
+  //
+  // Clear rather than leave whatever localStorage holds: the store persists
+  // across logins, and a session minted by a PREVIOUS sign-in would otherwise
+  // outlive this one — money actions would then take the gasless branch against
+  // a voucher the server no longer has a row for.
+  useSponsorship.getState().clear();
 }
 
 /**

@@ -9,7 +9,8 @@
     "start": "next start -p 3000",
     "serve": "node .next/standalone/apps/web/server.js",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:login": "tsx scripts/check-login-signatures.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -43,6 +44,7 @@
     "eslint-config-next": "^16.1.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

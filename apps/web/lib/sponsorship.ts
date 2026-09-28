@@ -1,75 +1,23 @@
 "use client";
 
 /**
- * Client-side gasless sponsorship.
+ * Client-side gasless relaying.
  *
- *   loginWithWallet() → beginSponsorshipSession()   (ONE EIP-712 signature)
- *   money action      → relayForwardRequest()        (per-action signature; no gas)
+ *   login        → lib/siwe.ts  (ONE signature: the voucher doubles as the login)
+ *   money action → relayForwardRequest()  (per-action signature; no gas)
  *
  * The user NEVER pays gas for sponsored actions: the server relayer submits the
  * meta-tx. The EIP-712 session voucher lives for the login session (JWT TTL).
+ *
+ * There is deliberately no "arm gasless after login" call: a second signature
+ * at login is the thing this design exists to prevent. A deployment with a
+ * forwarder gets gasless from the login voucher itself; one without cannot
+ * relay at all, so an extra popup would buy nothing.
  */
-import { get, post } from "@/lib/api";
+import { post } from "@/lib/api";
 import { signTypedData, useWallet } from "@/lib/wallet";
-import { toast } from "sonner";import { useSession } from "@/lib/session";
 import { useSponsorship } from "@/lib/sponsorship-store";
 import { encodeFunctionData, type Abi } from "viem";
-
-interface ChallengeResponse {
-  enabled: boolean;
-  domain: { name: string; version: string; chainId: number; verifyingContract: string | null };
-  types: Record<string, unknown>;
-  primaryType: string;
-  message: { owner: string; issuedAt: number; expiry: number; sessionId: `0x${string}` };
-  forwardRequestTypes: Record<string, unknown>;
-  sessionId: `0x${string}`;
-}
-
-/**
- * Runs immediately after a successful SIWE login: fetches the challenge, signs
- * ONE EIP-712 SponsorshipSession voucher, and stores it server-side + locally.
- * Non-fatal — if sponsorship is disabled or the user declines, money actions
- * simply fall back to normal user-paid gas.
- */
-export async function beginSponsorshipSession(): Promise<boolean> {
-  try {
-    const challenge = await get<ChallengeResponse>("/auth/sponsorship");
-    if (!challenge.enabled || !challenge.domain.verifyingContract) {
-      useSponsorship.getState().clear();
-      return false;
-    }
-    const signature = await signTypedData({
-      domain: challenge.domain,
-      types: challenge.types,
-      primaryType: challenge.primaryType,
-      message: challenge.message,
-    });
-    const stored = await post<{ sessionId: string; expiresAt: string }>("/auth/sponsorship", {
-      sessionId: challenge.message.sessionId,
-      issuedAt: challenge.message.issuedAt,
-      expiry: challenge.message.expiry,
-      signature,
-    });
-    useSponsorship.getState().setSession({
-      sessionId: stored.sessionId as `0x${string}`,
-      expiresAt: stored.expiresAt,
-      domain: challenge.domain,
-      forwardRequestTypes: challenge.forwardRequestTypes,
-    });
-    return true;
-  } catch (err) {
-    // Declined / unsupported wallet / disabled → stay on the user-paid path.
-    useSponsorship.getState().clear();
-    const msg = err instanceof Error ? err.message : String(err);
-    // A deliberate reject just means user-paid gas — stay quiet. Anything else
-    // (bad voucher signature, relayer down) is worth surfacing, otherwise money
-    // actions silently pay gas and nobody knows why.
-    if (!/reject|denied|cancel/i.test(msg)) {
-      toast.error("Gasless setup failed — you'll pay gas instead", { description: msg });
-    }
-    return false;
-  }
-}
 
 /**
  * Sign a ForwardRequest and hand it to the relayer. Returns the tx hash.
