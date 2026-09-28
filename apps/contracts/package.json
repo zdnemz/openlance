@@ -5,18 +5,18 @@
   "description": "OpenLance on-chain escrow + arbiter registry — UUPS upgradeable, Hardhat 3",
   "type": "module",
   "scripts": {
-    "dev": "hardhat node",
     "build": "hardhat build",
     "build:production": "hardhat build --build-profile production",
     "test": "hardhat test",
     "test:solidity": "hardhat test solidity",
     "clean": "hardhat clean",
+    "check": "hardhat build",
     "node": "hardhat node",
     "deploy:anvil": "hardhat run scripts/deploy.ts --network localhost",
+    "deploy:anvil:dev": "tsx scripts/deploy-anvil.ts",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
     "verify:sepolia": "hardhat run scripts/verify.ts --network baseSepolia",
-    "export:abi": "hardhat run scripts/export-abi.ts",
-    "check": "hardhat build"
+    "export:abi": "hardhat run scripts/export-abi.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.1.0",
@@ -26,7 +26,8 @@
     "@types/node": "^24",
     "hardhat": "^3.17.0",
     "typescript": "^5.7.0",
-    "viem": "^2.56.8"
+    "viem": "^2.56.8",
+    "tsx": "^4.23.13"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.4.0",

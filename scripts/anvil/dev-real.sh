@@ -4,9 +4,13 @@
 #   anvil (:8545, chain 31337)  →  deploy Escrow+Registry  →  write contract
 #   addresses to .env.local  →  migrate Supabase Postgres
 #
-# The API itself now runs INSIDE the Next.js server (route handlers under
-# /api) — this script does not start or babysit a separate API process. It is
-# invoked by the /api/dev/stack route or manually: `bash scripts/anvil/dev-real.sh`.
+# This script does NOT start the app. The API is a separate service now
+# (apps/api on :4000) and the web app is apps/web on :3000; run `pnpm dev` for
+# those. This is the chain layer only — anvil is the local node, NOT
+# `hardhat node`, which would fight it for port 8545.
+#
+# Invoked by POST /api/dev/stack or manually:
+#   bash scripts/anvil/dev-real.sh
 #
 # Safe to re-run: it reuses a live anvil and always deploys fresh contracts.
 set -uo pipefail
@@ -51,10 +55,16 @@ log "anvil ready"
 
 # ── 2. deploy contracts (fresh every boot — anvil state resets) ─────────────
 log "building contracts (hardhat)"
-(cd "$ROOT/contracts" && npx hardhat build) > "$HERE/.state/build.log" 2>&1 || { log "FATAL: contract build failed (see $HERE/.state/build.log)"; exit 1; }
+(cd "$ROOT/apps/contracts" && pnpm exec hardhat build) > "$HERE/.state/build.log" 2>&1 || { log "FATAL: contract build failed (see $HERE/.state/build.log)"; exit 1; }
 
 log "deploying contracts"
-DEPLOY_OUT="$(bun "$HERE/deploy-anvil.ts" 2>/dev/null | tail -1)" || { log "FATAL: deploy failed"; exit 1; }
+# Deploy lives in apps/contracts (it needs that package's viem + Hardhat config).
+# Capture the log instead of discarding it: a silent `2>/dev/null` turns a
+# missing-dependency error into a bare "deploy failed".
+(cd "$ROOT/apps/contracts" && pnpm exec tsx scripts/deploy-anvil.ts) > "$HERE/.state/deploy.log" 2>&1 || {
+  log "FATAL: deploy failed (see $HERE/.state/deploy.log)"; tail -5 "$HERE/.state/deploy.log"; exit 1;
+}
+DEPLOY_OUT="$(tail -1 "$HERE/.state/deploy.log")"
 log "deployed: $DEPLOY_OUT"
 ESCROW_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"escrow":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
 REGISTRY_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"arbiterRegistry":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
@@ -82,10 +92,11 @@ PLATFORM_FEE_BPS=250
 ADMIN_WALLETS=0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266
 EOF
 log ".env.local updated (real mode, contracts $ESCROW_ADDR / $REGISTRY_ADDR)"
-log "NOTE: restart the Next.js dev server to pick up env changes"
+log "NOTE: restart the API service to pick up the new env values"
 
 # ── 4. sync the schema to the configured database (env DATABASE_URL) ───────
 log "pushing schema"
-bunx drizzle-kit push > "$HERE/.state/migrate.log" 2>&1 || { log "FATAL: push failed (see $HERE/.state/migrate.log)"; exit 1; }
+(cd "$ROOT/apps/api" && pnpm db:migrate) > "$HERE/.state/migrate.log" 2>&1 || { log "FATAL: push failed (see $HERE/.state/migrate.log)"; exit 1; }
 
-log "chain stack up — anvil :8545, fresh contracts deployed, empty DB; API is served by Next.js on :3000"
+log "chain stack up — anvil :8545, fresh contracts deployed, empty DB"
+log "start the app with: pnpm dev   (web :3000, api :4000)"

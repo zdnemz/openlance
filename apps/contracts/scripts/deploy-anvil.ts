@@ -4,14 +4,17 @@
  * testnet can never drift.
  *
  * Boot flow (scripts/anvil/dev-real.sh): anvil up -> this script -> .env written
- * -> migrate -> API starts in CHAIN_MODE=real -> demo seed.
+ * -> migrate -> `pnpm dev` starts the API in CHAIN_MODE=real.
  *
  * Output: a single JSON line on stdout:
  *   {"escrow":"0x..","arbiterRegistry":"0x..","timelock":"0x..","deployer":"0x..","chainId":31337}
  *
- * Implementation: spawns `npx hardhat run scripts/deploy.ts --network localhost`
- * from the contracts/ directory, parses the printed addresses, and writes the
- * deployment JSON next to this file.
+ * Implementation: spawns `hardhat run scripts/deploy.ts --network localhost`
+ * from this package's directory, parses the printed addresses, and writes the
+ * deployment JSON to the repo root (where the other anvil tooling reads it).
+ *
+ * Lives inside apps/contracts rather than scripts/anvil/ because it is a
+ * contracts concern: it needs this package's `viem` and its Hardhat config.
  */
 import { spawnSync } from "node:child_process";
 import { createPublicClient, http } from "viem";
@@ -22,7 +25,10 @@ import { fileURLToPath } from "node:url";
 
 const RPC = process.env.ANVIL_RPC_URL ?? "http://127.0.0.1:8545";
 const here = dirname(fileURLToPath(import.meta.url));
-const contractsDir = resolve(here, "../../contracts");
+// This file is apps/contracts/scripts/deploy-anvil.ts, so the package root is
+// its parent and the repo root is two levels up.
+const contractsDir = resolve(here, "..");
+const repoRoot = resolve(here, "../../..");
 
 // Anvil account #0 — the devnet deployer and the default ADMIN_WALLETS entry.
 const DEPLOYER = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
@@ -34,8 +40,8 @@ async function main() {
 
   // Short timelock delay on the devnet so wiring feels immediate.
   const res = spawnSync(
-    "npx",
-    ["hardhat", "run", "scripts/deploy.ts", "--network", "localhost"],
+    "pnpm",
+    ["exec", "hardhat", "run", "scripts/deploy.ts", "--network", "localhost"],
     {
       cwd: contractsDir,
       env: { ...process.env, TIMELOCK_DELAY: "5", BASE_SEPOLIA_RPC_URL: RPC, DEPLOYER_KEY: process.env.DEPLOYER_KEY ?? "" },
@@ -64,7 +70,7 @@ async function main() {
     chainId,
   };
 
-  writeFileSync(resolve(here, "../.anvil-deployment.json"), JSON.stringify(deployment, null, 2));
+  writeFileSync(resolve(repoRoot, "scripts/anvil/.anvil-deployment.json"), JSON.stringify(deployment, null, 2));
   console.log(JSON.stringify(deployment));
 }
 

@@ -11,7 +11,7 @@
     "dev": "pnpm --parallel -r dev",
     "dev:web": "pnpm --filter @openlance/web dev",
     "dev:api": "pnpm --filter @openlance/api dev",
-    "dev:contracts": "pnpm --filter @openlance/contracts dev",
+    "chain": "bash scripts/anvil/dev-real.sh",
     "build": "pnpm -r build",
     "build:web": "pnpm --filter @openlance/web build",
     "build:api": "pnpm --filter @openlance/api build",

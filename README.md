@@ -9,52 +9,61 @@ Three deliverables, one repo:
 
 | Piece | Where | What it proves |
 |---|---|---|
-| **Contracts** | [`contracts/`](./contracts) | Solidity 0.8.28 + OZ 5.6 on **Hardhat 3**: `Escrow` + `ArbiterRegistry` (ERC-5194) + `SponsorshipForwarder` (ERC-2771), both money contracts **UUPS-upgradeable** behind an OZ **TimelockController**. 72 tests incl. event-surface lock, upgrade-safety, reentrancy, and sponsored-meta-tx/EIP-712 proofs; Slither clean. |
-| **Backend** | [`src/server`](./src/server) + [`src/app/api`](./src/app/api) | Next.js server runtime (App Router route handlers): SIWE auth, marketplace, dispute coordination, chain indexer/mirror, transactional-outbox webhooks. Supabase Postgres + Upstash Redis caching. |
-| **Frontend** | `src/` (this app) | Next.js 16 product UI against the live stack: wallet-first auth, milestone state machine, real on-chain actions, arbiter surface. |
+| **Contracts** | [`apps/contracts`](./apps/contracts) | Solidity 0.8.28 + OZ 5.6 on **Hardhat 3**: `Escrow` + `ArbiterRegistry` (ERC-5194) + `SponsorshipForwarder` (ERC-2771), both money contracts **UUPS-upgradeable** behind an OZ **TimelockController**. 93 tests incl. event-surface lock, upgrade-safety, reentrancy, and sponsored-meta-tx/EIP-712 proofs; Slither clean. |
+| **API** | [`apps/api`](./apps/api) | A standalone **Hono** service on `:4000`: SIWE auth, marketplace, dispute coordination, chain indexer/mirror, transactional-outbox webhooks. It owns the background workers. Supabase Postgres + Upstash Redis caching. |
+| **Web** | [`apps/web`](./apps/web) | Next.js 16 product UI against the live stack: wallet-first auth, milestone state machine, real on-chain actions, arbiter surface. Pages only — the browser talks to the API service directly. |
 
 ## The devnet stack (what's running)
 
 ```
 anvil :8545 ── Escrow + ArbiterRegistry (fresh deploy per boot)
     │                ▲
-    │  (same-origin  │  (poll logs, re-derive
-    │   JSON-RPC     │   money truth via RPC)
-    │   relay)       │
-browser ──────► Next.js :3000 ── /api route handlers ── Supabase Postgres
-   signs with            │                              + Upstash Redis (cache)
-   anvil personas        └── sign locally in the browser, drive REAL transactions
+    │  (JSON-RPC     │  (poll logs, re-derive
+    │   relay)       │   money truth via RPC)
+    │                │
+browser ──► apps/web :3000 ──fetch──► apps/api :4000 ── Supabase Postgres
+   signs with      (pages)            (the API service)  + Upstash Redis (cache)
+   anvil personas                        │
+                                          └── owns the indexer + crons
 ```
 
-- **One app, one origin**: the API is no longer a separate service — it runs
-  inside the Next.js server as App Router route handlers under `/api/**`
-  (`src/app/api`), with the domain logic in `src/server`. No CORS, no gateway
-  port forwarding from the client.
+- **Two services, two origins**: `apps/web` serves pages on `:3000`; `apps/api`
+  is a standalone Hono service on `:4000` that the browser calls directly. The
+  API answers its own CORS preflights and owns auth, the database, and the
+  chain indexer. There is no BFF in between.
 - **Personas**: the connect panel offers five anvil deterministic accounts
   (public test keys) that sign locally in the browser — one click = wallet +
   SIWE session. A real browser wallet (MetaMask) rides the same surface via
   the injected provider; it needs the anvil network added locally
-  (chain 31337, RPC `<origin>/api/rpc`).
+  (chain 31337, RPC `<API_BASE>/api/rpc`).
 - **State split enforced in the UI**: money-relevant views poll the API
   mirror, and every wallet action waits through three honest phases —
   *signing → mining → indexer mirroring* — before declaring success.
-- **Boot self-healing**: the Next.js server babysits the chain stack through
+- **Boot self-healing**: the API service supervises the chain stack through
   `scripts/anvil/dev-real.sh`: anvil → build + deploy (Hardhat 3, UUPS proxies
-  behind a timelock) →   write contract addresses to `.env.local` → migrate.
-  `POST /api/dev/stack?force=1` restarts it on demand.
+  behind a timelock) → write contract addresses to `.env.local` → migrate.
+  `POST /api/dev/stack?force=1` restarts it on demand (development only).
 
-## Running the backend
+## Running the stack
 
-The backend lives in the same Next.js app. It needs a Postgres connection
-string (Supabase or any Postgres) and, optionally, Upstash Redis for cache /
-rate limits (an in-process fallback keeps local dev zero-infra).
+The API needs a Postgres connection string (Supabase or any Postgres) and,
+optionally, Upstash Redis for cache / rate limits (an in-process fallback keeps
+local dev zero-infra).
 
 ```bash
-cp .env.example .env.local        # set DATABASE_URL (+ Upstash/Supabase optional)
-bun install
-bun run db:migrate                # drizzle-kit push schema → DATABASE_URL
-bun run dev                       # Next.js + the API on :3000
+pnpm install                        # once — also links .env.local into web + api
+cp .env.example .env.local          # set DATABASE_URL (+ Upstash/Supabase optional)
+pnpm db:migrate                     # drizzle-kit push schema → DATABASE_URL
+pnpm chain                          # anvil + deploy contracts + migrate (optional)
+pnpm dev                            # web :3000 + api :4000
 ```
+
+`pnpm dev` starts the two app services in parallel. The chain is a separate
+step on purpose: it binds `:8545`, so it must not fight an anvil you already
+have running. Per-service env references live in
+[`apps/api/.env.example`](./apps/api/.env.example),
+[`apps/web/.env.example`](./apps/web/.env.example) and
+[`apps/contracts/.env.example`](./apps/contracts/.env.example).
 
 Key env vars (see [`.env.example`](./.env.example)):
 
@@ -84,31 +93,40 @@ Signed-in users pay **no gas** for money-moving actions. The design:
    `ArbiterRegistry` trust the forwarder, so `client == user` on-chain, never
    the relayer. A leaked relayer key cannot move funds users did not sign for.
 
-Relevant files: `contracts/contracts/SponsorshipForwarder.sol`,
-`contracts/contracts/ERC2771ContextLite.sol`,
-`src/server/modules/sponsorship.ts`, `src/server/chain/relayer.ts`,
-`src/app/api/relay/**`, `src/lib/sponsorship.ts`. Tests:
-`contracts/test/sponsorship.ts`, `contracts/test/eip712-agreement.ts`.
+Relevant files: `apps/contracts/contracts/SponsorshipForwarder.sol`,
+`apps/contracts/contracts/ERC2771ContextLite.sol`,
+`apps/api/src/modules/sponsorship.ts`, `apps/api/src/chain/relayer.ts`,
+`apps/api/src/routes/relay/**`, `apps/web/lib/sponsorship.ts`. Tests:
+`apps/contracts/test/sponsorship.ts`, `apps/contracts/test/eip712-agreement.ts`.
 
 > Testnet only: the relayer fronts gas and principal, so give it test ETH only.
 > A per-user hourly cap (`SPONSORSHIP_RATE_LIMIT_PER_HOUR`) bounds relayer drain.
 
-### Backend layout
+### Repo layout
 
 ```
-src/app/api/**        route handlers (the HTTP surface — same paths as before)
-src/server/           domain logic, ported 1:1 from the old Hono service
-  config.ts           env schema (Supabase + Upstash), derived config
-  db/                 Drizzle schema + Supabase Postgres client
-  lib/                kv (Upstash), cache, jwt, rate-limit, http, errors, queue
-  auth/               SIWE + session middleware
-  chain/              adapter (real/mock), relayer (sponsored meta-txs), events, indexer, reconcile
-  modules/            jobs, proposals, projects, disputes, files, sponsorship, … 
-  workers/            webhook delivery + crons
-  proxy.ts            CORS + OPTIONS preflight for /api/**
-scripts/              anvil/ (dev chain tooling); schema pushes straight
-                      to DATABASE_URL via `drizzle-kit push` (no migration files)
+apps/api/             the API service (Hono, :4000) — runs on plain Node, no build
+  src/server.ts       entrypoint: validate config, boot workers, listen
+  src/app.ts          Hono app: CORS, 404, the route table
+  src/routes.ts       generated from routes/ — the index of the API surface
+  src/routes/**       one module per path, `route()` wrapped (same contract as before)
+  src/config.ts       env schema (Supabase + Upstash), derived config
+  src/db/             Drizzle schema + Supabase Postgres client
+  src/lib/            kv (Upstash), cache, jwt, rate-limit, http, errors, queue
+  src/auth/           SIWE + session middleware
+  src/chain/          adapter (real/mock), relayer (sponsored meta-txs), events, indexer, reconcile
+  src/modules/        jobs, proposals, projects, disputes, files, sponsorship, … 
+  src/workers/        webhook delivery + crons
+  scripts/            check:routes (table vs tree), gen:routes, verify scripts
+apps/web/             the Next.js UI (:3000) — pages only
+  proxy.ts            onboarding + seat gate (reads the cookies the API stamps)
+apps/contracts/       Hardhat 3 Solidity
+scripts/              link-env.mjs (one .env.local → both services), anvil/
+schema pushes straight to DATABASE_URL via `drizzle-kit push` (no migration files)
 ```
+
+`pnpm check:routes` fails if `src/routes.ts` and the `routes/` tree ever
+disagree — the one failure mode a 70-file move can produce silently.
 
 ## Key routes
 
