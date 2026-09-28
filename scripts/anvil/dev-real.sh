@@ -63,7 +63,8 @@ TIMELOCK_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"timelock":"\(0x[0-9a-fA-F]*\)
 
 # ── 3. write the resolved chain config into .env.local (Next reads it) ──────
 # Preserve an existing DATABASE_URL/Upstash/Supabase config; only replace the
-# chain-specific keys.
+# chain-specific keys. The publish deposit locks into the Escrow contract
+# directly (lockBudget), so no separate custody address is written here.
 ENV_FILE="$ROOT/.env.local"
 touch "$ENV_FILE"
 strip_keys() { grep -vE "^(CHAIN_MODE|CHAIN_ID|CHAIN_RPC_URL|ESCROW_ADDRESS|ARBITER_REGISTRY_ADDRESS|TIMELOCK_ADDRESS|INDEXER_POLL_MS|INDEXER_CONFIRMATIONS|PLATFORM_FEE_BPS|ADMIN_WALLETS)=" "$ENV_FILE" 2>/dev/null || true; }

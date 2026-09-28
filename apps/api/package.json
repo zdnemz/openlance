@@ -1,0 +1,41 @@
+{
+  "name": "@openlance/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenLance API — Hono service: auth, escrow orchestration, chain indexer, webhooks",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env.local --watch src/server.ts",
+    "start": "node --env-file-if-exists=.env.local src/server.ts",
+    "build": "tsc --noEmit",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "check:routes": "node scripts/check-routes.mjs",
+    "gen:routes": "node scripts/gen-routes.mjs",
+    "check:fixed-rate": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-fixed-rate.ts",
+    "verify:notifications": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/verify-notifications.ts",
+    "db:migrate": "drizzle-kit push --config drizzle.config.ts",
+    "db:setup": "pnpm db:migrate",
+    "clean": "rm -rf drizzle"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@spruceid/siwe-parser": "^3.0.0",
+    "@supabase/supabase-js": "^2.116.0",
+    "@upstash/ratelimit": "^2.1.0",
+    "@upstash/redis": "^1.38.4",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.11.10",
+    "jose": "^6.2.12",
+    "postgres": "^3.4.9",
+    "viem": "^2.56.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5",
+    "eslint": "^9",
+    "typescript-eslint": "^8"
+  }
+}

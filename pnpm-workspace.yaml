@@ -1,0 +1,15 @@
+packages:
+  - 'apps/*'
+
+# pnpm blocks dependency build scripts unless reviewed (strictDepBuilds defaults
+# to true, so an unreviewed dep fails the install). These four are native
+# modules that must compile to work: without them signature verification
+# (secp256k1), event hashing (keccak), bundling (esbuild) and eslint's resolver
+# fail at runtime rather than at install time. Reviewed individually — none
+# fetch anything or run install steps. Replaces the v10 onlyBuiltDependencies
+# list, which pnpm 11 removed in favour of this map.
+allowBuilds:
+  esbuild: true
+  keccak: true
+  secp256k1: true
+  unrs-resolver: true

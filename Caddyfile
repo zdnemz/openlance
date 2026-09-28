@@ -1,3 +1,20 @@
+# Caddy — local/preview edge.
+#
+#   :81      the web app        → localhost:3000
+#   api.     the API service    → localhost:4000   (public origin, see below)
+#
+# The API is a separate service now, so the browser calls it cross-origin and
+# the API answers its own CORS preflights. Caddy fronts it so production keeps
+# one TLS-terminating public entry point per origin.
+
+(forwarded) {
+	header_up Host {host}
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Forwarded-Proto {scheme}
+	header_up X-Real-IP {remote_host}
+}
+
+# ── Web app ────────────────────────────────────────────────────────────────
 :81 {
 	@transform_port_query {
 		query XTransformPort=*
@@ -5,19 +22,24 @@
 
 	handle @transform_port_query {
 		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
+			import forwarded
 		}
 	}
 
 	handle {
 		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
+			import forwarded
 		}
+	}
+}
+
+# ── API ────────────────────────────────────────────────────────────────────
+# The API reads the client IP for rate limiting (backend/lib/rate-limit.ts
+# keys on x-forwarded-for), so these headers are load-bearing, not decorative.
+# Do not expose this origin without a rate limit in front of it: the API trusts
+# the forwarded IP that Caddy sets.
+api.{
+	reverse_proxy localhost:4000 {
+		import forwarded
 	}
 }
