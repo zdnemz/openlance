@@ -83,17 +83,31 @@ export function useProjects() {
   });
 }
 
+/**
+ * How often the project room re-reads the mirror.
+ *
+ * A milestone at `pending_funding` counts as busy. A mined funding tx is
+ * invisible in the mirror until the indexer catches up, and that gap is exactly
+ * when the room is least trustworthy — it still offers Fund for value already
+ * locked. It polled slowest (12s) precisely then, so "refresh to see the
+ * funding" was the only way to get a current answer.
+ *
+ * Exported so the rule is pinned where it is declared, not copied into a check.
+ */
+export function projectPollMs(data: ProjectView | undefined): number {
+  const busy = data?.milestones?.some((m) =>
+    ["pending_funding", "funded", "submitted", "disputed"].includes(m.chainStatus),
+  );
+  return busy ? 3000 : 12000;
+}
+
 export function useProject(id: string) {
   const token = useSession((s) => s.token);
   return useQuery({
     queryKey: qk.project(id),
     queryFn: () => get<ProjectView>(`/projects/${id}`),
     enabled: !!id && !!token,
-    refetchInterval: (query) => {
-      const data = query.state.data as ProjectView | undefined;
-      const busy = data?.milestones?.some((m) => ["funded", "submitted", "disputed"].includes(m.chainStatus));
-      return busy ? 3000 : 12000;
-    },
+    refetchInterval: (query) => projectPollMs(query.state.data as ProjectView | undefined),
   });
 }
 

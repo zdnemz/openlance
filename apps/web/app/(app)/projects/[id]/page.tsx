@@ -396,14 +396,12 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Mirror-lag guard: once the chain says funded while the mirror still says
   // pending, the Fund button stays dead until the indexer catches up.
-  const [fundState, setFundState] = useState<"idle" | "checking" | "landed">("idle");
-  const fundCheckedRef = useRef<string | null>(null);
+  const [fundState, setFundState] = useState<"idle" | "landed">("idle");
   // Every milestone still sitting at pending_funding — funded together in one tx.
   // Derived before the early return so the stale-mirror effect below can use it.
   const outstanding = (project?.milestones ?? []).filter((x) => x.chainStatus === "pending_funding" && x.fund);
   const outstandingWei = outstanding.reduce((acc, x) => acc + BigInt(x.fund?.amountWei ?? "0"), 0n);
   const outstandingJobRef = outstanding[0]?.fund?.jobRef ?? outstanding[0]?.fund?.ref ?? null;
-  const outstandingKey = outstandingJobRef ? `${outstandingJobRef}:${outstandingWei}` : "";
   const cardStatus = m.chainStatus;
   // Request-changes is an off-chain soft state: the chain stays `submitted`, so
   // this is what tells the freelancer the work is back with them. It is also the
@@ -411,16 +409,22 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   // branch off exactly this pair).
   const changesRequested = m.softStatus === "changes_requested" && m.chainStatus === "submitted";
 
-  // Proactive stale-mirror check: a mined funding tx can leave the mirror at
+  // Stale-mirror check: a mined funding tx can leave the mirror at
   // pending_funding (indexer lag/outage) while work has already started. Chain
   // budget is truth — when it can't cover the outstanding sum, funding landed:
   // hide Fund and show the waiting notice without needing a click first.
+  //
+  // It re-reads on every render of the project data instead of latching on the
+  // first answer. The latch was correct when a hard refresh was the only exit;
+  // now that the view updates itself it is a bug — "landed" describes the chain
+  // right now, so the mirror catching up has to be able to retire it on its
+  // own. `project` is a fresh object each poll, which is the re-read trigger.
   useEffect(() => {
-    if (!escrow || !outstandingKey || !outstandingJobRef || cardStatus !== "pending_funding") return;
-    if (fundCheckedRef.current === outstandingKey) return;
-    fundCheckedRef.current = outstandingKey;
+    if (!escrow || !outstandingJobRef || cardStatus !== "pending_funding") {
+      setFundState("idle");
+      return;
+    }
     let cancelled = false;
-    setFundState("checking");
     readJobBudget(escrow, outstandingJobRef)
       .catch(() => null)
       .then((budget) => {
@@ -428,7 +432,9 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         setFundState(budget && outstandingWei > budget.free ? "landed" : "idle");
       });
     return () => { cancelled = true; };
-  }, [escrow, outstandingKey, outstandingJobRef, outstandingWei, cardStatus]);
+    // `project` is the poll tick: it changes identity on every refetch, which is
+    // exactly the re-read this effect wants — not an exhaustive-deps oversight.
+  }, [project, escrow, outstandingJobRef, outstandingWei, cardStatus]);
 
   if (!project) return null;
   const isClient = project.client.id === session.user?.id;
@@ -473,18 +479,16 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
     const jobRef = outstanding[0]!.fund!.jobRef ?? outstanding[0]!.fund!.ref;
     const freelancer = project!.freelancer.walletAddress;
     if (escrow) {
-      setFundState("checking");
       const budget = await readJobBudget(escrow, jobRef).catch(() => null);
       if (budget && outstandingWei > budget.free) {
         setFundState("landed");
         toast.success("Already funded on-chain", {
-          description: "The funding transaction landed — the view refreshes as soon as the indexer mirrors it.",
+          description: "The funding transaction landed — this view updates itself as soon as the indexer mirrors it.",
         });
         invalidate.project(projectId);
         invalidate.overview();
         return;
       }
-      setFundState("idle");
     }
     return chain.run({
       label: "Fund all milestones",
