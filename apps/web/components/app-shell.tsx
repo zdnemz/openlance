@@ -91,6 +91,16 @@ function railItems(role: UserRole | undefined, admin: boolean, disputesCount: nu
   ];
 }
 
+/**
+ * The nav item that owns the current route, by longest matching href: `/jobs`
+ * must not light up for `/jobs/new`, so the more specific child wins.
+ */
+function activeHref(pathname: string, items: RailItem[]): string | undefined {
+  return items
+    .filter((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
+
 function bottomItems(role: UserRole | undefined, disputesCount: number): RailItem[] {
   if (role === "arbiter") {
     return [
@@ -143,6 +153,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [sessionHydrated, session.user?.role, session.token]);
   const items = railItems(role, isAdmin, openDisputes, unread, kycNone);
   const mobile = bottomItems(role, openDisputes);
+  const railActive = activeHref(pathname, items);
+  const mobileActive = activeHref(pathname, mobile);
   // Gate the persisted-session-derived chip: the server always sees an empty
   // session, so rendering it before localStorage rehydrates would mismatch.
   const address = sessionHydrated ? session.user?.walletAddress : undefined;
@@ -168,7 +180,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <nav className="mt-2 flex flex-1 flex-col gap-0.5 px-3">
           {items.map((item) => {
-            const active = pathname === item.href || (item.href !== "/jobs/new" && pathname.startsWith(`${item.href}/`));
+            const active = item.href === railActive;
             const Icon = item.icon;
             return (
               <Link
@@ -263,7 +275,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* ── mobile bottom nav ────────────────────────────────────────── */}
       <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[68px] items-stretch border-t border-line bg-ink/90 backdrop-blur-xl lg:hidden">
         {mobile.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active = item.href === mobileActive;
           const Icon = item.icon;
           return (
             <Link
