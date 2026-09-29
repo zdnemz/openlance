@@ -34,6 +34,18 @@ export const qk = {
   webhookDeliveries: (id: string) => ["webhook-deliveries", id] as const,
 };
 
+/**
+ * Cadence for a list the COUNTERPARTY mutates.
+ *
+ * These were each given a poll by hand, and the ones nobody thought about were
+ * the ones a second party changes: the delivery record, the bid list, the
+ * project list. A client with the room open waiting for the freelancer to
+ * deliver saw the project and the chat update and the delivery sit stale —
+ * so "refresh" was the only way to find out whether work had arrived. If you
+ * are not the only person who can change this data, it polls.
+ */
+export const LIVE_POLL_MS = 4000;
+
 export function useOverview() {
   return useQuery({ queryKey: qk.overview, queryFn: () => get<Overview>("/overview"), refetchInterval: 15_000 });
 }
@@ -44,6 +56,7 @@ export function useJobs(filters?: Record<string, string>, enabled = true) {
     queryKey: qk.jobs(filters),
     queryFn: () => get<{ items: JobView[]; total: number }>(`/jobs${search ? `?${search}` : ""}`),
     enabled,
+    refetchInterval: LIVE_POLL_MS,
   });
 }
 
@@ -57,6 +70,7 @@ export function useProposals(jobId: string) {
     queryKey: qk.proposals(jobId),
     queryFn: () => get<ProposalView[]>(`/jobs/${jobId}/proposals`),
     enabled: !!jobId && !!token,
+    refetchInterval: LIVE_POLL_MS,
   });
 }
 
@@ -80,6 +94,7 @@ export function useProjects() {
     queryKey: qk.projects,
     queryFn: () => get<ProjectView[]>("/projects"),
     enabled: !!token,
+    refetchInterval: LIVE_POLL_MS,
   });
 }
 
@@ -127,6 +142,10 @@ export function useSubmissions(projectId: string, milestoneId: string) {
     queryKey: qk.submissions(projectId, milestoneId),
     queryFn: () => get<SubmissionView[]>(`/projects/${projectId}/milestones/${milestoneId}/submissions`),
     enabled: !!projectId && !!milestoneId && !!token,
+    // The freelancer writes this and the client reads it. Without a poll the
+    // client's open room showed the project and the chat moving and the
+    // delivery frozen, so the one thing they were waiting for needed a reload.
+    refetchInterval: LIVE_POLL_MS,
   });
 }
 

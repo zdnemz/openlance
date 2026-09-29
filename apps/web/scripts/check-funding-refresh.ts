@@ -17,7 +17,7 @@
  *
  * No network, no chain, no React.
  */
-import { projectPollMs } from "../lib/queries.ts";
+import { projectPollMs, LIVE_POLL_MS } from "../lib/queries.ts";
 import type { ProjectView } from "../lib/types.ts";
 
 let failures = 0;
@@ -59,6 +59,12 @@ check("no data yet backs off rather than throwing", projectPollMs(undefined) ===
 console.log("\nstale-mirror reset (states the effect keys on)");
 check("a funded milestone is not re-checked (reset branch)", room("funded").milestones[0]!.chainStatus !== "pending_funding");
 check("pending_funding is the only state that re-reads", room("pending_funding").milestones[0]!.chainStatus === "pending_funding");
+
+// The room is live in every direction: a list the counterparty writes polls, so
+// the client watching for a delivery never needs a reload to find it.
+console.log("\nlive lists (the counterparty writes these)");
+check("a counterparty-mutated list polls faster than the room's own backing-off cadence", LIVE_POLL_MS < SLOW);
+check("a counterparty-mutated list matches the chat's cadence", LIVE_POLL_MS === 4000);
 
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${failures === 0 ? "all good" : `${failures} failed`}`);
 process.exit(failures === 0 ? 0 : 1);
