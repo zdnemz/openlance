@@ -141,7 +141,7 @@ export function validateQuery<S extends ZodType>(url: URL, schema: S): import('z
   return parseOrThrow(schema, raw)
 }
 
-function parseOrThrow<S extends ZodType>(schema: S, raw: unknown): import('zod').output<S> {
+export function parseOrThrow<S extends ZodType>(schema: S, raw: unknown): import('zod').output<S> {
   const parsed = schema.safeParse(raw)
   if (!parsed.success) {
     const flat = parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`)

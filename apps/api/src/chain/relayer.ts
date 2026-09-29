@@ -11,8 +11,9 @@
 import { env } from '../config.ts'
 import { Errors } from '../lib/errors.ts'
 import { logger } from '../lib/logger.ts'
+import { FORWARDER_ERROR_ABI } from './abi.ts'
 
-/** Minimal ABI for the forwarder (registerSession + execute). */
+/** Minimal ABI for the forwarder (registerSession + execute) + its reverts. */
 const FORWARDER_ABI = [
   {
     type: 'function',
@@ -57,6 +58,9 @@ const FORWARDER_ABI = [
     inputs: [{ name: '', type: 'bytes32' }],
     outputs: [{ name: '', type: 'bool' }],
   },
+  // Without these viem cannot name a single revert this contract raises, so
+  // every failure below reached the user as an opaque 500.
+  ...FORWARDER_ERROR_ABI,
 ] as const
 
 export interface ForwardRequestInput {

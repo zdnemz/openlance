@@ -31,12 +31,15 @@
  * flow is exercisable with zero infrastructure.
  */
 import { and, desc, eq, gt } from 'drizzle-orm'
+import { decodeErrorResult } from 'viem'
 import { z } from 'zod'
 import { getDb } from '../db/index.ts'
 import { env } from '../config.ts'
-import { Errors } from '../lib/errors.ts'
+import { AppError, Errors } from '../lib/errors.ts'
+import { parseOrThrow } from '../lib/http.ts'
 import { getKv } from '../lib/kv.ts'
 import { logger } from '../lib/logger.ts'
+import { ESCROW_ERROR_ABI, FORWARDER_ERROR_ABI } from '../chain/abi.ts'
 import { sponsorshipSessions, users, type SponsorshipSession } from '../db/schema.ts'
 
 // ── EIP-712 shape (must stay byte-identical to SponsorshipForwarder.sol) ─────
@@ -134,7 +137,7 @@ const submitSchema = voucherSchema
 
 /** Persist a signed sponsorship session voucher (from the login flow). */
 export async function storeSponsorshipSession(userId: string, address: string, body: unknown) {
-  const input = submitSchema.parse(body)
+  const input = parseOrThrow(submitSchema, body)
   const db = getDb()
 
   // Sanity: the voucher's owner must be this user's address (defence in depth —
@@ -263,7 +266,7 @@ const prepareSchema = z.object({
  */
 export async function prepareForwardRequest(userId: string, address: string, body: unknown) {
   if (!sponsorshipEnabled()) throw Errors.precondition('sponsorship_disabled', 'Gasless sponsorship is not configured on this deployment')
-  const input = prepareSchema.parse(body)
+  const input = parseOrThrow(prepareSchema, body)
   // Refuse before the client is asked to sign anything.
   assertNoSponsoredValue(input.value)
 
@@ -334,6 +337,112 @@ export interface RelayResult {
 }
 
 /**
+ * Name a relayer revert. viem wraps errors in `ContractFunctionExecutionError`
+ * with the raw data on the innermost cause, and the forwarder re-throws the
+ * TARGET's revert verbatim inside `CallFailed(returnData)` — so Escrow's own
+ * error is what the user needs to see, not the wrapper's name.
+ *
+ * Returns the target's name when it decodes, the forwarder's otherwise, and
+ * null when nothing decodes.
+ */
+function decodeRevertName(err: unknown): string | null {
+  for (let e: unknown = err, depth = 0; e && depth < 5; e = (e as { cause?: unknown })?.cause, depth++) {
+    const data = (e as { data?: `0x${string}` })?.data
+    if (typeof data !== 'string' || !data.startsWith('0x')) continue
+    for (const abi of [FORWARDER_ERROR_ABI, ESCROW_ERROR_ABI]) {
+      // viem returns { abiItem, args, errorName }; errorName is the decoded name.
+      let d: { errorName?: string; args?: readonly unknown[] }
+      try { d = decodeErrorResult({ abi, data }) as typeof d } catch { continue }
+      const name = d?.errorName
+      if (!name) continue
+      if (name !== 'CallFailed') return name
+      const inner = d.args?.[0]
+      if (typeof inner !== 'string' || inner === '0x') return 'CallFailed'
+      try {
+        const t = decodeErrorResult({ abi: ESCROW_ERROR_ABI, data: inner as `0x${string}` })
+        return t?.errorName ?? 'CallFailed'
+      } catch { return 'CallFailed' }
+    }
+  }
+  return null
+}
+
+/**
+ * Turn a relayer/contract revert into an error the user can act on.
+ *
+ * Everything raised inside `submitViaForwarder` used to be rethrown verbatim.
+ * A viem revert is not an AppError, so `fail()` answered `500 Internal server
+ * error` — the same message for a lapsed session, a stale nonce, a target
+ * refusing the call, and a genuine relayer outage. The submission had already
+ * been written off-chain by then, so the freelancer saw a failure for work that
+ * was recorded, with no idea what to do next.
+ *
+ * Two layers are decoded. The forwarder's OWN errors are in its ABI (see
+ * `FORWARDER_ERRORS`), so viem names them and we map each to its remedy. The
+ * TARGET's errors ride inside `CallFailed(bytes returnData)` and are decoded
+ * against the escrow, because `submit`/`approve`/`release` reject on state
+ * mismatch far more often than the forwarder itself does. Anything still
+ * unmapped degrades to a 422 carrying the decoded name, so this class of
+ * failure can never present as "Internal server error" again.
+ */
+function describeRelayRevert(err: unknown): AppError {
+  const name = decodeRevertName(err)
+  switch (name) {
+    // Session lifecycle — every one of these is fixed by signing in again.
+    case 'SessionExpired':
+      return Errors.forbidden('Your gasless session expired before the transaction was submitted — sign in again and retry.')
+    case 'SessionNotYetValid':
+      return Errors.precondition('sponsorship_clock_skew', 'Your gasless session is not valid yet on-chain. The local chain clock and this server disagree — restart the dev chain and retry.')
+    case 'InvalidSession':
+      return Errors.forbidden('This gasless session is not registered on-chain — sign in again and retry.')
+    case 'InvalidRequestSignature':
+      return Errors.badRequest('The signed request did not match the authenticated wallet — reconnect and retry.')
+    // OZ ECDSA, raised from inside the forwarder's own recover() calls.
+    case 'ECDSAInvalidSignature':
+    case 'ECDSAInvalidSignatureLength':
+    case 'ECDSAInvalidSignatureS':
+    case 'ECDSAInvalidSignatureV':
+      return Errors.badRequest('The wallet signature could not be recovered on-chain — reconnect and sign again.')
+    // Per-request state — fixed by reloading, not by re-signing in.
+    case 'InvalidNonce':
+      return Errors.conflict('relay_nonce_stale', 'A previous sponsored transaction is still pending, so this one used a stale nonce. Wait a moment and retry.')
+    case 'RequestExpired':
+      return Errors.conflict('relay_deadline_passed', 'The request took too long to reach the chain — retry.')
+    // The forwarder relayed fine and the TARGET refused. Reached only when the
+    // wrapped payload was itself undecodable — a named target error (WrongStatus,
+    // NotFreelancer, …) is unwrapped by `decodeRevertName` and handled above.
+    case 'CallFailed':
+      return Errors.precondition('relay_target_reverted', 'The contract rejected this action. Refresh and retry.')
+    case 'InsufficientRelayerBalance':
+      return Errors.precondition('relayer_unfunded', 'The gasless relayer is out of funds. Fund RELAYER_PRIVATE_KEY, or send this action as a normal transaction.')
+    case 'TransferFailed':
+      return Errors.precondition('relayer_refund_failed', 'The relayer could not refund its over-payment. Try again as a normal transaction.')
+    // The target's own errors, when the revert bubbled without the wrapper.
+    case 'NotDisputed':
+      return Errors.badRequest('Milestone is not disputed on-chain — the opening transaction may not have landed yet, or the dispute already settled. Refresh and retry.')
+    case 'NotFreelancer':
+      return Errors.forbidden('Only this milestone’s freelancer can do that — switch to the freelancer wallet.')
+    case 'NotClient':
+      return Errors.forbidden('Only the project client can do that — switch to the client wallet.')
+    case 'WrongStatus':
+    case 'NotDisputable':
+      return Errors.conflict('milestone_state_changed', `The milestone moved on-chain since this page loaded (${name}). Refresh to see the current state.`)
+    case 'UnknownMilestone':
+      return Errors.notFound('Milestone')
+    default:
+      break
+  }
+  // Unmapped: still never a bare 500. Name whatever decoded, and log the raw
+  // message so the next one is a one-line addition to this table.
+  const raw = err instanceof Error ? err.message : String(err)
+  logger.error('unmapped relay revert', { name, err: raw.slice(0, 500) })
+  return Errors.precondition(
+    'relay_reverted',
+    name ? `The contract rejected this action (${name}). Refresh and retry.` : 'The contract rejected this action. Refresh and retry.',
+  )
+}
+
+/**
  * Submit a signed ForwardRequest through the relayer. The relayer pays gas; the
  * user pays nothing in ETH. Only authenticated users with an unexpired session,
  * a request signed BY THEIR OWN ADDRESS, and a ZERO value (see
@@ -342,7 +451,7 @@ export interface RelayResult {
 export async function relayForwardRequest(userId: string, address: string, body: unknown): Promise<RelayResult> {
   if (!sponsorshipEnabled()) throw Errors.precondition('sponsorship_disabled', 'Gasless sponsorship is not configured on this deployment')
 
-  const input = relaySchema.parse(body)
+  const input = parseOrThrow(relaySchema, body)
   const req = input.request
   if (req.from.toLowerCase() !== address.toLowerCase()) {
     throw Errors.forbidden('ForwardRequest.from must be the authenticated wallet')
@@ -403,14 +512,7 @@ export async function relayForwardRequest(userId: string, address: string, body:
     sessionSignature: session.signature as `0x${string}`,
     })
   } catch (err) {
-    // The forwarder ABI can't decode target custom errors (e.g. Escrow's
-    // NotDisputed 0x433b0e14), so viem surfaces an opaque 500. Map the known
-    // state-mismatch revert to a 400 the UI can show.
-    const msg = err instanceof Error ? err.message : String(err)
-    if (/NotDisputed/.test(msg)) {
-      throw Errors.badRequest('Milestone is not disputed on-chain — the opening transaction may not have landed yet, or the dispute already settled. Refresh and retry.')
-    }
-    throw err
+    throw describeRelayRevert(err)
   }
 
   await db

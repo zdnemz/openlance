@@ -129,3 +129,59 @@ export const DEV_REGISTRY_WRITE_ABI = parseAbi([
   'function requestUnstake()',
   'function withdrawStake()',
 ])
+
+/**
+ * The relayer's revert surface.
+ *
+ * `SponsorshipForwarder` reverts with custom errors, and viem can only name a
+ * revert whose selector is in the ABI it was given. `FORWARDER_ABI` in
+ * `chain/relayer.ts` declared only the two write functions, so EVERY failure —
+ * an expired session, a stale nonce, a lapsed deadline — came back as
+ * `Unable to decode signature "0x…"`, which is not an AppError and therefore
+ * surfaced to the user as a bare `500 Internal server error`. The one error the
+ * UI could explain (the target's `NotDisputed`) was matched by regex on that
+ * undecodable message.
+ *
+ * These entries are the fix: the relayer's own errors now decode, and
+ * `describeRelayRevert` turns them into what the user should do.
+ */
+export const FORWARDER_ERROR_ABI = parseAbi([
+  'error InvalidSession(bytes32 sessionId)',
+  'error SessionExpired(uint256 expiry)',
+  'error SessionNotYetValid(uint256 issuedAt)',
+  'error InvalidRequestSignature()',
+  'error RequestExpired(uint48 deadline)',
+  'error InvalidNonce(uint256 provided, uint256 expected)',
+  'error CallFailed(bytes returnData)',
+  'error InsufficientRelayerBalance()',
+  'error TransferFailed()',
+  // OZ's ECDSA raises these from inside the forwarder's own signature checks,
+  // BEFORE its InvalidRequestSignature can fire — a malformed-length or
+  // unrecoverable signature lands here, so they belong to this same surface.
+  'error ECDSAInvalidSignature()',
+  'error ECDSAInvalidSignatureLength(uint256)',
+  'error ECDSAInvalidSignatureS(bytes32)',
+  'error ECDSAInvalidSignatureV(uint8)',
+])
+
+/**
+ * The escrow's state-mismatch reverts, for the same reason.
+ *
+ * These are what a user actually hits: the sponsored call relays fine and then
+ * Escrow says no. They reach the relayer as the raw revert bytes inside the
+ * forwarder's `CallFailed(returnData)` (the forwarder bubbles the target
+ * verbatim), so they are decoded here rather than guessed from an error string.
+ * `Status` is modelled as uint8 — the enum ordinals only matter for display,
+ * and the surfaced message names the error rather than the numbers.
+ */
+export const ESCROW_ERROR_ABI = parseAbi([
+  'error UnknownMilestone(uint256 milestoneId)',
+  'error NotClient()',
+  'error NotFreelancer()',
+  'error NotParty()',
+  'error NotDisputable(uint8 status)',
+  'error WrongStatus(uint8 expected, uint8 actual)',
+  'error NotDisputed()',
+  'error NothingToWithdraw()',
+  'error ArbitrationAlreadyResolved()',
+])
