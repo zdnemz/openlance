@@ -6,7 +6,7 @@
  * Every money movement: wallet signs → tx mines → indexer mirrors (three-phase
  * honest UX: signing / mining / indexing).
  */
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { use, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/lib/wallet";
 import { AnimatePresence, motion } from "framer-motion";
@@ -29,8 +29,9 @@ import {
   AddressAvatar, AddressText, EthAmount, HashText, ListHead, Skeleton, EmptyState, press,
   StatusBadge, Copyable,
 } from "@/components/design";
-import { STATE_COLORS, MILESTONE_LABELS, formatEth, toWei, shortAddress, timeAgo, timeUntil, feeOn } from "@/lib/format";
-import type { ProjectMilestone, DisputeView } from "@/lib/types";
+import { STATE_COLORS, MILESTONE_LABELS, clockTime, formatEth, toWei, shortAddress, timeAgo, timeUntil, feeOn } from "@/lib/format";
+import type { MessageView, ProjectMilestone, DisputeView } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArbiterPickerDialog } from "@/components/arbiter-picker-dialog";
@@ -46,6 +47,8 @@ import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
 import { Star } from "@phosphor-icons/react/dist/csr/Star";
 import { ChatCircleDots } from "@phosphor-icons/react/dist/csr/ChatCircleDots";
+import { Check } from "@phosphor-icons/react/dist/csr/Check";
+import { Checks } from "@phosphor-icons/react/dist/csr/Checks";
 import { Pulse } from "@phosphor-icons/react/dist/csr/Pulse";
 import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
 import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
@@ -1144,6 +1147,51 @@ function ReviewForm({ projectId, milestoneId }: { projectId: string; milestoneId
 
 /* ── chat tab ──────────────────────────────────────────────────────────── */
 
+/**
+ * Consecutive messages from one sender collapse into a single visual run, the
+ * way a messenger groups a held-down thumb. Five minutes is the cut: past that
+ * the name and a gap come back, because the two messages are a new utterance.
+ */
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+function isRunStart(list: MessageView[], index: number): boolean {
+  const cur = list[index]!;
+  const prev = list[index - 1];
+  if (!prev) return true;
+  if (prev.senderId !== cur.senderId) return true;
+  return new Date(cur.createdAt).getTime() - new Date(prev.createdAt).getTime() > GROUP_WINDOW_MS;
+}
+
+function MessageBubble({
+  msg, mine, senderName, runStart,
+}: { msg: MessageView; mine: boolean; senderName: string; runStart: boolean }) {
+  return (
+    <li className={cn("flex", mine ? "justify-end" : "justify-start", runStart ? "mt-3 first:mt-0" : "mt-1")}>
+      <div className={cn("max-w-[min(560px,78%)]", mine && "text-right")}>
+        {runStart && !mine && <p className="mb-1 px-1 text-[11px] text-faint">{senderName}</p>}
+        <div
+          className={cn(
+            "inline-block rounded-2xl px-3.5 py-2 text-left text-[13.5px] leading-relaxed",
+            mine
+              ? "rounded-br-md border border-rose-accent/25 bg-rose-soft text-foreground"
+              : "rounded-bl-md border border-line-strong bg-white/[0.045] text-dim",
+          )}
+        >
+          {msg.body}
+          <span className="num ml-2 inline-flex items-center gap-1 align-middle text-[10.5px] text-faint">
+            {clockTime(msg.createdAt)}
+            {mine && (
+              msg.readByOther
+                ? <><Checks weight="bold" aria-hidden className="h-3 w-3 text-rose-bright" /><span className="sr-only">read</span></>
+                : <><Check aria-hidden className="h-3 w-3" /><span className="sr-only">sent</span></>
+            )}
+          </span>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function ChatTab({ projectId }: { projectId: string }) {
   const { data: messages } = useMessages(projectId);
   const { data: project } = useProject(projectId);
@@ -1151,17 +1199,66 @@ function ChatTab({ projectId }: { projectId: string }) {
   const invalidate = useInvalidate();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [paneHeight, setPaneHeight] = useState<number | null>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const atBottom = useRef(true);
 
+  /**
+   * The pane fills the viewport instead of a fixed 560px, so the chat stops
+   * being a letterbox. What sits above it is conditional (the surplus panel is
+   * client-only, the arbiter panel only appears once arbiters are seated), so
+   * the offset is measured rather than guessed — a `calc(100dvh - 20rem)` is
+   * wrong in at least one of those states. `main` reserves 7rem below lg and
+   * 4rem at lg+, and those are the numbers to subtract at the bottom.
+   */
+  useLayoutEffect(() => {
+    const measure = () => {
+      const pane = paneRef.current;
+      if (!pane) return;
+      const docTop = pane.getBoundingClientRect().top + window.scrollY;
+      const reserve = window.matchMedia("(min-width: 1024px)").matches ? 64 : 112;
+      const next = Math.max(360, Math.round(window.innerHeight - docTop - reserve));
+      setPaneHeight((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+
+  // Only follow the tail when the reader is already there. Without this a
+  // message arriving while you read history yanks you to the bottom.
+  const stickToBottom = () => {
+    const el = threadRef.current;
+    if (!el) return;
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  };
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages?.length]);
+    if (!atBottom.current) return;
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
+  }, [messages?.length, paneHeight]);
 
-  const canPost = project && (project.client.id === session.user?.id || project.freelancer.id === session.user?.id);
+  // Mark read through the newest message actually rendered, debounced so a
+  // burst of polls is one write rather than one per 4s tick. No refetch after:
+  // what I just wrote is *my* cursor, and my own bubbles report the
+  // counterparty's — the 4s poll already picks that up.
+  const canPostHere = !!project && (project.client.id === session.user?.id || project.freelancer.id === session.user?.id);
+  const newest = messages?.[messages.length - 1]?.createdAt;
+  useEffect(() => {
+    if (!newest || !canPostHere) return;
+    const t = setTimeout(() => {
+      post(`/projects/${projectId}/messages/read`, { through: newest })
+        .catch(() => { /* a lost receipt re-lands on the next poll */ });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [newest, projectId, canPostHere]);
 
   // Assigned arbiters read the room but not the chat: the messages endpoint
   // stays participant-only, so say so instead of faking an empty thread.
-  if (project && !canPost) {
+  if (project && !canPostHere) {
     return (
       <div className="glass rounded-3xl px-6 py-14 text-center text-sm text-faint">
         Messages are participant-only — arbiters judge from milestones, submissions, and on-chain activity.
@@ -1170,37 +1267,39 @@ function ChatTab({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="glass flex h-[560px] flex-col rounded-3xl">
-      <div className="flex items-center gap-2.5 border-b border-line px-6 py-4">
+    <div ref={paneRef} className="glass flex flex-col overflow-hidden rounded-3xl" style={{ height: paneHeight ?? 560 }}>
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-6 py-3.5">
         <ChatCircleDots className="h-4 w-4 text-faint" />
-        <span className="text-[13px] text-dim">Project chat — append-only evidence</span>
-        <span className="num ml-auto text-[11px] text-faint">edits and deletes are structurally impossible</span>
+        <span className="text-[13px] text-dim">Project chat</span>
+        <span className="num ml-auto text-[11px] text-faint">append-only · reads are a cursor, not an edit</span>
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-        {!messages?.length && (
+      <div
+        ref={threadRef}
+        onScroll={stickToBottom}
+        role="log"
+        aria-live="polite"
+        aria-label="Project messages"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
+      >
+        {!messages?.length ? (
           <p className="pt-16 text-center text-sm text-faint">No messages yet. Coordinate scope, funding, and reviews here — the record is permanent.</p>
+        ) : (
+          <ol>
+            {messages.map((msg, i) => (
+              <MessageBubble
+                key={msg.id}
+                msg={msg}
+                mine={msg.senderId === session.user?.id}
+                senderName={(msg.senderId === project?.client.id ? project.client : project?.freelancer)?.displayName ?? "member"}
+                runStart={isRunStart(messages, i)}
+              />
+            ))}
+          </ol>
         )}
-        {messages?.map((msg) => {
-          const mine = msg.senderId === session.user?.id;
-          const sender = msg.senderId === project?.client.id ? project.client : project?.freelancer;
-          return (
-            <div key={msg.id} className="border-t border-line pt-3.5 first:border-t-0 first:pt-0">
-              <div className="flex items-baseline gap-2.5">
-                <span className={`text-[12px] font-medium ${mine ? "text-rose-bright" : "text-foreground"}`}>
-                  {sender?.displayName ?? "member"}
-                </span>
-                <span className="num text-[11px] text-faint">{timeAgo(msg.createdAt)}</span>
-                {mine && <span className="text-[11px] text-faint">you</span>}
-              </div>
-              <p className="mt-1 max-w-[72ch] text-[13.5px] leading-relaxed text-dim">{msg.body}</p>
-            </div>
-          );
-        })}
-        <div ref={bottomRef} />
       </div>
-      {canPost ? (
+      {canPostHere ? (
         <form
-          className="flex items-center gap-3 border-t border-line px-5 py-4"
+          className="flex shrink-0 items-end gap-3 border-t border-line px-4 py-3.5 sm:px-5"
           onSubmit={async (e) => {
             e.preventDefault();
             if (!draft.trim() || sending) return;
@@ -1208,6 +1307,8 @@ function ChatTab({ projectId }: { projectId: string }) {
             try {
               await post(`/projects/${projectId}/messages`, { body: draft.trim() });
               setDraft("");
+              if (composerRef.current) composerRef.current.style.height = "auto";
+              atBottom.current = true;
               invalidate.messages(projectId);
             } catch (err) {
               toast.error("Message failed", { description: err instanceof Error ? err.message : "Unknown error" });
@@ -1216,18 +1317,32 @@ function ChatTab({ projectId }: { projectId: string }) {
             }
           }}
         >
-          <input
+          <textarea
+            ref={composerRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Message the counterparty…"
-            className="h-11 flex-1 rounded-full border border-line bg-white/[0.03] px-5 text-sm outline-none placeholder:text-faint focus:border-rose-accent/50"
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+            rows={1}
+            placeholder="Message the counterparty"
+            aria-label="Message the counterparty"
+            className="max-h-[140px] flex-1 resize-none rounded-2xl border border-line bg-white/[0.03] px-4 py-3 text-sm leading-snug outline-none placeholder:text-faint focus:border-rose-accent/50"
           />
-          <Button type="submit" disabled={!draft.trim() || sending} className="h-11 rounded-full bg-rose-accent px-5 hover:bg-rose-bright">
+          <Button type="submit" disabled={!draft.trim() || sending} aria-label="Send" className={cn("h-10 w-10 shrink-0 rounded-full bg-rose-accent p-0 hover:bg-rose-bright", press)}>
             <PaperPlaneTilt className="h-4 w-4" />
           </Button>
         </form>
       ) : (
-        <div className="border-t border-line px-6 py-4 text-[12px] text-faint">Participants only.</div>
+        <div className="shrink-0 border-t border-line px-6 py-4 text-[12px] text-faint">Participants only.</div>
       )}
     </div>
   );
