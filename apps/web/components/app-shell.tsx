@@ -26,6 +26,7 @@ import { Layout } from "@phosphor-icons/react/dist/csr/Layout";
 import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
 import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
+import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
 import { ShieldStar } from "@phosphor-icons/react/dist/csr/ShieldStar";
 import { TerminalWindow } from "@phosphor-icons/react/dist/csr/TerminalWindow";
 import { ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
@@ -158,7 +159,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Gate the persisted-session-derived chip: the server always sees an empty
   // session, so rendering it before localStorage rehydrates would mismatch.
   const address = sessionHydrated ? session.user?.walletAddress : undefined;
-  const roleLine = session.user ? `${session.user.role} · kyc ${session.user.kycStatus}` : "member";
+  // The seal is the whole signal. Spelling "kyc verified" beside it said the
+  // same thing twice in a 13px rail, and the unverified states are already
+  // surfaced where they matter — the Onboarding rail item below and the
+  // dashboard banner — so the chip never needs to restate them.
+  const roleLine = session.user ? session.user.role : "member";
   const isBackable = pathname !== "/dashboard" && pathname !== "/jobs" && pathname !== "/stake";
 
   return (
@@ -219,7 +224,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <AddressAvatar address={address} size={26} />
                   <span className="min-w-0">
-                    <span className="block truncate leading-tight">{session.user?.displayName ?? shortAddress(address)}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="block truncate leading-tight">{session.user?.displayName ?? shortAddress(address)}</span>
+                      {session.user?.kycStatus === "verified" && <SealCheck weight="fill" className="h-3 w-3 shrink-0 text-state-released" />}
+                    </span>
                     <span className="block text-[11px] leading-tight text-faint">{roleLine}</span>
                   </span>
                 </Link>

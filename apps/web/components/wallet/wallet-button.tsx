@@ -141,7 +141,9 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
                   {session.user?.kycStatus === "verified" && <SealCheck weight="fill" className="h-3 w-3 shrink-0 text-state-released" />}
                 </span>
                 <span className="num block text-[11px] leading-tight text-faint">
-                  {session.user ? `${session.user.role} · kyc ${session.user.kycStatus}` : shortAddress(address, 4)}
+                  {/* Role only — the seal above already says verified, and the
+                      unverified states have their own prompts (onboarding). */}
+                  {session.user ? session.user.role : shortAddress(address, 4)}
                 </span>
               </span>
           </button>
