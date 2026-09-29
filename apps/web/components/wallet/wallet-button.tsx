@@ -7,6 +7,7 @@ import { useWallet, useWalletHydrated, fetchBalance } from "@/lib/wallet";
 import { useSession } from "@/lib/session";
 import { loginWithWallet, disconnectAndLogout } from "@/lib/siwe";
 import { ConnectPanel } from "@/components/wallet/connect-panel";
+import { ROLE_HOME } from "@/lib/role-routes";
 import { AddressAvatar, press } from "@/components/design";
 import { shortAddress } from "@/lib/format";
 import {
@@ -55,10 +56,10 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
     try {
       await loginWithWallet(address);
       toast.success("Signed in", { description: "Session token issued by the API." });
-      // Route to the seat home; verify-aware so an unfinished user lands on
-      // /onboarding directly instead of a dashboard bounce.
-      const verified = useSession.getState().user?.kycStatus === "verified";
-      router.replace(verified ? "/dashboard" : "/onboarding");
+      // The proxy owns the seat decision: the verify response stamped
+      // `el_onboarded` + `el_role`, so a registered user goes straight to the
+      // app and an unfinished one is bounced back to /onboarding.
+      router.replace(ROLE_HOME);
     } catch (err) {
       toast.error("Sign-in failed", { description: err instanceof Error ? err.message : "Unknown error" });
     } finally {

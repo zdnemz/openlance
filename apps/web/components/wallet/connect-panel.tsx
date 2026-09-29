@@ -11,9 +11,10 @@ import { useWallet, hasInjected } from "@/lib/wallet";
 import { useRuntime } from "@/lib/runtime";
 import { loginWithWallet, disconnectAndLogout } from "@/lib/siwe";
 import { useSession } from "@/lib/session";
+import { ROLE_HOME } from "@/lib/role-routes";
 import { Wallet, Info, Plugs, Spinner } from "@phosphor-icons/react";
 import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -21,7 +22,6 @@ export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChan
   const chainId = useRuntime((s) => s.chainId);
   const session = useSession();
   const router = useRouter();
-  const pathname = usePathname();
   const [signingIn, setSigningIn] = useState(false);
   const injectedAvailable = hasInjected();
 
@@ -39,11 +39,12 @@ export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChan
       await loginWithWallet(addr);
       toast.success("Signed in", { description: "SIWE session issued — identity follows your key." });
       onOpenChange(false);
-      // Route to the seat home. Verify-aware: the freshly-issued session tells
-      // us whether onboarding is done, so we skip the pointless dashboard→
-      // onboarding round-trip. Already on /onboarding? Stay and continue.
-      const verified = useSession.getState().user?.kycStatus === "verified";
-      if (pathname !== "/onboarding") router.replace(verified ? "/dashboard" : "/onboarding");
+      // Always aim at the seat home and let the proxy decide. The verify
+      // response just stamped `el_onboarded` + `el_role` from the server, so a
+      // registered user lands in the app (and /onboarding is one-way) while a
+      // new one is bounced straight back — no client-side guess, and no
+      // re-entering onboarding from here.
+      router.replace(ROLE_HOME);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       if (!/reject|denied/i.test(message)) toast.error("Wallet or sign-in failed", { description: message });
