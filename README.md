@@ -58,6 +58,11 @@ pnpm chain                          # anvil + deploy contracts + migrate (option
 pnpm dev                            # web :3000 + api :4000
 ```
 
+`pnpm db:flush` empties every table in `public` (dev only) — it prompts before
+truncating, and `--yes` skips the prompt. `pnpm chain` boots a fresh anvil with
+new contract addresses, so a mirror left over from the previous boot points at
+contracts that no longer exist; flushing is the DB half of that reset.
+
 `pnpm dev` starts the two app services in parallel. The chain is a separate
 step on purpose: it binds `:8545`, so it must not fight an anvil you already
 have running. Per-service env references live in

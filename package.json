@@ -27,6 +27,7 @@
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @openlance/api db:migrate",
     "db:setup": "pnpm db:migrate",
+    "db:flush": "pnpm --filter @openlance/api db:flush",
     "export:abi": "pnpm --filter @openlance/contracts export:abi",
     "verify:notifications": "pnpm --filter @openlance/api verify:notifications",
     "check:job-bid": "pnpm --filter @openlance/api check:job-bid",

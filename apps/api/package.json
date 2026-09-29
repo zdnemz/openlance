@@ -21,6 +21,7 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
     "db:setup": "pnpm db:migrate",
+    "db:flush": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/db-flush.ts",
     "check:db": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-db-integrity.ts"
   },
   "dependencies": {
