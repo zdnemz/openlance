@@ -5,14 +5,16 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useJob, useProposals, useInvalidate, post } from "@/lib/queries";
-import { get, del, fileUrl } from "@/lib/api";
+import { del } from "@/lib/api";
 import { uploadAttachment } from "@/lib/uploads";
 import { useSession } from "@/lib/session";
 import {
   AddressAvatar, Chip, EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText,
 } from "@/components/design";
+import { AttachmentChip } from "@/components/attachment-chip";
+import { AttachmentPicker } from "@/components/attachment-picker";
 import { JobForm, CATEGORIES, CUSTOM_CATEGORY, type JobDraft } from "@/components/job-form";
-import type { AttachmentView, JobView } from "@/lib/types";
+import type { JobView } from "@/lib/types";
 import { formatEth, timeAgo, toWei } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
 import { sendContractCall, waitForReceipt } from "@/lib/wallet";
@@ -21,8 +23,6 @@ import { SurplusPanel } from "@/components/surplus-panel";
 import { ESCROW_ABI } from "@/lib/contracts";
 import { toast } from "sonner";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { Paperclip } from "@phosphor-icons/react/dist/csr/Paperclip";
-import { X } from "@phosphor-icons/react/dist/csr/X";
 import { Check } from "@phosphor-icons/react/dist/csr/Check";
 import { Stack } from "@phosphor-icons/react/dist/csr/Stack";
 import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
@@ -441,44 +441,6 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
 
 const EMPTY_MILESTONE = { title: "", description: "", amount: "" };
 
-function AttachmentChip({ attachment }: { attachment: AttachmentView }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function open() {
-    setBusy(true);
-    setErr(null);
-    try {
-      const { url } = await get<{ url: string }>(`/attachments/${attachment.id}/url`);
-      window.open(fileUrl(url), "_blank", "noopener");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not open the file");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={open}
-      disabled={busy}
-      title={err ?? attachment.filename}
-      className="inline-flex max-w-[15rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim transition-colors hover:border-line-strong hover:text-foreground disabled:opacity-50"
-    >
-      <Paperclip className="h-3.5 w-3.5 shrink-0 text-faint" weight="bold" />
-      <span className="truncate">{attachment.filename}</span>
-      <span className="num shrink-0 text-faint">{formatBytes(attachment.sizeBytes)}</span>
-    </button>
-  );
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
 /* ── proposal card (poster view) ──────────────────────────────────────── */
 
 function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/lib/types").ProposalView; onAccept: () => void; awarding: boolean }) {
@@ -525,6 +487,9 @@ function ProposeForm({ jobId }: { jobId: string }) {
   const session = useSession();
   const { data: job } = useJob(jobId);
   const { data: myProposals } = useProposals(jobId);
+  // The server's ceiling, not a local copy — the API refuses past it.
+  const { storage } = useRuntime();
+  const maxAttachments = storage?.maxAttachments ?? 3;
   const mine = myProposals?.find((p) => p.freelancerId === session.user?.id && p.status !== "withdrawn");
   const invalidate = useInvalidate();
 
@@ -680,33 +645,14 @@ function ProposeForm({ jobId }: { jobId: string }) {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[13px] font-medium">Supporting files</label>
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-2xl border border-dashed border-line px-4 py-3.5 text-[13px] text-dim transition-colors hover:border-line-strong hover:text-foreground">
-            <Paperclip className="h-4 w-4 shrink-0 text-faint" weight="bold" />
-            {files.length ? `${files.length} file${files.length > 1 ? "s" : ""} ready` : "Attach a portfolio piece, past audit, or spec"}
-            <input
-              type="file" multiple className="sr-only"
-              onChange={(e) => {
-                setFiles([...files, ...Array.from(e.target.files ?? [])]);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          {files.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {files.map((f, i) => (
-                <span key={`${f.name}-${i}`} className="inline-flex max-w-[14rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim">
-                  <span className="truncate">{f.name}</span>
-                  <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-faint hover:text-destructive">
-                    <X className="h-3 w-3" weight="bold" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <p className="text-[11px] text-faint">The poster can read these while reviewing your bid. They move to the project if you win.</p>
-        </div>
+        <AttachmentPicker
+          files={files}
+          onChange={setFiles}
+          max={maxAttachments}
+          label="Supporting files"
+          emptyLabel="Attach a portfolio piece, past audit, or spec"
+          hint="The poster can read these while reviewing your bid. They move to the project if you win."
+        />
 
         {error && (
           <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
