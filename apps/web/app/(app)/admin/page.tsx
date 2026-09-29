@@ -140,7 +140,7 @@ export default function AdminPage() {
             The contract is the authority; this figure re-derives from ledger events.
           </p>
           <Button
-            disabled={chain.phase !== "idle" && chain.phase !== "done" || accruedWei === 0n || !address}
+            disabled={chain.active || accruedWei === 0n || !address}
             onClick={async () => {
               const result = await withdrawFeesAction(chain.run)();
               if (result.ok) toast.success("Fees split 50/50 to treasury + sponsorship");

@@ -98,7 +98,7 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
   const now = useNow();
 
   const [outcome, setOutcome] = useState<keyof typeof DISPUTE_OUTCOME>("split");
-  const active = chain.phase !== "idle" && chain.phase !== "done";
+  const active = chain.active;
 
   const isParticipant = project?.client.id === session.user?.id || project?.freelancer.id === session.user?.id;
   const iAmSelected = round?.arbiters.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
@@ -263,7 +263,7 @@ function RevealControls({ dispute, onchainId, outcome, setOutcome, onDone }: {
   setOutcome: (o: keyof typeof DISPUTE_OUTCOME) => void; onDone: () => void;
 }) {
   const chain = useChainAction();
-  const active = chain.phase !== "idle" && chain.phase !== "done";
+  const active = chain.active;
 
   return (
     <>

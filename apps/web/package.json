@@ -15,6 +15,7 @@
     "check:gasless": "tsx scripts/check-gasless-value.ts",
     "check:file-url": "tsx scripts/check-file-url.ts",
     "check:funding-refresh": "tsx scripts/check-funding-refresh.ts",
+    "check:chain-busy": "tsx scripts/check-chain-busy.ts",
     "check:provider-error": "tsx scripts/check-provider-error.ts"
   },
   "dependencies": {

@@ -9,6 +9,7 @@
  *   3. MIRROR    indexer applies the event; the API view flips
  */
 import { useCallback, useState } from "react";
+import { create } from "zustand";
 import { useQueryClient } from "@tanstack/react-query";
 import { readContract, sendContractCall, waitForReceipt } from "@/lib/wallet";
 import { relayForwardRequest } from "@/lib/sponsorship";
@@ -97,6 +98,20 @@ export function describeFundingRevert(message: string, totalWei: bigint, freeWei
 export type Phase = "idle" | "signing" | "mining" | "indexing" | "done";
 
 /**
+ * True while a write is in flight — the one definition of "a button is dead".
+ *
+ * "done" counts as NOT busy: the tx landed, the action is over, and the panel
+ * is waiting on a poll it does not own. Holding buttons dead on "done" would
+ * strand the room until a reload, since nothing resets the phase on its own.
+ *
+ * Every call site used to inline `phase !== "idle" && phase !== "done"`, which
+ * is how one of them drifted into `phase !== "idle"` and locked a panel shut.
+ */
+export function isBusy(phase: Phase): boolean {
+  return phase !== "idle" && phase !== "done";
+}
+
+/**
  * Whether a call may take the gasless relay. The relayer sponsors STATE
  * CHANGES, never value movement — in either direction:
  *
@@ -119,9 +134,39 @@ export function canRelayGasless(opts: { value?: bigint; userPaid?: boolean }): b
   return !opts.userPaid && (opts.value ?? 0n) === 0n;
 }
 
+/**
+ * The one in-flight write, shared by every panel on the page.
+ *
+ * This used to be `useState` inside the hook, which made every CALL SITE its
+ * own action: a page renders one card per row (the disputes list) and one
+ * panel per milestone, so a tally in card A left card B's buttons live and a
+ * second signature could be sent while the first was still mining. Buttons
+ * were wired to the right flag — it just wasn't the same flag.
+ *
+ * A store, not a context: the wallet is a single global resource, so "something
+ * is signing" is global the same way `useRuntime` is. The ERROR deliberately
+ * stays local — it belongs to the action that failed, and a shared one would
+ * print a dispute panel's revert under an unrelated milestone's buttons.
+ */
+interface ChainTxState {
+  phase: Phase;
+  txHash: string | null;
+  setPhase: (phase: Phase) => void;
+  setTxHash: (txHash: string | null) => void;
+  reset: () => void;
+}
+
+const useChainTx = create<ChainTxState>()((set) => ({
+  phase: "idle",
+  txHash: null,
+  setPhase: (phase) => set({ phase }),
+  setTxHash: (txHash) => set({ txHash }),
+  reset: () => set({ phase: "idle", txHash: null }),
+}));
+
 export function useChainAction() {
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const phase = useChainTx((s) => s.phase);
+  const txHash = useChainTx((s) => s.txHash);
   const [error, setError] = useState<string | null>(null);
   const escrow = useRuntime((s) => s.escrow);
   const registry = useRuntime((s) => s.registry);
@@ -129,8 +174,7 @@ export function useChainAction() {
   const qc = useQueryClient();
 
   const reset = useCallback(() => {
-    setPhase("idle");
-    setTxHash(null);
+    useChainTx.getState().reset();
     setError(null);
   }, []);
 
@@ -154,6 +198,15 @@ export function useChainAction() {
         toast.error(msg);
         return { ok: false, hash: null };
       }
+      // Re-entrancy guard, checked against the STORE rather than a closure:
+      // two panels can call run() in the same tick (a double click lands
+      // before React re-renders the disabled button), and a per-call-site
+      // flag would not see the other one. The wallet takes one signature at
+      // a time, so the second call must be refused, not queued.
+      if (isBusy(useChainTx.getState().phase)) {
+        return { ok: false, hash: null };
+      }
+      const { setPhase, setTxHash } = useChainTx.getState();
       setError(null);
       setPhase("signing");
       try {
@@ -238,7 +291,9 @@ export function useChainAction() {
     [escrow, registry, chainId, qc],
   );
 
-  return { phase, txHash, error, run, reset };
+  // `active` is exposed rather than re-derived at each call site, so "is a
+  // button dead" is answered by the same predicate that gates run().
+  return { phase, txHash, error, active: isBusy(phase), run, reset };
 }
 
 /* ── Named actions (typed args, single source of truth per call) ────────── */

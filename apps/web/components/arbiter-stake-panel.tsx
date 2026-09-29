@@ -298,7 +298,7 @@ export function ArbiterStakeHub() {
   const [reduceModalOpen, setReduceModalOpen] = useState(false);
   const [reduceInput, setReduceInput] = useState("");
   const [retrying, setRetrying] = useState(false);
-  const active = chain.phase !== "idle" && chain.phase !== "done";
+  const active = chain.active;
 
   const stakeWei = ethToWei(stakeInput);
   const topUpWei = ethToWei(topUpInput);

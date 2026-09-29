@@ -455,7 +455,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   // Live dispute fee from the contract (0 = free). Copy and the tx value both
   // branch on it, so a fee retune is picked up without a code change.
   const feeWei = toWei(disputeFeeWei);
-  const active = chain.phase !== "idle" && chain.phase !== "done";
+  const active = chain.active;
   // The locked panel IS the dispute panel on-chain (no top-up); without a lock
   // the contract draws all 3 at random. Zero-padded to the fixed-size arg.
   const lockedPreferred = ((project.chosenArbiters ?? []) as string[]).filter(Boolean).slice(0, MAX_ARBITERS);
@@ -975,7 +975,7 @@ function DisputePanel({
   const windows = useDisputeWindows();
   const now = useNow();
   const [outcome, setOutcome] = useState<keyof typeof DISPUTE_OUTCOME>("split");
-  const active = chain.phase !== "idle" && chain.phase !== "done";
+  const active = chain.active;
 
   if (!project || milestone.onchainId === null) return null;
   const onchainId = milestone.onchainId;
