@@ -123,6 +123,10 @@ export const SCORE_REASON = { 1: "majority", 2: "minority", 3: "missed", 4: "ove
 
 export const MAX_ARBITERS = 3;
 export const QUORUM = 2;
+/** A lockable panel is 1–3 seats. ONE is a valid panel: a locked single arbiter
+ *  is seated as a degraded 1-seat round (deciding on its own reveal) rather than
+ *  topped up, so mutual agreement on one name always beats an unagreed draw. */
+export const MIN_ARBITERS = 1;
 
 /** Reveals a round needs before it can decide, mirroring Escrow._requiredReveals:
  *  the 2-of-3 QUORUM, or the whole seated panel when a degraded round could not

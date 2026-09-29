@@ -64,18 +64,41 @@ describe("Escrow — multi-arbiter disputes", () => {
     const selected = r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
     assert.ok(selected.includes(nom0.toLowerCase()), "first nominee must be selected");
     assert.ok(selected.includes(nom1.toLowerCase()), "second nominee must be selected");
+    for (const outsider of arbiters.slice(2)) {
+      assert.ok(!selected.includes(outsider.account.address.toLowerCase()), "a non-nominee must never be seated");
+    }
   });
 
-  it("never re-seats an arbiter the parties dropped (2 proposed, 1 vetoed)", async function () {
-    // The reported bug: a partial panel seats exactly itself, never topped up.
-    // The other registered arbiters stay in the roster, so a random fill would
-    // happily draw the dropped nominee back in.
+  it("seats a single locked arbiter as a degraded 1-seat round, never topped up", async function () {
+    // One name is a valid mutual agreement: it must be SEATED, not diluted by
+    // a random fill that could re-seat an arbiter the parties dropped (the
+    // reported bug) and could also outvote the one they actually agreed on.
     const { escrow, arbiters, client } = await setupFunded(4);
     const kept = arbiters[0]!.account.address;
     await escrow.write.openDisputeWith([1n, [kept, ZERO, ZERO]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
     assert.equal(r.arbiterCount, 1, "a 1-arbiter panel seats one arbiter, not three");
     assert.equal(r.arbiters[0]!.toLowerCase(), kept.toLowerCase(), "the locked arbiter must be seated");
+  });
+
+  it("a single locked arbiter's own vote decides the round", async function () {
+    // The reason 1 is lockable at all: the locked 1-seat round must actually
+    // SETTLE on that one reveal, rather than stalling on a 2-of-3 quorum it can
+    // never reach. This is the openDisputeWith path, so it is what a project
+    // that mutually locked a single arbiter actually gets.
+    const { escrow, arbiters, client } = await setupFunded(4);
+    const solo = arbiters[0]!;
+    await escrow.write.openDisputeWith([1n, [solo.account.address, ZERO, ZERO]], { value: DISPUTE_FEE, account: client.account });
+    const r = await getRound(escrow, 1n, 0);
+    assert.equal(r.arbiterCount, 1, "only the locked arbiter sits");
+
+    const salt = `0x${"5a".repeat(32)}` as `0x${string}`;
+    await escrow.write.commitVote([1n, 0, commitHash(RELEASE, salt, solo.account.address, 1n, 0)], { account: solo.account });
+    await passCommitWindow(escrow, 1n, 0);
+    await escrow.write.revealVote([1n, 0, RELEASE, salt], { account: solo.account });
+    await tallyAndFinalize(escrow, 1n, 0, client.account);
+
+    assert.equal(await escrow.read.milestoneStatus([1n]), 5, "ResolvedRelease — the lone locked vote decided");
   });
 
   it("seats the full 3-arbiter panel and keeps the 2-of-3 quorum", async function () {

@@ -26,7 +26,7 @@ import {
 import {
   useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt, saveCommit, loadCommit, clearCommit,
 } from "@/lib/dispute-round";
-import { DISPUTE_OUTCOME, MAX_ARBITERS, QUORUM, requiredReveals } from "@/lib/contracts";
+import { DISPUTE_OUTCOME, MAX_ARBITERS, MIN_ARBITERS, QUORUM, requiredReveals } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import {
   AddressAvatar, AddressText, EthAmount, HashText, ListHead, Skeleton, EmptyState, press,
@@ -225,9 +225,9 @@ function ArbiterPanel({ id }: { id: string }) {
   const mine = !!proposal && proposal.proposerId === session.user?.id;
 
   async function propose(addresses: string[]) {
-    if (addresses.length !== MAX_ARBITERS) {
-      toast.error(`Pick ${MAX_ARBITERS} arbiters`, {
-        description: "The locked panel is the dispute panel — it is never topped up, so it has to be a full one.",
+    if (addresses.length < MIN_ARBITERS || addresses.length > MAX_ARBITERS) {
+      toast.error(`Pick ${MIN_ARBITERS}–${MAX_ARBITERS} arbiters`, {
+        description: "Whoever you lock is the panel — one is enough, and nobody outside it is ever asked.",
       });
       return;
     }
@@ -279,7 +279,7 @@ function ArbiterPanel({ id }: { id: string }) {
       {locked.length > 0 ? (
         <div className="mt-3 space-y-3">
           <ArbiterBubbles addresses={locked} tone="locked" />
-          <p className="text-[12px] text-faint">They are the panel: a locked 1–2 seats a degraded round, and nobody outside this list is ever asked.</p>
+          <p className="text-[12px] text-faint">They are the panel, and nobody outside this list is ever asked. Fewer than 3 seats a degraded round that decides on those votes alone.</p>
         </div>
       ) : (
         <div className="mt-3 space-y-3">
@@ -304,11 +304,11 @@ function ArbiterPanel({ id }: { id: string }) {
               onClick={() => setPickerOpen(true)}
               className="rounded-full bg-white/10 px-5 py-2.5 text-[12.5px] font-medium hover:bg-white/20"
             >
-              {proposal ? "Replace proposal" : `Pick ${MAX_ARBITERS} arbiters`}
+              {proposal ? "Replace proposal" : "Add arbiters"}
             </Button>
           )}
           {!isParty && !proposal && (
-            <p className="text-[12px] text-faint">No arbiters picked yet — the parties agree a {MAX_ARBITERS}-arbiter panel after award.</p>
+            <p className="text-[12px] text-faint">No arbiters picked yet — the parties agree {MIN_ARBITERS}–{MAX_ARBITERS} after award.</p>
           )}
         </div>
       )}

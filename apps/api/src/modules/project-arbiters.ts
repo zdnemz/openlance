@@ -1,18 +1,18 @@
 /**
- * Mutual arbiter lock (propose → approve → lock, exactly 3).
+ * Mutual arbiter lock (propose → approve → lock, 1–3).
  *
- * After award, either side proposes 3 registry addresses; the other side
+ * After award, either side proposes 1–3 registry addresses; the other side
  * approves and the list locks on the project. At dispute open the UI passes
  * the locked list to `openDisputeWith`, which seats exactly that panel — an
- * arbiter the parties dropped is never re-seated. A panel that cannot staff
- * the round (everyone benched since the lock) falls back to random selection
- * on-chain, so a stale pick can never brick a dispute.
+ * arbiter the parties dropped is never re-seated, and a single locked arbiter
+ * IS seated rather than topped up. A panel that cannot staff the round (everyone
+ * benched since the lock) falls back to random selection on-chain, so a stale
+ * pick can never brick a dispute.
  *
- * The panel is all-or-nothing because the round is never topped up: locking 1
- * would decide a live dispute on a single voice, locking 2 on two that must
- * BOTH reveal. A full 3 keeps the 2-of-3 quorum. A project with fewer than 3
- * eligible arbiters in the roster cannot lock one at all and falls back to the
- * random draw at dispute time.
+ * One locked arbiter is a valid panel: the round is a degraded 1-seat round that
+ * decides on that single reveal, rather than a stall. Three keeps the 2-of-3
+ * quorum. Two requires BOTH to reveal or the no-quorum fallback refunds the
+ * opener — the parties' call, made with both signatures on the lock.
  */
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -29,8 +29,9 @@ const log = logger.child({ component: 'project-arbiters' })
 
 const ADDRESS = z.string().regex(/^0x[0-9a-fA-F]{40}$/, 'Invalid wallet address')
 
-/** Mirrors Escrow.MAX_ARBITERS — the full panel, and the only lockable size. */
-const PANEL_SIZE = 3
+/** Escrow seat bounds: a panel is 1–3, mirroring `Round.arbiterCount`. */
+const MIN_PANEL = 1
+const MAX_PANEL = 3
 
 async function isRegisteredOnchain(address: string): Promise<boolean | null> {
   if (env.CHAIN_MODE !== 'real' || !env.ARBITER_REGISTRY_ADDRESS || !env.CHAIN_RPC_URL) return null
@@ -59,12 +60,10 @@ async function validateNominees(projectId: string, addresses: string[]) {
   const normalized = addresses.map((a) => a.toLowerCase())
   if (new Set(normalized).size !== normalized.length) throw Errors.badRequest('Duplicate arbiter address')
   // The single gate for panel size: `propose` runs it on the nominee list, and
-  // `approve` re-runs it on the stored proposal, so a row that predates this
-  // rule (or was written by an older client) still cannot lock a partial panel.
-  if (normalized.length !== PANEL_SIZE) {
-    throw Errors.badRequest(
-      `Arbiter panel must be exactly ${PANEL_SIZE} — a locked panel is the dispute panel and is never topped up`,
-    )
+  // `approve` re-runs it on the stored proposal, so a row written by an older
+  // client still cannot lock a panel the contract could never seat.
+  if (normalized.length < MIN_PANEL || normalized.length > MAX_PANEL) {
+    throw Errors.badRequest(`Arbiter panel must be ${MIN_PANEL}–${MAX_PANEL} arbiters`)
   }
   for (const addr of normalized) {
     if (parties.has(addr)) throw Errors.badRequest('A party cannot arbitrate its own project')

@@ -11,7 +11,7 @@
  */
 import { useArbiters, useProjects, useJob, useInvalidate, post } from "@/lib/queries";
 import { useSession } from "@/lib/session";
-import { MAX_ARBITERS } from "@/lib/contracts";
+import { MAX_ARBITERS, MIN_ARBITERS } from "@/lib/contracts";
 import { AddressAvatar, EmptyState, ArbiterRegistrySkeleton, press } from "@/components/design";
 import { PageHeader } from "@/components/page-header";
 import { RoleGate } from "@/components/role-gate";
@@ -261,9 +261,9 @@ function ArbiterPicker({
 
   async function propose() {
     if (!project) return;
-    if (picked.length !== MAX_ARBITERS) {
-      toast.error(`Pick ${MAX_ARBITERS} arbiters`, {
-        description: "The locked panel is the dispute panel — it is never topped up, so it has to be a full one.",
+    if (picked.length < MIN_ARBITERS || picked.length > MAX_ARBITERS) {
+      toast.error(`Pick ${MIN_ARBITERS}–${MAX_ARBITERS} arbiters`, {
+        description: "Whoever you lock is the panel — one is enough, and nobody outside it is ever asked.",
       });
       return;
     }
@@ -361,8 +361,8 @@ function ArbiterPicker({
               </div>
               {picked.length === 0 ? (
                 <p className="mt-2 text-[12.5px] text-faint">
-                  Tick {MAX_ARBITERS} arbiters in the roster below — eligible rows only. A partial panel cannot be
-                  locked: it is never topped up at dispute time.
+                  Tick {MIN_ARBITERS}–{MAX_ARBITERS} arbiters in the roster below — eligible rows only. Whoever you
+                  lock is the panel; it is never topped up at dispute time.
                 </p>
               ) : (
                 <div className="mt-2 space-y-1.5">
@@ -377,7 +377,7 @@ function ArbiterPicker({
                 <p className="mt-3 text-[12px] text-amber-300">You proposed these — waiting on the counterparty to approve.</p>
               )}
               <Button
-                disabled={busy || picked.length !== MAX_ARBITERS || mine}
+                disabled={busy || picked.length < MIN_ARBITERS || mine}
                 onClick={propose}
                 className="mt-3 rounded-full bg-rose-accent px-5 py-2 text-[12.5px] font-medium hover:bg-rose-bright"
               >
@@ -385,9 +385,7 @@ function ArbiterPicker({
                   ? "Proposed"
                   : busy
                     ? "Proposing…"
-                    : picked.length < MAX_ARBITERS
-                      ? `Pick ${MAX_ARBITERS - picked.length} more`
-                      : "Propose panel"}
+                    : `Propose ${picked.length || ""} arbiter${picked.length === 1 ? "" : "s"}`}
               </Button>
             </div>
           )}
