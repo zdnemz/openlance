@@ -396,9 +396,12 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
           onClick={async () => {
             setSaving(true);
             try {
+              // Send the trimmed value even when empty — "" is what clears the
+              // column. Omitting the key means "leave unchanged", which is why
+              // an emptied field used to silently keep its old value.
               await patch("/users/me", {
-                displayName: displayName.trim() || undefined,
-                bio: bio.trim() || undefined,
+                displayName: displayName.trim(),
+                bio: bio.trim(),
                 skills: skills.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 20),
                 links: collectLinks(),
               });

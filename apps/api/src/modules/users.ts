@@ -8,12 +8,25 @@ import { publicUser } from '../auth/service.ts'
 import { users, reviews } from '../db/schema.ts'
 import { Errors } from '../lib/errors.ts'
 
+/**
+ * A blank or null value CLEARS the column. Every other profile field has to
+ * accept this: without it there is no way to unset a name or a bio once set.
+ * `min(1)` rejected "" outright, and the form's `|| undefined` omitted the key
+ * entirely — which means "leave unchanged". Both spellings of "clear" were
+ * no-ops, so a value could never be removed.
+ */
+export const clearable = (max: number) =>
+  z.string().max(max).nullable().transform((v) => {
+    const s = v?.trim()
+    return s ? s : null
+  })
+
 export async function updateMe(request: Request) {
   const user = await requireKyc(request)
   const body = await validate(request, z.object({
-    displayName: z.string().min(1).max(80).optional(),
+    displayName: clearable(80).optional(),
     avatarUrl: z.string().url().max(500).optional(),
-    bio: z.string().max(2000).optional(),
+    bio: clearable(2000).optional(),
     skills: z.array(z.string().min(1).max(40)).max(20).optional(),
     links: z.record(z.string(), z.string().url()).optional(),
   }))
