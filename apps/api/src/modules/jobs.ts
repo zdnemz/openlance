@@ -1,5 +1,5 @@
 /** /jobs domain logic — draft → publish → award (PRD F1). */
-import { and, count, desc, eq, ilike, inArray, ne, sql } from 'drizzle-orm'
+import { and, count, desc, eq, ilike, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db/index.ts'
 import { pagination, validate } from '../lib/http.ts'
@@ -63,8 +63,9 @@ export async function listJobs(request: Request) {
 
   const conditions: import('drizzle-orm').SQL[] = []
   if (status && ['draft', 'open', 'in_progress', 'completed', 'cancelled'].includes(status)) conditions.push(eq(jobs.status, status as 'open'))
-  // Drafts are private: the marketplace never lists them unless explicitly asked.
-  else if (!status) conditions.push(ne(jobs.status, 'draft'))
+  // Default is the marketplace, and the marketplace is open work only: a job
+  // leaves it the instant a bid is accepted (in_progress) and never returns.
+  else if (!status) conditions.push(eq(jobs.status, 'open'))
   if (status === 'draft') {
     // Draft listing is poster-scoped: you only ever see your own drafts.
     const viewer = await requireAuth(request).catch(() => null)

@@ -84,7 +84,7 @@ export default function JobsPage() {
         {isClient && !!drafts?.items.length && (
           <div className="mb-8 overflow-hidden rounded-3xl border border-amber-400/25 bg-amber-400/[0.04]">
             <div className="px-6 pt-5">
-              <span className="num text-[11px] uppercase tracking-wider text-amber-300">your drafts · publish when ready</span>
+              <span className="num text-[11px] uppercase tracking-wider text-amber-300">your drafts · deposit to publish</span>
             </div>
             <div className="divide-y divide-white/[0.05]">
               {drafts.items.map((job) => (
@@ -138,9 +138,6 @@ export default function JobsPage() {
                       <span className="num rounded-md bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">
                         {job.category}
                       </span>
-                      {job.status !== "open" && (
-                        <span className="num text-[11px] uppercase tracking-wider text-faint">{job.status.replace("_", " ")}</span>
-                      )}
                       <span className="num text-[11px] text-faint">{timeAgo(job.createdAt)}</span>
                     </div>
                     <h2 className="mt-2 text-[17px] font-medium leading-snug tracking-tight transition-colors group-hover:text-rose-bright">
