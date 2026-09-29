@@ -40,6 +40,20 @@ const SESSION_TYPES = {
   ],
 } as const;
 
+/** Mirrors FORWARD_REQUEST_TYPES in apps/api/src/modules/sponsorship.ts. */
+const FORWARD_REQUEST_TYPES = {
+  ForwardRequest: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "gas", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint48" },
+    { name: "data", type: "bytes" },
+    { name: "sessionId", type: "bytes32" },
+  ],
+} as const;
+
 /**
  * Provider that signs the payload the client sends, exactly as a wallet would,
  * and hands back the signature. Returns the parsed payload so the test can
@@ -144,6 +158,47 @@ async function main() {
   {
     const { payload: p } = await signThroughClient(domain, { ...SESSION_TYPES, EIP712Domain: [] } as never, "SponsorshipSession", message);
     check("caller-supplied EIP712Domain is overridden", (p.types.EIP712Domain ?? []).length > 0, JSON.stringify(p.types.EIP712Domain));
+  }
+
+  // 5. A ForwardRequest carries bigint uint fields (the 0.05 ETH dispute fee is
+  //    `value`). JSON.stringify throws "Do not know how to serialize a BigInt"
+  //    on those, which killed every sponsored money action at signing time.
+  {
+    const forward = {
+      from: getAddress(ADDRESS),
+      to: "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+      value: 50_000_000_000_000_000n, // 0.05 ETH
+      gas: 1_000_000n,
+      nonce: 3n,
+      deadline: 1_757_086_400,
+      data: "0xdeadbeef",
+      sessionId: `0x${"c".repeat(64)}` as const,
+    };
+    let signed = false;
+    try {
+      const { payload: p, signature: sig } = await signThroughClient(domain, FORWARD_REQUEST_TYPES, "ForwardRequest", forward);
+      signed = true;
+      check(
+        "bigint uint fields reach the payload as strings",
+        p.message.value === "50000000000000000" && p.message.gas === "1000000" && p.message.nonce === "3",
+        JSON.stringify(p.message),
+      );
+      // The wallet hashes what it was given; the server hashes numbers. Same
+      // uint256s must produce the same digest, or the relay rejects the sig.
+      const fromPayload = hashTypedData({
+        domain: p.domain as Parameters<typeof hashTypedData>[0]["domain"],
+        types: p.types as Parameters<typeof hashTypedData>[0]["types"],
+        primaryType: p.primaryType,
+        message: p.message as Parameters<typeof hashTypedData>[0]["message"],
+      });
+      const fromServer = hashTypedData({ domain: domain as never, types: FORWARD_REQUEST_TYPES, primaryType: "ForwardRequest", message: forward as never });
+      check("ForwardRequest payload digest == server digest", fromPayload === fromServer, `${fromPayload} vs ${fromServer}`);
+      const who = await recoverAddress({ hash: fromServer, signature: sig });
+      check("ForwardRequest signature recovers to the signer", who?.toLowerCase() === ADDRESS.toLowerCase(), String(who));
+    } catch (err) {
+      check("ForwardRequest with bigint value signs", false, err instanceof Error ? err.message : String(err));
+    }
+    check("ForwardRequest signing did not throw", signed);
   }
 
   if (failures) {

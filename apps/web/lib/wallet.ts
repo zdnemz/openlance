@@ -12,7 +12,7 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { encodeFunctionData, decodeFunctionResult, type Abi } from "viem";
+import { encodeFunctionData, decodeFunctionResult, serializeTypedData, type Abi } from "viem";
 
 /** Public origin of the API service (apps/api). */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
@@ -235,6 +235,13 @@ function eip712DomainTypes(domain: Record<string, unknown>): { name: string; typ
  * at login and a ForwardRequest per money action. Unlike `personal_sign` this
  * shows structured data (human-readable) in the wallet, which is the whole point
  * of using EIP-712 rather than a replayable hash.
+ *
+ * The payload is built with viem's `serializeTypedData` — the same serializer
+ * viem hands to this RPC method — NOT `JSON.stringify`. A ForwardRequest
+ * carries bigint uint fields (value / gas / nonce, e.g. the 0.05 ETH dispute
+ * fee) and `JSON.stringify` throws "Do not know how to serialize a BigInt" on
+ * them. Serializing via viem encodes those fields as the decimal strings the
+ * wallet expects, so it hashes the same uint256s the server re-derives.
  */
 export async function signTypedData(args: {
   domain: Record<string, unknown>;
@@ -245,14 +252,17 @@ export async function signTypedData(args: {
   const state = useWallet.getState();
   if (!state.address) throw new Error("No wallet connected");
   if (typeof window === "undefined" || !window.ethereum) throw new Error("No injected wallet detected");
-  const payload = JSON.stringify({
+  // The `as never` is viem's generic refusing `Record<string, unknown>`: the
+  // server hands us the domain/type map as untyped JSON, and the runtime
+  // serializer only needs the fields to line up with the primary type.
+  const payload = serializeTypedData({
     domain: args.domain,
     // After the spread so a caller-supplied EIP712Domain can't reintroduce the
     // empty-list bug, whatever it passes.
     types: { ...args.types, EIP712Domain: eip712DomainTypes(args.domain) },
     primaryType: args.primaryType,
     message: args.message,
-  });
+  } as never);
   return (await window.ethereum.request({
     method: "eth_signTypedData_v4",
     params: [state.address, payload],
