@@ -7,7 +7,7 @@
  * -> migrate -> `pnpm dev` starts the API in CHAIN_MODE=real.
  *
  * Output: a single JSON line on stdout:
- *   {"escrow":"0x..","arbiterRegistry":"0x..","timelock":"0x..","deployer":"0x..","chainId":31337}
+ *   {"escrow":"0x..","arbiterRegistry":"0x..","timelock":"0x..","sponsorshipForwarder":"0x..","deployer":"0x..","chainId":31337}
  *
  * Implementation: spawns `hardhat run scripts/deploy.ts --network localhost`
  * from this package's directory, parses the printed addresses, and writes the
@@ -66,6 +66,10 @@ async function main() {
     escrow: grab("ESCROW_ADDRESS"),
     arbiterRegistry: grab("ARBITER_REGISTRY_ADDRESS"),
     timelock: grab("TIMELOCK_ADDRESS"),
+    // Escrow/Registry are initialized with THIS address as their trusted
+    // ERC-2771 forwarder, so it has to reach the env: an API pointed at any
+    // other forwarder makes every sponsored action revert NotParty().
+    sponsorshipForwarder: grab("SPONSORSHIP_FORWARDER_ADDRESS"),
     deployer: DEPLOYER,
     chainId,
   };

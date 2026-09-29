@@ -157,7 +157,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
         <div className="space-y-2">
           <label className="text-[13px] font-medium">Max budget (ETH)</label>
           <Input value={d.budget} onChange={(e) => setD({ ...d, budget: e.target.value })} className="num h-11 border-line bg-white/[0.03] text-sm" />
-          <p className="text-[12px] text-faint">The ceiling on any bid. You pay the bid you accept, not this.</p>
+          <p className="text-[12px] text-faint">The ceiling on any bid — and what you lock in escrow to publish. You pay the bid you accept; the rest is withdrawable.</p>
         </div>
       </div>
 
@@ -189,7 +189,8 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
             : <span className="flex items-center gap-2">Save draft <ArrowRight className="h-4 w-4" weight="bold" /></span>}
       </Button>
       <p className="text-center text-[12px] text-faint">
-        Freelancers shape the milestone breakdown themselves — you review the bids.
+        Freelancers shape the milestone breakdown themselves — you review the bids. Nothing moves on-chain until you
+        lock the budget to publish.
       </p>
     </div>
   );

@@ -98,7 +98,8 @@ time-based rules are observable without warping days of chain time.
 | Min score to withdraw | `MIN_SCORE_TO_WITHDRAW` | 50 | 50 |
 | Min stake duration | `MIN_STAKE_DURATION_SECONDS` | 60s | 604800s (7d) |
 | Unstake cooldown | `UNSTAKE_COOLDOWN_SECONDS` | 60s | 259200s (3d) |
-| Dispute fee | `DISPUTE_FEE_WEI` | 0.05 ETH | 0.05 ETH |
+| Dispute fee | `DISPUTE_FEE_WEI` | 0 (free) | 0 (free) |
+| Arbiter reward per dispute | `DISPUTE_REWARD_WEI` | 0.05 ETH | 0.05 ETH (from `rewardPool`) |
 | Commit window | `COMMIT_WINDOW_SECONDS` | 120s | 86400s (24h) |
 | Reveal window | `REVEAL_WINDOW_SECONDS` | 120s | 86400s (24h) |
 | Appeal window | `APPEAL_WINDOW_SECONDS` | 600s | 172800s (48h) |

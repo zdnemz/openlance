@@ -2,8 +2,16 @@
  * /attachments + /files — file storage (PRD F7).
  *
  * Flow: init (metadata + upload target) → client uploads → confirm (HEAD).
- * Drivers: Supabase Storage signed URLs (production) or local disk with
- * HMAC-signed download URLs (zero-infra dev).
+ * Drivers: Supabase Storage or local disk with HMAC-signed download URLs.
+ *
+ * Uploads ALWAYS go through this API's own `PUT /api/files/:id/raw`, never
+ * direct-to-Supabase from the browser. It used to hand the client a signed
+ * Supabase upload URL instead, which cannot work: writing to `storage.objects`
+ * needs the service-role key (RLS), and that key must never reach a browser.
+ * The signed-upload token does not lift the row policy, so every proposal
+ * attachment died at the upload step with a 403 the user saw as a bare
+ * "Storage error". Proxying keeps the service role on the server, and both
+ * drivers then share one authenticated, size-capped upload path.
  *
  * Two owners, one pipeline. A file belongs to a project (a deliverable or
  * submission) or to a proposal (a bid's supporting material, uploaded before
@@ -27,11 +35,10 @@ import { requireParticipant, requireProposalReader } from './helpers.ts'
 import { isMimeAllowed, storageConfig, storageKey, supabaseAdmin } from '../storage/index.ts'
 
 // ── Supabase Storage driver ─────────────────────────────────────────────────
-async function supabaseUploadUrl(path: string): Promise<{ url: string; token: string; path: string }> {
+async function supabaseUpload(path: string, bytes: Uint8Array, mimeType: string): Promise<void> {
   const sb = await supabaseAdmin()
-  const { data, error } = await sb.storage.from(env.STORAGE_BUCKET).createSignedUploadUrl(path)
-  if (error || !data) throw Errors.internal(`Storage error: ${error?.message ?? 'no signed url'}`)
-  return { url: data.signedUrl, token: data.token, path: data.path }
+  const { error } = await sb.storage.from(env.STORAGE_BUCKET).upload(path, bytes, { contentType: mimeType, upsert: true })
+  if (error) throw Errors.internal(`Storage error: ${error.message}`)
 }
 
 async function supabaseDownloadUrl(path: string, ttl: number): Promise<string> {
@@ -120,16 +127,10 @@ async function createAttachment(
     storagePath,
   }).returning()
 
-  if (cfg.driver === 'supabase') {
-    const target = await supabaseUploadUrl(storagePath)
-    return {
-      attachmentId: att!.id, driver: 'supabase', bucket: cfg.bucket,
-      path: target.path, token: target.token, uploadUrl: target.url,
-      note: 'POST the file to uploadUrl (or use supabase-js uploadToSignedUrl)',
-    }
-  }
+  // Both drivers upload through this API — see the module note on why the
+  // browser never gets a direct-to-Supabase target.
   return {
-    attachmentId: att!.id, driver: 'local', path: storagePath,
+    attachmentId: att!.id, driver: cfg.driver, bucket: cfg.bucket, path: storagePath,
     uploadUrl: `${env.API_URI}/api/files/${att!.id}/raw`,
     method: 'PUT', headers: { 'Content-Type': body.mimeType },
     note: 'PUT the raw bytes to uploadUrl with your Bearer token',
@@ -171,20 +172,23 @@ export async function attachmentUrl(request: Request, attachmentId: string) {
   return { url, expiresInSeconds: cfg.signedUrlTtlSeconds, filename: att.filename, mimeType: att.mimeType, sizeBytes: att.sizeBytes }
 }
 
-/** Local-driver upload (Bearer auth, size-capped). */
+/** Upload bytes (Bearer auth, size-capped) for either driver. */
 export async function putAttachmentRaw(request: Request, attachmentId: string) {
   const user = await requireKyc(request)
   const db = getDb()
   const [att] = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1)
   if (!att) throw Errors.notFound('Attachment')
   if (att.uploaderId !== user.id) throw Errors.forbidden('Not your attachment')
-  if (storageConfig().driver === 'supabase') throw Errors.badRequest('local_driver_only', 'This route exists only in local storage mode')
   const buf = await request.arrayBuffer()
   if (buf.byteLength > storageConfig().maxUploadBytes) throw Errors.badRequest('too_large', 'File exceeds size limit')
   if (buf.byteLength === 0) throw Errors.badRequest('empty_upload', 'No bytes received')
-  const dest = localPath(att.storagePath)
-  await mkdir(dirname(dest), { recursive: true })
-  await writeFile(dest, Buffer.from(buf))
+  if (storageConfig().driver === 'supabase') {
+    await supabaseUpload(att.storagePath, new Uint8Array(buf), att.mimeType)
+  } else {
+    const dest = localPath(att.storagePath)
+    await mkdir(dirname(dest), { recursive: true })
+    await writeFile(dest, Buffer.from(buf))
+  }
   return { stored: true, bytes: buf.byteLength }
 }
 

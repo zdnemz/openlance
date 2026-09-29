@@ -2,12 +2,13 @@
  * Self-check for the job-post / bid contract (run: pnpm check:job-bid).
  * No DB needed — it exercises the real zod schemas on both sides of the flow.
  *
- * The rule this file exists to pin: a job post is a brief plus a ceiling, and a
- * bid is the freelancer's own breakdown and price, capped at that ceiling. The
- * milestone sum invariant that used to live here ("sum == budget") is gone with
- * the template — the one budget rule left is the ceiling.
+ * The rule this file exists to pin: a job post is a brief plus a ceiling (which
+ * is also what gets locked at publish), and a bid is the freelancer's own
+ * breakdown and price, capped at that ceiling. The milestone sum invariant that
+ * used to live here ("sum == budget") is gone with the template — the budget
+ * rules left are the ceiling on a bid and the lock it draws from.
  */
-import { createJobSchema } from '../src/modules/jobs.ts'
+import { createJobSchema, deletableByFunding } from '../src/modules/jobs.ts'
 import { proposalSchema, bidExceedsCeiling } from '../src/modules/proposals.ts'
 import { toWei } from '../src/lib/money.ts'
 
@@ -51,11 +52,25 @@ const bid = proposalSchema.parse({
 check('a bid carries its own breakdown', bid.milestones.length === 1)
 check('a bid with no milestones is rejected', !safe(() => proposalSchema.parse({ ...bid, milestones: [] })))
 
-// 6. The one budget rule left: a bid at the ceiling is fundable, above it is not.
+// 6. The budget rules that remain. The ceiling is both the cap on a bid and
+//    the amount locked at publish, so the same comparison governs an award
+//    drawing against that lock — and whatever the bid doesn't use stays
+//    withdrawable, which is why the client locks the ceiling and not the price.
 const CEILING_WEI = BigInt(toWei('0.5'))
 check('a bid at the ceiling is accepted', !bidExceedsCeiling(BigInt(toWei('0.5')), CEILING_WEI))
 check('a bid under the ceiling is accepted', !bidExceedsCeiling(BigInt(toWei('0.3')), CEILING_WEI))
 check('a bid over the ceiling is rejected', bidExceedsCeiling(BigInt(toWei('0.5000001')), CEILING_WEI))
+check('a 0.3 bid draws 0.2 of surplus from a 0.5 lock',
+  BigInt(toWei('0.5')) - BigInt(toWei('0.3')) === BigInt(toWei('0.2')))
+
+// 7. Deleting a job is only safe once nothing is left locked under its escrow
+//    key: bytes32(job.id) is unrecoverable once the row is gone, so any ETH
+//    still locked there would be stranded forever. This is the guard itself.
+check('a fully withdrawn job is deletable', deletableByFunding(0n).ok)
+check('an unreadable chain (mock mode) is deletable', deletableByFunding(null).ok)
+const lockedVerdict = deletableByFunding(BigInt(toWei('0.2')))
+check('a job with a live lock is not deletable',
+  !lockedVerdict.ok && lockedVerdict.reason === 'funding_locked' && lockedVerdict.freeWei === toWei('0.2'))
 
 function safe(fn: () => unknown): boolean {
   try { fn(); return true } catch { return false }

@@ -105,7 +105,8 @@ const API_GROUPS: { title: string; icon: typeof ServerCog; rows: [string, string
   ] },
   { title: 'Marketplace (F1–F2)', icon: Blocks, rows: [
     ['POST /jobs', 'brief + max budget, no chain call'],
-    ['POST /jobs/:id/publish', 'draft → open, no funds moved'],
+    ['POST /jobs/:id/publish', 'lockBudget tx verified on-chain, then draft → open'],
+    ['DELETE /jobs/:id', 'poster only; refused while ETH is still locked'],
     ['POST /jobs/:id/proposals', 'one per freelancer, own breakdown + bid'],
     ['POST /proposals/:id/attachments', "a bid's files, poster + bidder only"],
     ['POST /proposals/:id/accept', 'bridge event → project + milestones, one-signature funding'],

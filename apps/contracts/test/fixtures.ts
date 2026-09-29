@@ -18,6 +18,8 @@ const ZERO32 = `0x${"00".repeat(32)}` as Address;
 export const MIN_STAKE = parseEther("0.1");
 export const MIN_SCORE = 50n;
 export const DISPUTE_FEE = parseEther("0.05");
+/** Protocol-funded arbiter pot per dispute (drawn from `rewardPool`). */
+export const DISPUTE_REWARD = parseEther("0.05");
 export const COMMIT_WINDOW = 120n;
 export const REVEAL_WINDOW = 120n;
 export const APPEAL_WINDOW = 600n;
@@ -61,6 +63,8 @@ export async function deployWithEoaOwner() {
   );
 
   await registry.write.setEscrow([escrow.address], { account: deployer.account });
+  // `disputeReward` is owner-set, not an initialize arg (see Escrow.initialize).
+  await escrow.write.setDisputeReward([DISPUTE_REWARD], { account: deployer.account });
 
   return {
     viem,
@@ -127,6 +131,15 @@ export async function deployWithTimelockOwner() {
   });
   await timelock.write.schedule([registry.address, 0n, calldata, ZERO32, ZERO32, 0n]);
   await timelock.write.execute([registry.address, 0n, calldata, ZERO32, ZERO32]);
+
+  // Same for the protocol's arbiter reward — owner-gated, so via the timelock.
+  const rewardData = encodeFunctionData({
+    abi: escrow.abi,
+    functionName: "setDisputeReward",
+    args: [DISPUTE_REWARD],
+  });
+  await timelock.write.schedule([escrow.address, 0n, rewardData, ZERO32, ZERO32, 0n]);
+  await timelock.write.execute([escrow.address, 0n, rewardData, ZERO32, ZERO32]);
 
   return {
     viem,

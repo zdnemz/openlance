@@ -16,6 +16,7 @@
     "check:kv": "node --experimental-strip-types scripts/check-kv.ts",
     "gen:routes": "node scripts/gen-routes.mjs",
     "check:job-bid": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-job-bid.ts",
+    "check:sponsored-value": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-sponsored-value.ts",
     "verify:notifications": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/verify-notifications.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",

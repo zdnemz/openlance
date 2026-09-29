@@ -78,7 +78,10 @@ Key env vars (see [`.env.example`](./.env.example)):
 
 ### Gasless money actions (sponsored meta-txs)
 
-Signed-in users pay **no gas** for money-moving actions. The design:
+Signed-in users pay **no gas** for state-changing actions. The relayer sponsors
+**state, never value**: any call that moves principal — in (escrow funding,
+stake deposit/top-up, dispute fee) or out (`withdrawStake`) — is a normal
+user-paid transaction. The design:
 
 1. **Login** — after SIWE succeeds the client signs ONE extra EIP-712
    `SponsorshipSession` voucher (`owner, issuedAt, expiry, sessionId`). It
@@ -86,7 +89,12 @@ Signed-in users pay **no gas** for money-moving actions. The design:
 2. **Action** — the client signs an EIP-712 `ForwardRequest` (nonce + deadline
    owned by the server) and POSTs it to `/api/relay`.
 3. **Relay** — the server relayer (`RELAYER_PRIVATE_KEY`) submits
-   `SponsorshipForwarder.execute(...)` and pays gas (+ principal on testnet).
+   `SponsorshipForwarder.execute(...)` and pays gas. Requests are only relayed
+   with `value: 0`, guarded on both sides: `canRelayGasless()` in
+   `apps/web/lib/chain-actions.ts` and `assertNoSponsoredValue()` in
+   `apps/api/src/modules/sponsorship.ts` (422 `sponsored_value_not_allowed`).
+   Proof: `pnpm --filter @openlance/web check:gasless` and
+   `pnpm check:sponsored-value`.
 4. **On-chain authority** — `SponsorshipForwarder` (ERC-2771) verifies the
    session voucher, the per-request signature, and the nonce; the target
    contract recovers the real user via `_msgSender()`. `Escrow` and
@@ -99,7 +107,7 @@ Relevant files: `apps/contracts/contracts/SponsorshipForwarder.sol`,
 `apps/api/src/routes/relay/**`, `apps/web/lib/sponsorship.ts`. Tests:
 `apps/contracts/test/sponsorship.ts`, `apps/contracts/test/eip712-agreement.ts`.
 
-> Testnet only: the relayer fronts gas and principal, so give it test ETH only.
+> Testnet only: the relayer fronts gas alone, so give it test ETH for gas.
 > A per-user hourly cap (`SPONSORSHIP_RATE_LIMIT_PER_HOUR`) bounds relayer drain.
 
 ### Repo layout

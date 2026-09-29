@@ -73,7 +73,7 @@ export const ESCROW_ABI = parseAbi([
   // ── Drawdown model ─────────────────────────────────────────────────────
   'function lockBudget(bytes32 jobRef) payable',
   'function fundFromCredit(bytes32 jobRef, bytes32 ref, address freelancer, uint256 amount)',
-  'function fundAllFromCredit(bytes32 jobRef, bytes32[] refs, address[] freelancers, uint256[] amounts) payable',
+  'function fundAllFromCredit(bytes32 jobRef, bytes32[] refs, address[] freelancers, uint256[] amounts)',
   'function unlockBudget(bytes32 jobRef, uint256 amount)',
   'function lockedBudget(bytes32 jobRef) view returns (uint256)',
   'function reservedBudget(bytes32 jobRef) view returns (uint256)',

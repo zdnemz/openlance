@@ -142,6 +142,11 @@ export async function devWithdrawFees() {
  * adapter the /dev/chain endpoints use — so the full login→sign→relay→indexer
  * path is exercisable with zero infrastructure. The real path lives in
  * backend/chain/relayer.ts (viem → forwarder.execute).
+ *
+ * `req.value` is always "0" by the time a request reaches here:
+ * assertNoSponsoredValue (modules/sponsorship.ts) refuses a value-bearing relay
+ * upstream. The value arguments below mirror what the forwarder would do, not
+ * a supported sponsored transfer.
  */
 export async function devSponsoredFunding(
   req: { to: string; data: string; value: string },

@@ -57,7 +57,8 @@ export interface JobView {
   skills: string[];
   status: JobStatus;
   /** The client's ceiling. There is no min and no milestone template: the price
-   *  and the breakdown both come from the bid the client accepts. */
+   *  and the breakdown both come from the bid the client accepts. The same
+   *  number is what gets locked in escrow at publish. */
   budget: { maxWei: string; maxEth: string };
   poster?: {
     id: string;
@@ -66,8 +67,8 @@ export interface JobView {
     avatarUrl: string | null;
     stats: { completedProjectsAsClient: number; totalPaidWei: string };
   };
-  /** The amount locked on-chain for this job — the winning bid, set at award. */
-  funded: { amountWei: string; txHash: string | null; fundedAt: string | null } | null;
+  /** What is locked on-chain for this job: the ceiling at publish, then the winning bid after award. */
+  deposit: { amountWei: string; txHash: string | null; depositedAt: string | null } | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;

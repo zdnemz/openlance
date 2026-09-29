@@ -71,14 +71,14 @@ const schema = z.object({
   ARBITER_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   /** TimelockController that owns the UUPS proxies (informational). */
   TIMELOCK_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
-  // NOTE: there is no VAULT_ADDRESS, and ESCROW_ADDRESS no longer gates
-  // publishing. An earlier revision had both: a vault variable that was read by
-  // nothing, and a publish gate that verified a `lockBudget(jobRef)` deposit
-  // from the poster before the job went live. A job post is now a brief and a
-  // ceiling, with no counterparty to pay — so the budget is locked by the
-  // client's award signature instead (fundAllFromCredit with value, see
-  // modules/proposals.ts), and nothing verifies a tx at publish. ESCROW_ADDRESS
-  // is still the address the API reports and the client's funding txs go to.
+  // NOTE: there is no VAULT_ADDRESS. An earlier revision had one and a comment
+  // claiming publish "requires a successful plain transfer of budgetMax from the
+  // poster to this address". That never matched the code: the budget is held by
+  // the ESCROW itself via `lockBudget(jobRef)`, and verifyDeposit() (modules/jobs.ts)
+  // enforces tx.to === ESCROW_ADDRESS, functionName === 'lockBudget',
+  // args[0] === this job's ref, and tx.value === the budget exactly. A separate
+  // vault contract was never deployed and the variable was read by nothing but
+  // the /runtime response, where it advertised a contract that does not exist.
 
   // ── Gasless sponsorship (ERC-2771 forwarder + relayer) ─────────────────────
   /** The deployed SponsorshipForwarder (trusted ERC-2771 forwarder). */
@@ -104,7 +104,7 @@ const schema = z.object({
    * Display-only mirror of the escrow's dispute fee (wei). The contract reads
    * are authoritative; this is used for UI copy before the first RPC read.
    */
-  DISPUTE_FEE_WEI: z.string().regex(/^\d+$/).default('50000000000000000'), // 0.05 ETH
+  DISPUTE_FEE_WEI: z.string().regex(/^\d+$/).default('0'), // free — the protocol funds the arbiters
   /** Minimum arbiter stake (wei) shown in the staking UI. */
   MIN_STAKE_WEI: z.string().regex(/^\d+$/).default('100000000000000000'), // 0.1 ETH
   /** Minimum trust score n below which a stake locks (mirrors the registry). */

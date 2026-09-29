@@ -10,7 +10,16 @@
  *      POST /api/relay. The server (a) authenticates the JWT, (b) looks up the
  *      user's unexpired session, (c) registers the session on-chain if needed,
  *      (d) submits `forwarder.execute(req, sessionId, sig)` from the RELAYER
- *      wallet, which pays gas (+ principal on testnet).
+ *      wallet, which pays GAS.
+ *
+ * ── Value is never sponsored ─────────────────────────────────────────────────
+ *   `SponsorshipForwarder.execute` is payable and forwards `req.value` out of
+ *   the RELAYER's balance, so a sponsored request carrying value would move the
+ *   platform's ETH while crediting the user: their balance never moves, there
+ *   is no transfer to confirm, and a slashed arbiter bond costs the platform
+ *   rather than the arbiter. Principal rides the user's own transaction
+ *   (`canRelayGasless` in apps/web/lib/chain-actions.ts); assertNoSponsoredValue
+ *   is the server-side backstop so a hand-rolled client cannot route around it.
  *
  * ── Authority ───────────────────────────────────────────────────────────────
  *   The CONTRACT is the authority: it re-checks the session signature + expiry
@@ -62,6 +71,24 @@ export const FORWARD_REQUEST_TYPES = {
 /** Whether gasless sponsorship is configured at all. */
 export function sponsorshipEnabled(): boolean {
   return env.sponsorship.enabled
+}
+
+/**
+ * Refuse a sponsored request that carries value. The relayer sponsors GAS
+ * only: `SponsorshipForwarder.execute` is payable and would pay `req.value` out
+ * of the relayer's own balance, so a value-bearing relay would credit the user
+ * with the platform's ETH — their wallet balance would never move, and a slash
+ * would cost the platform instead of the arbiter. Principal moves as a normal
+ * user-paid transaction (`canRelayGasless` in apps/web/lib/chain-actions.ts);
+ * this is the backstop for a client that skips that guard.
+ */
+export function assertNoSponsoredValue(valueWei: string): void {
+  if (BigInt(valueWei) !== 0n) {
+    throw Errors.precondition(
+      'sponsored_value_not_allowed',
+      'Sponsored actions cannot carry value — the relayer pays gas only. Send this as a normal transaction from your wallet.',
+    )
+  }
 }
 
 /** Server-generated scoping id for a sponsorship session / login challenge. */
@@ -237,6 +264,8 @@ const prepareSchema = z.object({
 export async function prepareForwardRequest(userId: string, address: string, body: unknown) {
   if (!sponsorshipEnabled()) throw Errors.precondition('sponsorship_disabled', 'Gasless sponsorship is not configured on this deployment')
   const input = prepareSchema.parse(body)
+  // Refuse before the client is asked to sign anything.
+  assertNoSponsoredValue(input.value)
 
   const session = await activeSession(userId)
   if (!session) throw Errors.forbidden('No active sponsorship session — sign in again')
@@ -306,8 +335,9 @@ export interface RelayResult {
 
 /**
  * Submit a signed ForwardRequest through the relayer. The relayer pays gas; the
- * user pays nothing. Only authenticated users with an unexpired session and a
- * request signed BY THEIR OWN ADDRESS are accepted.
+ * user pays nothing in ETH. Only authenticated users with an unexpired session,
+ * a request signed BY THEIR OWN ADDRESS, and a ZERO value (see
+ * assertNoSponsoredValue) are accepted.
  */
 export async function relayForwardRequest(userId: string, address: string, body: unknown): Promise<RelayResult> {
   if (!sponsorshipEnabled()) throw Errors.precondition('sponsorship_disabled', 'Gasless sponsorship is not configured on this deployment')
@@ -317,6 +347,9 @@ export async function relayForwardRequest(userId: string, address: string, body:
   if (req.from.toLowerCase() !== address.toLowerCase()) {
     throw Errors.forbidden('ForwardRequest.from must be the authenticated wallet')
   }
+  // The trust boundary: a value-bearing relay would move the relayer's ETH, so
+  // it is refused here regardless of what the client signed or how it got here.
+  assertNoSponsoredValue(req.value)
 
   const db = getDb()
   // Session must exist, be unexpired, and belong to this user.

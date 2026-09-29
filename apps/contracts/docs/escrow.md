@@ -114,7 +114,7 @@ Client refunds stay **push** (`cancel`, `ResolvedRefund`, and the client half of
 ## Flow 4 — dispute
 
 ```
-openDispute{value: >= disputeFee}(id)              (or openDisputeWith(id, preferred[3]))
+openDispute(id)   /* free while disputeFee == 0 */  (or openDisputeWith(id, preferred[3]))
    │
    ├─ COMMIT   commitVote(id, round, hash)          each arbiter, until commitDeadline
    ▼
@@ -123,7 +123,7 @@ openDispute{value: >= disputeFee}(id)              (or openDisputeWith(id, prefe
    ├─ TALLY    resolveDispute(id)     round 0
    │           resolveAppeal(id)     round >= 1
    ▼
-   ├─ (optional) appeal{value: >= disputeFee}(id)  re-draws a fresh round
+   ├─ (optional) appeal(id)                        re-draws a fresh round
    ▼
    └─ finalizeDispute(id)           after revealDeadline + appealWindow  ← MONEY MOVES HERE
           ├─ ResolvedRelease / ResolvedSplit → withdrawMilestone(id) by the freelancer
@@ -147,14 +147,20 @@ commit. `salt` is chosen by the arbiter and must be kept to reveal.
 
 - Draws up to `MAX_ARBITERS = 3` without replacement from the registry roster.
 - Parties are always excluded. Eligible draws only (`IArbiterRegistry.isEligible`).
-- Reverts `NotEnoughArbiters(count)` when fewer than `QUORUM = 2` can be drawn.
-  A roster shorter than 2 yields `NotEnoughArbiters(0)`.
+- **Degraded panels.** A thin roster opens a round anyway, down to a single arbiter —
+  availability over panel size, because a milestone stuck against its parties is worse
+  than one judged by a single staked, score-tracked arbiter. The decision threshold
+  follows the seated panel (`_requiredReveals`): `min(arbiterCount, QUORUM)`. So a
+  1-arbiter round decides on one reveal and a 2-arbiter round still needs both.
+  Only an **empty** roster reverts `NotEnoughArbiters(0)` — a panel of zero is not
+  arbitration, and the client can `cancel` or the pair can `submit`/`approve` instead.
 - `openDisputeWith` honours up to 3 mutually-agreed nominees first. A nominee that is a
   party, a duplicate, or ineligible is **skipped silently** and the slot is filled at
   random — a stale pick can never block dispute opening.
 - Randomness is `prevrandao` + block metadata, so it is producer-influenceable.
   Bounded exposure: a biased producer reorders *which* eligible arbiters are drawn;
-  money stays gated by the 2-of-3 quorum and by staking. See `SECURITY.md`.
+  money stays gated by the commit-reveal quorum and by staking. On a healthy roster
+  that quorum is 2-of-3; on a degraded panel it is the panel itself. See `SECURITY.md`.
 - `stakeWeights` are snapshotted at `ArbitersSelected` so an arbiter cannot top up
   their stake after being drawn and seize a larger reward share.
 
@@ -209,19 +215,25 @@ into that pot. Verified: `accruedFees == 0` after a full dispute settlement.
 Two separate pots, both split pro-rata by the selection-time `stakeWeights` among the
 revealed majority:
 
-1. `d.fee + subsidy` — the dispute fee (replaced by the appeal fee on appeal) plus a
-   protocol subsidy drawn from `rewardPool`.
+1. `d.fee + subsidy` — whatever the opener paid (0 while disputes are free; replaced
+   by the appeal fee on appeal) plus a protocol top-up drawn from `rewardPool`.
 2. The milestone fee — on `Release` and `Split` only, via `_payArbiterFee`.
 
-**The subsidy.** `depositRewards` funds `rewardPool`, and each settlement draws
-`subsidy = min(rewardPool, d.fee)` from it, so the protocol **matches the opener's fee,
-capped at 1× it**. Consequences worth knowing:
+**The subsidy.** Opening a dispute is free by default (`disputeFee == 0`), so the
+arbiters are paid by the protocol rather than by the opener. `depositRewards` funds
+`rewardPool`, and each settlement draws `subsidy = min(rewardPool, disputeReward)`
+from it — `disputeReward` is the per-dispute ceiling, owner-set via `setDisputeReward`.
+Consequences worth knowing:
 
-- A single dispute can at most **double** the pot, and can never drain the pool.
-- No configuration and no admin lever: it scales with the fee the user actually paid.
-- Each dispute consumes one fee's worth, so a standing balance funds a standing
-  per-dispute top-up. When the pool runs dry the subsidy is simply 0 and the pot
-  reverts to `d.fee` alone — no branch, no failure mode.
+- The draw is capped at the pool balance, so a dispute can never pay out more than the
+  protocol has already funded. It is a ceiling, not a mint.
+- With `disputeFee == 0` and a funded pool, the pot is exactly `disputeReward` — the
+  opener's contribution is 0 and the protocol funds the whole round.
+- A `disputeFee` retune (owner) makes the opener's payment additive again, exactly as
+  before: the pot becomes `d.fee + min(rewardPool, disputeReward)`.
+- When the pool runs dry the subsidy is simply 0 and the pot reverts to `d.fee` alone —
+  no branch, no failure mode. With a free dispute that means the arbiters earn only the
+  milestone fee, so the pool is a standing budget, not a one-off.
 - `RewardSubsidized(milestoneId, amount)` reports the draw; `rewardPool` is the
   remaining balance. `sweepRewardPool` (owner) reclaims whatever is left, so this is a
   policy lever, not a permanent commitment.
@@ -309,7 +321,7 @@ when the outcome changed.
 | `accruedFees()`, `rewardPool()`, `nextMilestoneId()` | `uint256` | — |
 | `activeDisputes(address arbiter)` | `uint256` | — |
 | `lockedBudget` / `reservedBudget` / `paidOutBudget` / `budgetLocker` | per `jobRef` | — |
-| `feeBps`, `disputeFee`, `commitWindow`, `revealWindow`, `appealWindow`, `treasury`, `sponsorshipWallet`, `arbiterRegistry` | config | — |
+| `feeBps`, `disputeFee`, `disputeReward`, `commitWindow`, `revealWindow`, `appealWindow`, `treasury`, `sponsorshipWallet`, `arbiterRegistry` | config | — |
 | `MAX_FEE_BPS()`, `MAX_ARBITERS()`, `QUORUM()` | constants | — |
 
 `getRound` returns `(address[3] arbiters, uint8 arbiterCount, uint8 commitCount,
@@ -325,7 +337,8 @@ are real; the rest are zero.
 |---|---|---|
 | `arbiterRegistry` | `IArbiterRegistry` | eligibility + scoring trust boundary |
 | `feeBps` | `uint16` | platform fee for **future** milestones; ≤ 500 |
-| `disputeFee` | `uint256` | minimum ETH to open or appeal a dispute |
+| `disputeFee` | `uint256` | minimum ETH to open or appeal a dispute; **0 = free** |
+| `disputeReward` | `uint256` | protocol-funded arbiter reward per dispute, drawn from `rewardPool`; 0 = no subsidy |
 | `commitWindow` | `uint64` | commit-phase duration, seconds |
 | `revealWindow` | `uint64` | reveal-phase duration, seconds |
 | `appealWindow` | `uint64` | appeal window measured **from `revealDeadline`** |
@@ -344,7 +357,8 @@ are real; the rest are zero.
 | `paidOutBudget` | `mapping(bytes32 => uint256)` | wei released by settlement / cancel / unlock |
 | `budgetLocker` | `mapping(bytes32 => address)` | the client who locked the job |
 | `_milestoneJob` | `mapping(uint256 => bytes32)` | milestoneId → jobRef; `bytes32(0)` = wallet-funded |
-| `__gap` | `uint256[32]` | reserved storage; shrink only by slots added above |
+| `disputeReward` | `uint256` | protocol arbiter reward per dispute (see above); appended last, before `__gap` |
+| `__gap` | `uint256[31]` | reserved storage; shrink only by slots added above |
 
 Structs:
 
@@ -419,7 +433,7 @@ The last field of `MilestoneReleased` is `viaDisputeResolution`. `DisputeResolve
 | `InsufficientBudget(needed, available)` | draw or unlock exceeds the free balance |
 | `BadBatch()` | empty batch or mismatched array lengths |
 | `DisputeFeeTooLow(provided, required)` | attach at least `disputeFee` |
-| `NotEnoughArbiters(eligible)` | fewer than 2 could be drawn |
+| `NotEnoughArbiters(eligible)` | zero arbiters could be drawn (always 0) |
 | `WrongPhase(expected, actual)` | resolve the round before appealing |
 | `NotSelectedArbiter()` | caller is not in `arbiters[0..count-1]` |
 | `AlreadyCommitted()` / `AlreadyRevealed()` | already voted this round |

@@ -30,6 +30,7 @@
     "export:abi": "pnpm --filter @openlance/contracts export:abi",
     "verify:notifications": "pnpm --filter @openlance/api verify:notifications",
     "check:job-bid": "pnpm --filter @openlance/api check:job-bid",
+    "check:sponsored-value": "pnpm --filter @openlance/api check:sponsored-value",
     "check:notification-rows": "pnpm --filter @openlance/api check:notification-rows",
     "check:envelope": "pnpm --filter @openlance/api check:envelope",
     "clean": "pnpm -r clean",

@@ -88,8 +88,8 @@ export function runtimeConfig() {
       escrow: adapter.escrowAddress,
       arbiterRegistry: adapter.registryAddress,
       timelock: env.TIMELOCK_ADDRESS ?? null,
-      // No `vault` key: job budgets are held by the Escrow itself, locked under
-      // the job's ref at award, so there is no separate vault contract to report.
+      // No `vault` key: job budgets are held by the Escrow itself via
+      // lockBudget(jobRef), so there is no separate vault contract to report.
       sponsorshipForwarder: env.sponsorship.forwarderAddress,
     },
     // Gasless sponsorship: when enabled, signed-in users pay no gas (relayer
@@ -122,12 +122,16 @@ async function loadOverview() {
   } catch { /* env defaults stand */ }
 
   // Live escrow fee config (disputeFee/feeBps retunes take effect on-chain
-  // immediately); env defaults stand when the RPC is unreachable.
+  // immediately); env defaults stand when the RPC is unreachable. The fee is
+  // 0 in the shipped config, so this must be a null check — a truthiness check
+  // would read "0" as "no answer" and fall back to the env default.
   try {
     const adapter = getChainAdapter()
     if (adapter.mode === 'real') {
       const live = await adapter.getFeeConfig().catch(() => null)
-      if (live?.disputeFeeWei) config.disputeFeeWei = live.disputeFeeWei
+      if (live?.disputeFeeWei !== null && live?.disputeFeeWei !== undefined) {
+        config.disputeFeeWei = live.disputeFeeWei
+      }
       if (live?.feeBps !== null && live?.feeBps !== undefined) config.feeBps = live.feeBps
     }
   } catch { /* env defaults stand */ }

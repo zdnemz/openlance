@@ -96,6 +96,15 @@ both gas and principal; on mainnet the principal would come from the user throug
 paymaster instead. A `value: 0` request (e.g. `submit`, `commitVote`, `revealVote`) needs
 `msg.value: 0` and is fully gasless.
 
+> That capability is deliberately unused. The client never sends a `value > 0`
+> request, and neither does the server: `canRelayGasless()`
+> (`apps/web/lib/chain-actions.ts`) and `assertNoSponsoredValue()`
+> (`apps/api/src/modules/sponsorship.ts`, 422 `sponsored_value_not_allowed`)
+> both reject one. A relayed `value` is the relayer's ETH credited to the user —
+> their balance never moves and a slash costs the platform. Every principal
+> transfer, in or out (`withdrawStake` included), rides the user's own
+> transaction. Keep this contract capability; do not use it for principal.
+
 On a target revert the contract emits `SponsoredCallFailed(to, returnData)` and
 re-bubbles the target's revert data **verbatim** — so custom errors from the Escrow
 propagate intact through the relayer. Decode the revert against the target's ABI, not

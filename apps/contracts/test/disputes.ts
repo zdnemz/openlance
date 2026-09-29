@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { deployWithEoaOwner, connection, DISPUTE_FEE, getRound, getDispute, getMilestone, commitHash, MIN_STAKE, MIN_STAKE_DURATION } from "./fixtures.ts";
+import { deployWithEoaOwner, connection, DISPUTE_FEE, DISPUTE_REWARD, getRound, getDispute, getMilestone, commitHash, MIN_STAKE, MIN_STAKE_DURATION } from "./fixtures.ts";
 import { commitRevealAll, walletsFor, passCommitWindow, passRevealWindow, passAppealWindow, tallyAndFinalize } from "./disputeFlow.ts";
 import { parseEther } from "viem";
 
@@ -84,15 +84,66 @@ describe("Escrow — multi-arbiter disputes", () => {
     void ZERO;
   });
 
-  it("requires at least a 2-arbiter pool to open a dispute", async function () {
-    const { registry, escrow, client, freelancer } = await deployWithEoaOwner();
-    // Only one arbiter registered -> cannot reach quorum.
-    await registry.write.registerArbiter({ value: MIN_STAKE, account: (await connection.viem.getWalletClients())[3]!.account });
+  it("opens a degraded 1-arbiter round when only one is eligible", async function () {
+    // Availability over panel size: a thin roster must not trap the milestone.
+    // One arbiter is enough to open; that single vote decides the round.
+    const { registry, escrow, client, freelancer, arbiters } = await deployWithEoaOwner();
+    const solo = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE, account: solo.account });
+    await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
+    await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
+    await escrow.write.submit([1n], { account: freelancer.account });
+
+    await escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account });
+    const r = await getRound(escrow, 1n, 0);
+    assert.equal(r.arbiterCount, 1, "a thin roster seats whoever is available");
+    assert.equal(r.arbiters[0]!.toLowerCase(), solo.account.address.toLowerCase());
+
+    // One reveal is enough to decide a 1-arbiter round (no-quorum does NOT fire).
+    const w = walletsFor(r, arbiters);
+    const salt = `0x${"d1".repeat(32)}` as `0x${string}`;
+    await escrow.write.commitVote([1n, 0, commitHash(RELEASE, salt, solo.account.address, 1n, 0)], { account: solo.account });
+    await passCommitWindow(escrow, 1n, 0);
+    await escrow.write.revealVote([1n, 0, RELEASE, salt], { account: solo.account });
+    await tallyAndFinalize(escrow, 1n, 0, client.account);
+
+    assert.equal(await escrow.read.milestoneStatus([1n]), 5, "ResolvedRelease — the lone vote decided");
+    void w;
+  });
+
+  it("reverts opening only when the roster cannot staff a round at all", async function () {
+    // Zero eligible arbiters is the one unrecoverable case: nobody to judge.
+    const { escrow, client, freelancer } = await deployWithEoaOwner();
     await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("1"), account: client.account });
     await assert.rejects(
       escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account }),
       /NotEnoughArbiters/,
     );
+  });
+
+  it("keeps a 2-arbiter panel at the 2-reveal quorum (not 1)", async function () {
+    // A 2-arbiter round has nobody to outvote the first reveal, so requiring 2
+    // is what stops a single vote from deciding it. `_requiredReveals` floors at
+    // the seated count, never below 2 when 2 arbiters sit.
+    const { registry, escrow, client, freelancer, arbiters } = await deployWithEoaOwner();
+    for (const w of arbiters.slice(0, 2)) await registry.write.registerArbiter({ value: MIN_STAKE, account: w.account });
+    await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
+    await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
+    await escrow.write.submit([1n], { account: freelancer.account });
+    await escrow.write.openDispute([1n], { value: DISPUTE_FEE, account: client.account });
+
+    const r = await getRound(escrow, 1n, 0);
+    assert.equal(r.arbiterCount, 2, "both registered arbiters are seated");
+    const wallets = walletsFor(r, arbiters.slice(0, 2));
+    const salt = `0x${"d2".repeat(32)}` as `0x${string}`;
+    await escrow.write.commitVote([1n, 0, commitHash(RELEASE, salt, wallets[0]!.account.address, 1n, 0)], { account: wallets[0]!.account });
+    await passCommitWindow(escrow, 1n, 0);
+    await escrow.write.revealVote([1n, 0, RELEASE, salt], { account: wallets[0]!.account });
+    await passRevealWindow(escrow, 1n, 0);
+    await escrow.write.resolveDispute([1n], { account: client.account });
+
+    // One of two revealing is still no quorum -> opener refunded, milestone back.
+    assert.equal(await escrow.read.milestoneStatus([1n]), 2, "no-quorum fallback still applies to a 2-arbiter round");
   });
 
   it("enforces the dispute fee", async function () {
@@ -378,16 +429,16 @@ describe("Escrow — multi-arbiter disputes", () => {
     assert.equal(await registry.read.trustScoreOf([wallets[0]!.account.address]), 100n);
   });
 
-  it("draws a matching rewardPool subsidy into the pot, capped at 1x the fee", async function () {
+  it("tops the pot up from rewardPool by disputeReward, capped at the pool balance", async function () {
     const { escrow, registry, client, freelancer, arbiters, deployer } = await deployWithEoaOwner();
     const pool = arbiters.slice(0, 2);
     await registry.write.registerArbiter({ value: MIN_STAKE, account: pool[0]!.account });
     await registry.write.registerArbiter({ value: MIN_STAKE, account: pool[1]!.account });
     await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
 
-    // Fund the pool generously; the subsidy must be clamped to the fee, not the balance.
-    await escrow.write.depositRewards({ value: DISPUTE_FEE * 10n, account: deployer.account });
-    assert.equal(await escrow.read.rewardPool(), DISPUTE_FEE * 10n);
+    // Fund generously; the draw must be clamped to disputeReward, not the balance.
+    await escrow.write.depositRewards({ value: DISPUTE_REWARD * 10n, account: deployer.account });
+    assert.equal(await escrow.read.rewardPool(), DISPUTE_REWARD * 10n);
 
     await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
     await escrow.write.submit([1n], { account: freelancer.account });
@@ -413,14 +464,73 @@ describe("Escrow — multi-arbiter disputes", () => {
     const g1 = (await pc.getBalance({ address: w[0]!.account.address })) + (await pc.getBalance({ address: w[1]!.account.address }));
 
     // Both arbiters voted the same way with equal stake, so they split the pot evenly.
-    // Pot = dispute fee + milestone fee (2.5% of 10 ETH) + a subsidy of one fee.
+    // Pot = opener's fee + milestone fee (2.5% of 10 ETH) + the protocol top-up.
     const milestoneFee = (parseEther("10") * 250n) / 10000n;
-    const pot = DISPUTE_FEE + milestoneFee + DISPUTE_FEE;
-    assert.equal(g1 - g0, pot, "subsidy is capped at 1x the dispute fee");
+    const pot = DISPUTE_FEE + milestoneFee + DISPUTE_REWARD;
+    assert.equal(g1 - g0, pot, "the protocol top-up is disputeReward, not the pool balance");
 
-    // Exactly one fee's worth was drawn out of the 10x balance, and the remainder
-    // stays available to future disputes.
-    assert.equal(await escrow.read.rewardPool(), DISPUTE_FEE * 9n);
+    // Exactly disputeReward was drawn; the remainder stays for future disputes.
+    assert.equal(await escrow.read.rewardPool(), DISPUTE_REWARD * 9n);
+  });
+
+  it("opens free and pays arbiters from the protocol pool when disputeFee is 0", async function () {
+    // The shipped config: `disputeFee = 0` (opening is free) + `disputeReward`
+    // funded from `rewardPool`, so the arbiters are still paid.
+    const { escrow, registry, client, freelancer, arbiters, deployer } = await deployWithEoaOwner();
+    const pool = arbiters.slice(0, 2);
+    for (const x of pool) await registry.write.registerArbiter({ value: MIN_STAKE, account: x.account });
+    await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
+    await escrow.write.setDisputeFee([0n], { account: deployer.account });
+    await escrow.write.depositRewards({ value: DISPUTE_REWARD, account: deployer.account });
+
+    await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
+    await escrow.write.submit([1n], { account: freelancer.account });
+    // Zero value: opening costs the opener nothing.
+    await escrow.write.openDispute([1n], { account: client.account });
+    assert.equal((await getDispute(escrow, 1n)).fee, 0n, "no fee was paid");
+
+    const r = await getRound(escrow, 1n, 0);
+    const w = walletsFor(r, pool);
+    const salt = `0x${"a3".repeat(32)}` as `0x${string}`;
+    for (const x of w) await escrow.write.commitVote([1n, 0, commitHash(RELEASE, salt, x.account.address, 1n, 0)], { account: x.account });
+    await passCommitWindow(escrow, 1n, 0);
+    for (const x of w) await escrow.write.revealVote([1n, 0, RELEASE, salt], { account: x.account });
+
+    const pc = await connection.viem.getPublicClient();
+    const g0 = (await pc.getBalance({ address: w[0]!.account.address })) + (await pc.getBalance({ address: w[1]!.account.address }));
+    await tallyAndFinalize(escrow, 1n, 0, client.account);
+    const g1 = (await pc.getBalance({ address: w[0]!.account.address })) + (await pc.getBalance({ address: w[1]!.account.address }));
+
+    // Milestone fee + the full protocol reward, split evenly between the two.
+    const milestoneFee = (parseEther("10") * 250n) / 10000n;
+    assert.equal(g1 - g0, milestoneFee + DISPUTE_REWARD, "arbiters are paid entirely by the protocol");
+    assert.equal(await escrow.read.rewardPool(), 0n, "the pool funded this dispute exactly");
+  });
+
+  it("a dry rewardPool still settles a free dispute (arbiters earn the milestone fee only)", async function () {
+    const { escrow, registry, client, freelancer, arbiters, deployer } = await deployWithEoaOwner();
+    const pool = arbiters.slice(0, 2);
+    for (const x of pool) await registry.write.registerArbiter({ value: MIN_STAKE, account: x.account });
+    await connection.networkHelpers.time.increase(Number(MIN_STAKE_DURATION) + 1);
+    await escrow.write.setDisputeFee([0n], { account: deployer.account });
+    assert.equal(await escrow.read.rewardPool(), 0n);
+
+    await escrow.write.fund([REF, freelancer.account.address], { value: parseEther("10"), account: client.account });
+    await escrow.write.submit([1n], { account: freelancer.account });
+    await escrow.write.openDispute([1n], { account: client.account });
+
+    const r = await getRound(escrow, 1n, 0);
+    const w = walletsFor(r, pool);
+    const salt = `0x${"a4".repeat(32)}` as `0x${string}`;
+    for (const x of w) await escrow.write.commitVote([1n, 0, commitHash(RELEASE, salt, x.account.address, 1n, 0)], { account: x.account });
+    await passCommitWindow(escrow, 1n, 0);
+    for (const x of w) await escrow.write.revealVote([1n, 0, RELEASE, salt], { account: x.account });
+    await passRevealWindow(escrow, 1n, 0);
+    await tallyAndFinalize(escrow, 1n, 0, client.account);
+
+    // No pool to draw from must not revert or under-pay the milestone fee.
+    assert.equal(await escrow.read.milestoneStatus([1n]), 5);
+    assert.equal(await escrow.read.claimable([1n]), (parseEther("10") * 975n) / 1000n);
   });
 
   it("an empty rewardPool leaves the pot unchanged (no subsidy path is safe)", async function () {

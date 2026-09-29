@@ -33,9 +33,12 @@ The contract is the source of truth: the off-chain layer is a mirror, and every 
 - SIWE (EIP-4361) login mints a Supabase-compatible JWT; identity follows the key.
 - Three-phase chain-action UX: signing → mining → indexer mirroring (honest, with mirror-wait).
 - Gasless money actions: at login a second EIP-712 signature opens a sponsorship
-  session; every money-moving tx (fund, submit, approve, cancel, dispute,
-  stake deposit/withdraw) is then relayed as an ERC-2771 meta-tx. The signed-in
-  user pays no gas — the server relayer fronts it. Enforcement is on-chain
+  session; every money-moving tx (submit, approve, cancel, vote, unstake request,
+  fee withdrawal) is then relayed as an ERC-2771 meta-tx. The signed-in user pays
+  no gas — the server relayer fronts it. Gas only: a call that moves principal
+  (escrow funding, stake deposit/top-up, dispute fee) or pays it back out
+  (withdrawStake) stays a user-paid transaction, so every amount that leaves a
+  wallet is one the user signed for. Enforcement is on-chain
   (SponsorshipForwarder verifies the session voucher + nonce; escrow/registry
   trust it as an ERC-2771 forwarder), mirrored off-chain only for quoting.
 

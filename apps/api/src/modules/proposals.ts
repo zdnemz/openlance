@@ -8,9 +8,9 @@
  * ACCEPTING a proposal is the bridge event: it creates the project + its
  * milestones from the winning proposal's breakdown, locks the job, auto-rejects
  * every other proposal, and fans out notifications — all inside one
- * transaction, because a half-awarded job must be impossible. The money moves
- * one step later, when the client signs the returned funding payload; the
- * contract locks the budget on that first call.
+ * transaction, because a half-awarded job must be impossible. The budget was
+ * locked at publish; the client then signs the returned funding payload once to
+ * draw the bid out of it, leaving the remainder withdrawable.
  */
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
@@ -189,12 +189,18 @@ export async function acceptProposal(request: Request, proposalId: string) {
     for (const l of losers.filter((l) => l.id !== proposal.id)) {
       await tx.update(proposals).set({ status: 'rejected', updatedAt: new Date() }).where(eq(proposals.id, l.id))
     }
-    // The winning bid is the amount the client is about to lock on-chain. The
-    // escrow call is the client's signature (returned below); this row records
-    // what the lock must equal, and there is no surplus to refund — the lock is
-    // the bid, not the ceiling.
+    // Surplus: the vault locked the full ceiling at publish; only the winning
+    // bid total stays escrowed. The remainder is NOT refunded on-chain — it
+    // stays locked and the poster withdraws it with unlockBudget from the
+    // project room.
+    const locked = BigInt(lockedJob!.depositAmountWei ?? lockedJob!.budgetMaxWei)
+    if (bidExceedsCeiling(bid, locked)) throw Errors.conflict('bid_exceeds_deposit', 'Winning bid exceeds the locked deposit')
+    const surplus = locked - bid
+
+    // The bid is what the client is about to commit on-chain; this row records
+    // it, and the ceiling minus the bid is what stays withdrawable.
     await tx.update(jobs).set({
-      status: 'in_progress', depositAmountWei: bid.toString(), depositedAt: new Date(), updatedAt: new Date(),
+      status: 'in_progress', depositAmountWei: bid.toString(), updatedAt: new Date(),
     }).where(eq(jobs.id, job.id))
 
     return {
@@ -203,6 +209,7 @@ export async function acceptProposal(request: Request, proposalId: string) {
       attachments: files.length,
       rejected: losers.filter((l) => l.id !== proposal.id).length,
       bidTotalWei: bid.toString(),
+      surplusLockedWei: surplus.toString(),
       fundingItems: createdMilestones.map((m) => ({ ref: uuidToBytes32(m.id), amountWei: m.amountWei })),
     }
   })
@@ -215,7 +222,7 @@ export async function acceptProposal(request: Request, proposalId: string) {
     type: 'proposal.accepted',
     actorAddress: user.walletAddress,
     projectId: result.project.id,
-    payload: { jobId: job.id, jobTitle: job.title, proposalId: proposal.id, freelancer: freelancer.walletAddress, bidTotalWei: result.bidTotalWei, milestones: result.milestones, attachments: result.attachments },
+    payload: { jobId: job.id, jobTitle: job.title, proposalId: proposal.id, freelancer: freelancer.walletAddress, bidTotalWei: result.bidTotalWei, surplusLockedWei: result.surplusLockedWei, milestones: result.milestones, attachments: result.attachments },
   })
 
   return {
@@ -223,12 +230,13 @@ export async function acceptProposal(request: Request, proposalId: string) {
     milestonesCreated: result.milestones,
     attachmentsMoved: result.attachments,
     proposalsRejected: result.rejected,
+    /** Still locked on-chain, not refunded — withdraw it with unlockBudget. */
+    surplusLockedWei: result.surplusLockedWei,
     /**
      * One-signature funding payload: the client signs a single
-     * `fundAllFromCredit(jobRef, refs, freelancers, amounts)` tx carrying
-     * `value = bidTotalWei`. Nothing was locked at publish, so that call locks
-     * the budget AND funds every milestone. Starting a milestone needs no
-     * further signature.
+     * `fundAllFromCredit(jobRef, refs, freelancers, amounts)` tx. The budget is
+     * already locked from publish, so this draws the bid out of it; after that
+     * starting a milestone needs no further signature.
      */
     funding: {
       jobRef: uuidToBytes32(job.id),

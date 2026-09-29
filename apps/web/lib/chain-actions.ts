@@ -38,6 +38,43 @@ export async function readJobBudget(escrow: string, jobRef: string): Promise<{
 }
 
 /**
+ * Hand back the job budget the winning bid never used.
+ *
+ * The client locked the FULL ceiling at publish, so an award below the ceiling
+ * leaves a gap. `fundAllFromCredit` reserves exactly the bid, so the moment that
+ * tx mines the job's free balance (locked − paidOut − reserved) IS ceiling −
+ * bid, and `unlockBudget` returns it. Only the wallet that locked the budget may
+ * call it, so this rides the client's own transaction — there is no server path.
+ *
+ * Best-effort by design: a reject or revert leaves the surplus LOCKED and
+ * withdrawable, and every live milestone stays backed either way. Returns the
+ * wei handed back (0n when there was nothing to return, or it did not land) and
+ * never throws, so it can never fail an award that already happened. The
+ * SurplusPanel button is the manual retry for the declined case.
+ */
+export async function returnBudgetSurplus(
+  escrow: string,
+  jobRef: string,
+  chainId?: number,
+): Promise<bigint> {
+  try {
+    // Re-read AFTER funding: reserved only equals the bid once the batch mined.
+    const budget = await readJobBudget(escrow, jobRef);
+    if (!budget || budget.free <= 0n) return 0n;
+    const hash = await sendContractCall({
+      to: escrow,
+      abi: ESCROW_ABI,
+      functionName: "unlockBudget",
+      args: [jobRef, budget.free],
+      expectedChainId: chainId,
+    });
+    return (await waitForReceipt(hash)).status === "success" ? budget.free : 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+/**
  * Funding reverts speak in custom-error names (often inside a relay 500).
  * Translate the common ones into what the user should actually do.
  */
@@ -58,6 +95,29 @@ export function describeFundingRevert(message: string, totalWei: bigint, freeWei
 }
 
 export type Phase = "idle" | "signing" | "mining" | "indexing" | "done";
+
+/**
+ * Whether a call may take the gasless relay. The relayer sponsors STATE
+ * CHANGES, never value movement — in either direction:
+ *
+ *   · A call that carries `value` may never be relayed. The forwarder pays
+ *     `req.value` out of its OWN balance (SponsorshipForwarder.execute), so a
+ *     relayed deposit moves the relayer's ETH while crediting the user's stake
+ *     — a bare signature, no balance change, and a slashed bond that costs the
+ *     platform instead of the arbiter. Funding, stake deposit/top-up and
+ *     dispute fees are therefore normal user-paid transactions.
+ *   · A call that moves value OUT declares `userPaid` — a withdrawal pays the
+ *     user's own collateral back, and it should be a transaction they can see
+ *     and pay for like every other money action, not a signature the relayer
+ *     sponsors.
+ *
+ * Everything else is a bookkeeping action with no principal: submit, approve,
+ * cancel, commit/reveal vote, tally, finalize, unstake request/cancel, fee
+ * withdrawal. Those stay gasless.
+ */
+export function canRelayGasless(opts: { value?: bigint; userPaid?: boolean }): boolean {
+  return !opts.userPaid && (opts.value ?? 0n) === 0n;
+}
 
 export function useChainAction() {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -81,6 +141,8 @@ export function useChainAction() {
       functionName: string;
       args?: unknown[];
       value?: bigint;
+      /** Force the user's own transaction (gas included) — see canRelayGasless. */
+      userPaid?: boolean;
       projectId?: string;
       expect?: (p: ProjectView) => boolean;
       successMessage?: string;
@@ -96,10 +158,13 @@ export function useChainAction() {
       setPhase("signing");
       try {
         const abi = opts.contract === "escrow" ? ESCROW_ABI : REGISTRY_ABI;
-        // Gasless path: when a sponsorship session is active, the user signs an
-        // EIP-712 ForwardRequest and the relayer pays the gas. Falls back to a
-        // normal user-paid call if sponsorship is unavailable.
-        const sponsored = useSponsorship.getState().isActive();
+        // Gasless path: when a sponsorship session is active AND the call is one
+        // the relayer may sponsor, the user signs an EIP-712 ForwardRequest and
+        // the relayer pays the gas. Falls back to a normal user-paid call if
+        // sponsorship is unavailable. `canRelayGasless` is the whole rule: a call
+        // that moves value in (via `value`) or out (via `userPaid`) is always a
+        // user transaction, so the wallet shows the amount and the balance moves.
+        const sponsored = canRelayGasless(opts) && useSponsorship.getState().isActive();
         let hash: string;
         if (sponsored) {
           try {
@@ -402,7 +467,15 @@ export function cancelUnstakeAction(run: ReturnType<typeof useChainAction>["run"
     });
 }
 
-/** Withdraw collateral (only when idle and score healthy). */
+/**
+ * Withdraw collateral (only when idle and score healthy).
+ *
+ * `userPaid`: a withdrawal moves value OUT of the protocol — the arbiter's own
+ * stake comes back to them. It is a money action the user should see and pay
+ * for like their deposit, not a signature the relayer sponsors. (The funds can
+ * only ever go to `req.from`, so relaying it was never a drain risk — this is
+ * about the money path being uniform, not about safety.)
+ */
 export function withdrawStakeAction(run: ReturnType<typeof useChainAction>["run"]) {
   return () =>
     run({
@@ -410,6 +483,7 @@ export function withdrawStakeAction(run: ReturnType<typeof useChainAction>["run"
       contract: "registry",
       functionName: "withdrawStake",
       args: [],
+      userPaid: true,
       successMessage: "Stake withdrawn",
     });
 }

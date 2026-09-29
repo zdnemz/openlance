@@ -17,7 +17,7 @@ import { logger } from '../lib/logger.ts'
 import { getKv } from '../lib/kv.ts'
 import { getDb } from '../db/index.ts'
 import { feeOf } from '../lib/money.ts'
-import { outcomeFromUint8, type ResolutionOutcome } from './abi.ts'
+import { ESCROW_ABI, outcomeFromUint8, type ResolutionOutcome } from './abi.ts'
 import { uuidToBytes32 } from './events.ts'
 import type { ChainEventName, MilestoneStatus } from '../domain/state-machine.ts'
 import type { RawChainLog } from './events.ts'
@@ -49,6 +49,12 @@ export interface ChainAdapter {
   getAccruedFees(): Promise<string | null>
   /** Real mode: the escrow contract's ETH balance (solvency invariant input). Mock: null. */
   getEscrowBalance(): Promise<string | null>
+  /**
+   * Real mode: the live balance sheet for one job's locked budget. `freeWei` is
+   * what the client can still withdraw. Mock: null (the mock moves no ETH).
+   * Money-relevant reads go through here, never off a mirror row.
+   */
+  getJobBudget(jobRef: string): Promise<{ lockedWei: string; reservedWei: string; paidOutWei: string; freeWei: string } | null>
   getLatestBlock(): Promise<number>
   /**
    * Real mode only: locate the MilestoneFunded log for a milestone ref
@@ -293,6 +299,28 @@ export class RealChainAdapter implements ChainAdapter {
     return balance === null ? null : balance.toString()
   }
 
+  async getJobBudget(jobRef: string) {
+    const { client } = await this.viem()
+    const read = async (fn: 'lockedBudget' | 'reservedBudget' | 'paidOutBudget'): Promise<bigint | null> =>
+      (client.readContract({
+        address: this.escrowAddress as `0x${string}`,
+        abi: ESCROW_ABI,
+        functionName: fn,
+        args: [jobRef as `0x${string}`],
+      } as never) as Promise<bigint>).catch((err) => {
+        logger.warn(`${fn} read failed`, { err: String(err) })
+        return null
+      })
+    const [locked, reserved, paidOut] = await Promise.all([read('lockedBudget'), read('reservedBudget'), read('paidOutBudget')])
+    if (locked === null || reserved === null || paidOut === null) return null
+    return {
+      lockedWei: locked.toString(),
+      reservedWei: reserved.toString(),
+      paidOutWei: paidOut.toString(),
+      freeWei: (locked - paidOut - reserved).toString(),
+    }
+  }
+
   async getLatestBlock(): Promise<number> {
     const { client } = await this.viem()
     return Number(await client.getBlockNumber())
@@ -433,6 +461,10 @@ export class MockChainAdapter implements ChainAdapter {
 
   async getEscrowBalance(): Promise<string | null> {
     return null // the mock moves no real ETH; solvency is enforced by the contract tests
+  }
+
+  async getJobBudget(): Promise<null> {
+    return null // the mock holds no real ETH, so no job has a locked balance to check
   }
 
   async getLatestBlock(): Promise<number> {

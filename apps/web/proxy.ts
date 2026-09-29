@@ -15,6 +15,11 @@
  *    adaptive home every role may view. The API remains the security
  *    boundary; this is navigation shaping.
  *
+ * 4. Awarded jobs: once a job has a project, `/jobs/:id` is a stale address —
+ *    the work lives in the room, and the room gates its own reads. This is a
+ *    server-side 307 so the job page never paints for a link the user did not
+ *    mean to click (a shared bid, a notification, the back button).
+ *
  * The API is a separate origin now (apps/api on :4000) and answers its own
  * CORS preflights, so there is no `/api` branch here — this app serves pages.
  *
@@ -28,6 +33,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { ONBOARDED_COOKIE, ROLE_COOKIE, ROLE_HOME, ONBOARDING_PATH, isAllowed, isAppRole } from '@/lib/role-routes'
 
+/** Same origin the client uses (lib/api.ts) — kept inline: this file is edge. */
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000'
+
+/** `/jobs/<uuid>` — the only path that can be answered by a redirect. */
+const JOB_PATH = /^\/jobs\/([0-9a-fA-F-]{36})$/
+
 function redirectTo(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone()
   url.pathname = pathname
@@ -35,7 +46,39 @@ function redirectTo(request: NextRequest, pathname: string) {
   return NextResponse.redirect(url)
 }
 
-export function proxy(request: NextRequest) {
+/**
+ * An awarded job IS its project — send the room a `fromJob` breadcrumb so its
+ * "not yours to see" wall can offer a way back to the posting.
+ *
+ * Fails open everywhere: `?stay=1` is that breadcrumb's escape hatch (answer it
+ * with a redirect and the two pages ping-pong), and a non-OK read means the
+ * page renders and decides for itself — the API treats a draft as poster-only,
+ * and a draft has no project to redirect to anyway.
+ */
+async function redirectAwardedJob(request: NextRequest, jobId: string) {
+  if (request.nextUrl.searchParams.get('stay') === '1') return NextResponse.next()
+  try {
+    // Forward the visitor's IP: the API's read limiter keys on it, and this is a
+    // server-to-server call that would otherwise land in one shared bucket for
+    // every user on the box.
+    const forwarded = request.headers.get('x-forwarded-for')
+    const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, {
+      cache: 'no-store',
+      headers: forwarded ? { 'x-forwarded-for': forwarded } : undefined,
+    })
+    if (!res.ok) return NextResponse.next()
+    const { data } = (await res.json()) as { data?: { projectId?: string | null } }
+    if (!data?.projectId) return NextResponse.next()
+    const url = request.nextUrl.clone()
+    url.pathname = `/projects/${data.projectId}`
+    url.search = `fromJob=${jobId}`
+    return NextResponse.redirect(url)
+  } catch {
+    return NextResponse.next()
+  }
+}
+
+export async function proxy(request: NextRequest) {
   {
     const p = request.nextUrl.pathname
     const onboarded = request.cookies.get(ONBOARDED_COOKIE)?.value === '1'
@@ -58,6 +101,14 @@ export function proxy(request: NextRequest) {
     const rawRole = request.cookies.get(ROLE_COOKIE)?.value
     const role = isAppRole(rawRole) ? rawRole : null
     if (role && !isAllowed(p, role)) return redirectTo(request, ROLE_HOME)
+
+    // An awarded job's posting is a stale address — the room owns it now.
+    // The page keeps its own client-side redirect for what the proxy cannot
+    // cover: a job awarded while its posting sits in the router cache, or open
+    // in front of the poster who just accepted a bid.
+    const job = JOB_PATH.exec(p)
+    if (job) return redirectAwardedJob(request, job[1])
+
     return NextResponse.next()
   }
 }

@@ -5,7 +5,7 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useJob, useProposals, useInvalidate, post } from "@/lib/queries";
-import { get, fileUrl } from "@/lib/api";
+import { get, del, fileUrl } from "@/lib/api";
 import { uploadAttachment } from "@/lib/uploads";
 import { useSession } from "@/lib/session";
 import {
@@ -16,7 +16,8 @@ import type { AttachmentView, JobView } from "@/lib/types";
 import { formatEth, timeAgo, toWei } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
 import { sendContractCall, waitForReceipt } from "@/lib/wallet";
-import { describeFundingRevert, readJobBudget } from "@/lib/chain-actions";
+import { describeFundingRevert, readJobBudget, returnBudgetSurplus } from "@/lib/chain-actions";
+import { SurplusPanel } from "@/components/surplus-panel";
 import { ESCROW_ABI } from "@/lib/contracts";
 import { toast } from "sonner";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
@@ -50,6 +51,9 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
   // room itself gates reads (participants/arbiters in, everyone else gets the
   // "not yours to see" wall). Unfunded-yet awards land there too: the fund
   // recovery button lives in the room, guarded against double-funding.
+  // The proxy already 307s a cold visit to an awarded posting (see proxy.ts);
+  // this covers the two it can't: a router-cached RSC payload, and the award
+  // landing while this page is open.
   const projectId = job?.projectId ?? null;
   useEffect(() => {
     // fromJob lets the project room's "not yours to see" wall link back to
@@ -62,15 +66,17 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
     try {
       const result = await post<{
         project: { id: string };
+        /** Ceiling − bid, unlocked back to the client right after funding. */
+        surplusLockedWei: string;
         funding: { jobRef: string; freelancer: string; totalWei: string; items: { ref: string; amountWei: string }[] };
       }>(`/proposals/${proposalId}/accept`);
       invalidate.job(id);
       invalidate.proposals(id);
       invalidate.projects();
 
-      // One signature locks the budget AND every milestone of the project up
-      // front: nothing was escrowed at publish, so this call's value becomes the
-      // job's lock, and the client never signs again as milestones start.
+      // One signature funds EVERY milestone of the project up front, drawing
+      // from the budget locked at publish. The client never signs again as
+      // milestones start.
       let funded = true;
       if (escrow && result.funding?.items?.length) {
         const total = result.funding.items.reduce((a, m) => a + BigInt(m.amountWei), 0n);
@@ -91,7 +97,6 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
               result.funding.items.map(() => result.funding.freelancer),
               result.funding.items.map((m) => BigInt(m.amountWei)),
             ],
-            value: total,
             expectedChainId: chainId,
           });
           const receipt = await waitForReceipt(hash);
@@ -107,8 +112,19 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       }
 
       if (funded) {
+        // The ceiling went in at publish; the bid is now reserved for the
+        // milestones. Whatever the bid didn't use belongs to the client, so it
+        // goes straight back — one extra signature, right where the award
+        // already has their wallet open. A reject just leaves it locked.
+        const jobRef = result.funding?.jobRef;
+        const returnedWei = escrow && jobRef ? await returnBudgetSurplus(escrow, jobRef, chainId) : 0n;
+        const tail = returnedWei > 0n
+          ? ` Surplus ${formatEth(returnedWei.toString())} ETH is back in your wallet.`
+          : result.surplusLockedWei && BigInt(result.surplusLockedWei) > 0n
+            ? ` Surplus ${formatEth(result.surplusLockedWei)} ETH is still locked on the job.`
+            : "";
         toast.success("Proposal accepted — milestones funded", {
-          description: `${formatEth(result.funding?.totalWei ?? "0")} ETH is locked from the awarded bid. Work needs no further signatures.`,
+          description: `Every milestone is locked from the job budget; work needs no further signatures.${tail}`,
           action: { label: "Open project", onClick: () => router.push(`/projects/${result.project.id}`) },
         });
       }
@@ -175,6 +191,12 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
         </div>
       )}
 
+      {isPoster && !job.projectId && job.status !== "in_progress" && (
+        <div className="flex justify-end">
+          <DeleteJob jobId={id} jobRef={job.jobRef} funded={job.status === "open"} />
+        </div>
+      )}
+
       <div className="grid gap-10 lg:grid-cols-[1.55fr_1fr]">
         {/* left: the brief */}
         <div className="min-w-0 space-y-10">
@@ -205,9 +227,12 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
           </section>
         </div>
 
-        {/* right: publish (draft) / proposals / propose */}
+        {/* right: deposit gate (draft) / surplus + proposals / propose */}
         <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-          {isPoster && job.status === "draft" && <PublishPanel jobId={id} />}
+          {isPoster && job.status === "draft" && (
+            <DepositPanel jobId={id} jobRef={job.jobRef} budgetWei={job.budget.maxWei} />
+          )}
+          {isPoster && job.status !== "draft" && <SurplusPanel jobId={id} jobRef={job.jobRef} />}
           {isPoster ? (
             <section>
               <ListHead>Proposals · {proposals?.length ?? 0}</ListHead>
@@ -217,7 +242,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
                   title="No proposals yet"
                   body={
                     job.status === "draft"
-                      ? "Publish first — freelancers can only propose on an open job."
+                      ? "Publish first — freelancers can propose once the deposit locks."
                       : "Freelancers see this job the moment it's open. Switch to the freelancer seat to propose."
                   }
                 />
@@ -270,44 +295,144 @@ function jobToDraft(job: JobView): JobDraft {
   };
 }
 
-/* ── publish (poster view, draft only) ──────────────────────────────────────
-   No chain call. The ceiling is a number in the brief; escrow happens once,
-   at award, when the client signs the bid they chose. */
+/* ── delete (poster view, draft or open) ─────────────────────────────────────
+   A published job's escrow key is derived from its id, so deleting the row
+   while ETH is locked under it would strand that ETH forever. The server
+   refuses in that case; here we withdraw first, then delete. */
 
-function PublishPanel({ jobId }: { jobId: string }) {
+function DeleteJob({ jobId, jobRef, funded }: { jobId: string; jobRef: string; funded: boolean }) {
+  const escrow = useRuntime((s) => s.escrow);
+  const chainId = useRuntime((s) => s.chainId);
   const invalidate = useInvalidate();
-  const [publishing, setPublishing] = useState(false);
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function publish() {
-    setPublishing(true);
+  async function remove() {
+    setBusy(true);
+    setError(null);
     try {
-      await post(`/jobs/${jobId}/publish`);
+      // Withdraw the free balance first when the job is funded and one is left.
+      // The server re-checks on-chain, so this is convenience, not the gate.
+      if (funded && escrow) await returnBudgetSurplus(escrow, jobRef, chainId);
+      await del(`/jobs/${jobId}`);
       invalidate.job(jobId);
-      toast.success("Job published", { description: "It's live in the marketplace. Freelancers can bid now." });
+      toast.success("Job deleted", {
+        description: funded ? "The locked budget is back in your wallet." : "The draft is gone.",
+      });
+      router.push("/jobs");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete the job");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button
+        variant="ghost"
+        onClick={() => setOpen(true)}
+        className="rounded-full px-4 py-2 text-[12.5px] text-faint hover:text-destructive"
+      >
+        Delete job
+      </Button>
+    );
+  }
+
+  return (
+    <div className="glass flex flex-wrap items-center gap-3 rounded-2xl border-destructive/30 px-5 py-4 text-[13px]">
+      <span className="text-dim">
+        {funded
+          ? "This job is live and its budget is locked. Deleting it withdraws the remainder to your wallet first."
+          : "This draft is deleted immediately. Nothing was ever escrowed."}
+      </span>
+      <div className="ml-auto flex items-center gap-2">
+        <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy} className="rounded-full px-4 py-2 text-[12.5px]">
+          Keep it
+        </Button>
+        <Button
+          onClick={remove}
+          disabled={busy}
+          className="rounded-full bg-destructive px-4 py-2 text-[12.5px] font-medium text-white hover:bg-destructive/90"
+        >
+          {busy ? "Working…" : funded ? "Withdraw & delete" : "Delete"}
+        </Button>
+      </div>
+      {error && <p className="w-full text-[12px] text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+/* ── deposit gate (poster view, draft only) ─────────────────────────────── */
+
+function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: string; budgetWei: string }) {
+  const escrow = useRuntime((s) => s.escrow);
+  const chainId = useRuntime((s) => s.chainId);
+  const invalidate = useInvalidate();
+  const [phase, setPhase] = useState<"idle" | "depositing" | "publishing">("idle");
+
+  async function depositAndPublish() {
+    setPhase("depositing");
+    try {
+      let depositTxHash: string;
+      if (escrow) {
+        // Drawdown model: lock the full ceiling in the escrow contract once;
+        // every milestone of this job is then funded from that locked balance.
+        // Whatever the winning bid doesn't use stays withdrawable.
+        const hash = await sendContractCall({
+          to: escrow,
+          abi: ESCROW_ABI,
+          functionName: "lockBudget",
+          args: [jobRef],
+          value: BigInt(budgetWei),
+          expectedChainId: chainId,
+        });
+        const receipt = await waitForReceipt(hash);
+        if (receipt.status !== "success") throw new Error("Deposit transaction reverted on-chain");
+        depositTxHash = hash;
+      } else {
+        // Dev mode (no escrow configured): the server accepts the hash shape
+        // alone; real mode verifies the lock on-chain before publishing.
+        depositTxHash = `0x${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}`;
+      }
+      setPhase("publishing");
+      await post(`/jobs/${jobId}/publish`, { depositTxHash });
+      invalidate.job(jobId);
+      toast.success("Job published", { description: "Budget locked in escrow — it's live in the marketplace." });
     } catch (err) {
       toast.error("Could not publish", { description: err instanceof Error ? err.message : "Unknown error" });
     } finally {
-      setPublishing(false);
+      setPhase("idle");
     }
   }
 
   return (
     <section className="glass-raised rounded-3xl p-6">
-      <ListHead>Publish</ListHead>
+      <ListHead>Publish — lock the budget first</ListHead>
       <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
-        This draft is private. Publishing puts it in front of freelancers — no funds move until you accept a bid, and
-        then you sign once for the amount you accepted.
+        This draft is private. Publishing locks <EthAmount wei={budgetWei} className="text-foreground" /> (your max
+        budget) in the escrow contract, so every live job is funded and freelancers know the money is there. The winning
+        bid is drawn from it; the rest is withdrawable.
       </p>
+      {escrow ? (
+        <p className="num mt-3 break-all text-[11px] text-faint">escrow {escrow}</p>
+      ) : (
+        <p className="mt-3 text-[11px] text-faint">Dev mode: no escrow configured, publishing records a simulated deposit.</p>
+      )}
       <Button
-        disabled={publishing}
-        onClick={publish}
+        disabled={phase !== "idle"}
+        onClick={depositAndPublish}
         className="mt-4 w-full rounded-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
       >
-        {publishing ? "Publishing…" : "Publish job"}
+        {phase === "idle" ? `Lock ${formatEth(budgetWei)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
       </Button>
     </section>
   );
 }
+
+/* ── surplus withdrawal (poster view, published jobs) ─────────────────── */
 
 
 /* ── a bid's file ────────────────────────────────────────────────────────

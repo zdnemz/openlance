@@ -125,6 +125,7 @@ export const ROUTES: Array<[string, string, RouteHandler]> = [
   ['POST', '/api/jobs', rjobs.POST],
   ['GET', '/api/jobs/:id', rjobsId.GET],
   ['PATCH', '/api/jobs/:id', rjobsId.PATCH],
+  ['DELETE', '/api/jobs/:id', rjobsId.DELETE],
   ['POST', '/api/jobs/:id/cancel', rjobsIdCancel.POST],
   ['GET', '/api/jobs/:id/proposals', rjobsIdProposals.GET],
   ['POST', '/api/jobs/:id/proposals', rjobsIdProposals.POST],

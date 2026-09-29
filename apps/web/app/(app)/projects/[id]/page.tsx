@@ -23,7 +23,7 @@ import {
 import {
   useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt, saveCommit, loadCommit, clearCommit,
 } from "@/lib/dispute-round";
-import { DISPUTE_OUTCOME, QUORUM } from "@/lib/contracts";
+import { DISPUTE_OUTCOME, QUORUM, requiredReveals } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import {
   AddressAvatar, AddressText, EthAmount, HashText, ListHead, Skeleton, EmptyState, press,
@@ -37,6 +37,7 @@ import { ArbiterPickerDialog } from "@/components/arbiter-picker-dialog";
 import { ArbiterBubbles } from "@/components/arbiter-bubble";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { SurplusPanel } from "@/components/surplus-panel";
 import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -55,6 +56,9 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
   const { id } = use(params);
   const session = useSession();
   const { data: project, isLoading } = useProject(id);
+  // The client's free budget lives on the job's escrow key; react-query shares
+  // the entry with ProjectHeader, so this costs nothing extra.
+  const { data: job } = useJob(project?.jobId ?? "");
   const { data: disputes } = useDisputes();
   // Escape hatch for strangers bounced here by the job→project redirect: the
   // raw param never touches href (open-redirect) — strict uuid shape only.
@@ -105,6 +109,10 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
           <AddressText value={project.freelancer.walletAddress} className="text-foreground" /> (freelancer) to act on this project.
         </div>
       )}
+      {/* The room is where an awarded job lives, so it is also where the client
+          finds the free budget — the job posting redirects here on award. It
+          renders nothing once the award handed the surplus back. */}
+      {isClient && job && <SurplusPanel jobId={job.id} jobRef={job.jobRef} />}
       <Tabs defaultValue="milestones" className="gap-6">
         <TabsList className="h-auto gap-7 border-b border-line bg-transparent p-0 pb-px">
           <TabsTrigger value="milestones" className="rounded-none px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
@@ -417,6 +425,9 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   const projectComplete = project.milestones.length > 0 && project.milestones.every((x) => COMPLETE_STATES.includes(x.chainStatus));
   const myReview = reviews?.find((r) => r.reviewerId === session.user?.id);
   const fee = feeOn(m.amountWei, feeBps);
+  // Live dispute fee from the contract (0 = free). Copy and the tx value both
+  // branch on it, so a fee retune is picked up without a code change.
+  const feeWei = toWei(disputeFeeWei);
   const active = chain.phase !== "idle" && chain.phase !== "done";
   // Locked mutual arbiters seat first on-chain; otherwise the draw is random.
   const lockedPreferred = ((project.chosenArbiters ?? []) as string[]).filter(Boolean).slice(0, 3);
@@ -433,15 +444,9 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
     (Array.isArray(status) ? status : [status]).includes(p.milestones.find((x) => x.id === m.id)!.chainStatus);
 
   /**
-   * Fund-all: one signature funds every outstanding milestone of this project.
-   * This is the recovery path for when the award-time batch was skipped or
-   * rejected — the normal flow funds at award.
-   *
-   * The batch carries value only when the job has no budget locked yet. Nothing
-   * is locked at publish any more (the client posts a ceiling, not a deposit),
-   * so an award whose funding tx never landed leaves `lockedBudget == 0` and
-   * this call is the one that becomes the lock. When a lock does exist, the
-   * batch must send no ETH and draws from it.
+   * Fund-all: one signature locks every outstanding milestone from the job
+   * budget. This is the recovery path for when the award-time batch tx was
+   * skipped or rejected — the normal flow funds at award.
    *
    * Pre-flight against on-chain truth first: the mirror can lag a mined funding
    * tx, and sending a second batch would just revert with InsufficientBudget.
@@ -450,21 +455,17 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
     if (!outstanding.length || fundState !== "idle") return;
     const jobRef = outstanding[0]!.fund!.jobRef ?? outstanding[0]!.fund!.ref;
     const freelancer = project!.freelancer.walletAddress;
-    let lockValue = 0n;
     if (escrow) {
       setFundState("checking");
       const budget = await readJobBudget(escrow, jobRef).catch(() => null);
-      if (budget) {
-        if (outstandingWei > budget.free) {
-          setFundState("landed");
-          toast.success("Already funded on-chain", {
-            description: "The funding transaction landed — the view refreshes as soon as the indexer mirrors it.",
-          });
-          invalidate.project(projectId);
-          invalidate.overview();
-          return;
-        }
-        lockValue = budget.locked > 0n ? 0n : outstandingWei;
+      if (budget && outstandingWei > budget.free) {
+        setFundState("landed");
+        toast.success("Already funded on-chain", {
+          description: "The funding transaction landed — the view refreshes as soon as the indexer mirrors it.",
+        });
+        invalidate.project(projectId);
+        invalidate.overview();
+        return;
       }
       setFundState("idle");
     }
@@ -478,7 +479,6 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         outstanding.map(() => freelancer),
         outstanding.map((x) => BigInt(x.fund!.amountWei)),
       ],
-      value: lockValue,
       projectId,
       expect: (p) => p.milestones.every((x) => x.chainStatus !== "pending_funding"),
       successMessage: "Milestones funded — work needs no further signatures",
@@ -675,9 +675,9 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
             </summary>
             <div className="mt-4 space-y-3">
               <p className="text-[12.5px] leading-relaxed text-faint">
-                The dispute record (reason) is written off-chain, then your wallet locks the milestone on-chain and pays
-                the dispute fee. {preferredArg ? "Your mutually-locked arbiters seat first; " : ""}Any remaining seats
-                draw at random from eligible arbiters who vote commit-reveal; a 2-of-3 majority decides.
+                The dispute record (reason) is written off-chain, then your wallet locks the milestone on-chain
+                {feeWei > 0n ? " and pays the dispute fee" : " — opening is free"}. {preferredArg ? "Your mutually-locked arbiters seat first; " : ""}Any remaining seats
+                draw at random from eligible arbiters who vote commit-reveal; a majority decides.
               </p>
               <Textarea
                 value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
@@ -685,11 +685,15 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                 className="resize-none border-line bg-white/[0.03] text-[13px]"
               />
               <p className="num text-[11px] text-faint">
-                dispute fee {formatEth(disputeFeeWei)} ETH · paid to the majority arbiters on resolution
+                {feeWei > 0n
+                  ? `dispute fee ${formatEth(disputeFeeWei)} ETH · paid to the majority arbiters on resolution`
+                  : "free to open · the protocol's reward pool pays the arbiters"}
               </p>
               {quorumRisk && (
                 <p className="num rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
-                  Only {eligibleSeats} eligible arbiter{eligibleSeats === 1 ? "" : "s"} outside the parties — opening now reverts on-chain (needs {QUORUM}).
+                  {eligibleSeats === 0
+                    ? `No eligible arbiter outside the parties right now — opening reverts on-chain until one registers (needs at least 1${QUORUM > 1 ? `, ${QUORUM} for a full panel` : ""}).`
+                    : `Only ${eligibleSeats} eligible arbiter${eligibleSeats === 1 ? "" : "s"} outside the parties — this round is a degraded panel, decided by a single vote instead of ${QUORUM}-of-3.`}
                 </p>
               )}
               <Button
@@ -699,14 +703,14 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     `/projects/${projectId}/milestones/${m.id}/disputes`,
                     { reason: reason.trim() },
                     () => openDisputeAction(chain.run)(
-                      m.onchainId!, toWei(disputeFeeWei), projectId, wait("disputed"),
+                      m.onchainId!, feeWei, projectId, wait("disputed"),
                       preferredArg ? (preferredArg as [string, string, string]) : undefined,
                     ),
                   )
                 }
                 className="w-full rounded-full border border-state-disputed/40 bg-state-disputed/10 py-2.5 text-[12.5px] font-medium text-state-disputed hover:bg-state-disputed/20"
               >
-                <PhaseLabel phase={chain.phase} idle={`Write record + openDispute() · ${formatEth(disputeFeeWei)} ETH`} />
+                <PhaseLabel phase={chain.phase} idle={`Write record + openDispute()${feeWei > 0n ? ` · ${formatEth(disputeFeeWei)} ETH` : " · free"}`} />
               </Button>
             </div>
           </details>
@@ -837,7 +841,7 @@ function DisputePanel({
   const canTally = !!round && round.arbiterCount > 0 && !round.resolved && (now > round.revealDeadline || allRevealed);
   // Below quorum the tally is still valid — the contract refunds the opener
   // and returns the milestone to Submitted (no-quorum fallback).
-  const tallyFallsBack = !!round && !round.resolved && round.revealCount < QUORUM;
+  const tallyFallsBack = !!round && !round.resolved && round.revealCount < requiredReveals(round.arbiterCount);
   const canFinalize = !!round && round.resolved && !dispute.finalized && now > round.revealDeadline + windows.appeal;
   // ponytail: derived from the live round + chain windows — the only honest finalize clock.
   const appealEndsAt = round?.resolved && !dispute.finalized ? round.revealDeadline + windows.appeal : null;
@@ -1056,7 +1060,7 @@ function DisputePanel({
               <p className="text-[11.5px] text-faint">Payout unlocks once the appeal window closes — anyone can finalize then.</p>
             )}
             {canTally && tallyFallsBack && (
-              <p className="text-[11.5px] text-amber-300">Fewer than {QUORUM} reveals — tallying refunds the opener and returns the milestone to Submitted (no-quorum fallback).</p>
+              <p className="text-[11.5px] text-amber-300">Fewer than {requiredReveals(round.arbiterCount)} reveals — tallying refunds the opener and returns the milestone to Submitted (no-quorum fallback).</p>
             )}
             {(isClient || isFreelancer) && round?.resolved && !dispute.finalized && (
               <Button
@@ -1067,7 +1071,7 @@ function DisputePanel({
                 }}
                 className="w-full rounded-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10"
               >
-                Appeal ({formatEth(disputeFeeWei)} ETH) — penalises a wrong majority
+                {toWei(disputeFeeWei) > 0n ? `Appeal (${formatEth(disputeFeeWei)} ETH)` : "Appeal (free)"} — penalises a wrong majority
               </Button>
             )}
           </div>

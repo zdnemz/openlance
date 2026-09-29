@@ -7,12 +7,10 @@ import type { Abi } from "viem";
 
 export const ESCROW_ABI = [
   { type: "function", name: "fund", stateMutability: "payable", inputs: [{ name: "ref", type: "bytes32" }, { name: "freelancer", type: "address" }], outputs: [] },
-  // Drawdown model: the budget is locked by the first funding signature for
-  // that jobRef — either lockBudget (pre-funding) or fundAllFromCredit with
-  // value attached (the award path) — and every later milestone draws from it.
+  // Drawdown model: lock the full budget at publish, milestones draw from it.
   { type: "function", name: "lockBudget", stateMutability: "payable", inputs: [{ name: "jobRef", type: "bytes32" }], outputs: [] },
   { type: "function", name: "fundFromCredit", stateMutability: "nonpayable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "ref", type: "bytes32" }, { name: "freelancer", type: "address" }, { name: "amount", type: "uint256" }], outputs: [] },
-  { type: "function", name: "fundAllFromCredit", stateMutability: "payable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "refs", type: "bytes32[]" }, { name: "freelancers", type: "address[]" }, { name: "amounts", type: "uint256[]" }], outputs: [] },
+  { type: "function", name: "fundAllFromCredit", stateMutability: "nonpayable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "refs", type: "bytes32[]" }, { name: "freelancers", type: "address[]" }, { name: "amounts", type: "uint256[]" }], outputs: [] },
   { type: "function", name: "unlockBudget", stateMutability: "nonpayable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "amount", type: "uint256" }], outputs: [] },
   { type: "function", name: "lockedBudget", stateMutability: "view", inputs: [{ name: "jobRef", type: "bytes32" }], outputs: [{ name: "", type: "uint256" }] },
   { type: "function", name: "reservedBudget", stateMutability: "view", inputs: [{ name: "jobRef", type: "bytes32" }], outputs: [{ name: "", type: "uint256" }] },
@@ -125,3 +123,11 @@ export const SCORE_REASON = { 1: "majority", 2: "minority", 3: "missed", 4: "ove
 
 export const MAX_ARBITERS = 3;
 export const QUORUM = 2;
+
+/** Reveals a round needs before it can decide, mirroring Escrow._requiredReveals:
+ *  the 2-of-3 QUORUM, or the whole seated panel when a degraded round could not
+ *  staff that many. Never 0. Use this — not a bare QUORUM — to decide whether a
+ *  tally will fall back to the no-quorum refund. */
+export function requiredReveals(arbiterCount: number): number {
+  return arbiterCount < QUORUM ? arbiterCount : QUORUM;
+}

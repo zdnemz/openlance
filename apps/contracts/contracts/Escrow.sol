@@ -181,6 +181,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     /// @notice Protocol subsidy drawn from `rewardPool` into a dispute's reward pot.
     event RewardSubsidized(uint256 indexed milestoneId, uint256 amount);
     event DisputeFeeUpdated(uint256 oldFee, uint256 newFee);
+    /// @notice Protocol-funded arbiter pot per dispute changed (`disputeReward`).
+    event DisputeRewardUpdated(uint256 oldReward, uint256 newReward);
 
     // ── Admin/ops events ──────────────────────────────────────────────────────
 
@@ -209,6 +211,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     error NothingToWithdraw();
     error TransferFailed();
     error DisputeFeeTooLow(uint256 provided, uint256 required);
+    /// @param eligible arbiters actually seated (0 — the roster cannot staff a round)
     error NotEnoughArbiters(uint256 eligible);
     error WrongPhase(Phase expected, Phase actual);
     error NotSelectedArbiter();
@@ -237,7 +240,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     IArbiterRegistry public arbiterRegistry;
 
     uint16 public feeBps; // platform fee snapshot target for new milestones
-    uint256 public disputeFee; // minimum ETH a party must pay to open a dispute
+    uint256 public disputeFee; // minimum ETH a party must pay to open a dispute (0 = free)
     uint64 public commitWindow; // duration of the commit phase
     uint64 public revealWindow; // duration of the reveal phase
     uint64 public appealWindow; // after finalization, how long a party may appeal
@@ -271,8 +274,18 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     mapping(bytes32 => address) public budgetLocker; // jobRef => the client who locked
     mapping(uint256 => bytes32) internal _milestoneJob; // milestoneId => jobRef (bytes32(0) = wallet-funded legacy path)
 
+    /// @notice Protocol-funded arbiter reward per dispute, drawn from `rewardPool`.
+    ///         Opening a dispute is free (`disputeFee` = 0), so the arbiters who do
+    ///         the work are paid by the protocol rather than by the opener. Starts at
+    ///         0 and is set by the owner via `setDisputeReward` — deliberately not an
+    ///         `initialize` argument, which is already at the EVM stack limit. 0 means
+    ///         "no subsidy": arbiters then earn only the milestone fee.
+    /// @dev Appended after the last mapping, consuming one gap slot, so existing
+    ///      proxy storage (every slot up to here) keeps its meaning across upgrades.
+    uint256 public disputeReward;
+
     /// @dev Reserved storage for future upgrades.
-    uint256[32] private __gap;
+    uint256[31] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -284,7 +297,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      * @param arbiterRegistry_ the arbiter registry (stake + trust + eligibility)
      * @param owner_           upgrade/admin authority (TimelockController in prod)
      * @param feeBps_          initial platform fee in bps (<= MAX_FEE_BPS)
-     * @param disputeFee_      minimum ETH to open a dispute (funds arbiter rewards)
+     * @param disputeFee_      minimum ETH to open a dispute (0 = free; the opener's
+     *                         payment is added to the arbiter reward pot)
      * @param treasury_        receives slashed fees / undistributed rewards
      * @param sponsorshipWallet_ receives 50% of every withdrawFees split
      *                          (address(0) falls back to treasury_)
@@ -522,11 +536,14 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * @notice Either party locks a funded/submitted milestone into dispute and
-     *         pays the dispute fee. Up to MAX_ARBITERS eligible, non-party
-     *         arbiters are selected at random from the registry.
-     * @dev    The opener must send at least `disputeFee`; any excess is treated as
-     *         an extra reward contribution.
+     * @notice Either party locks a funded/submitted milestone into dispute.
+     *         Up to MAX_ARBITERS eligible, non-party arbiters are selected at
+     *         random from the registry; fewer is allowed (degraded round) as
+     *         long as at least one is eligible.
+     * @dev    Opening is free while `disputeFee` is 0. When it is non-zero the
+     *         opener must send at least that; any value sent (fee or excess) is
+     *         the opener's share of the arbiter reward pot, topped up by the
+     *         protocol's `disputeReward` from `rewardPool`.
      */
     function openDispute(uint256 milestoneId) external payable nonReentrant {
         address[3] memory none;
@@ -564,8 +581,10 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
     /**
      * @notice Select up to MAX_ARBITERS arbiters for a new round: preferred
-     *         nominees first (when eligible), then random fill. Reverts if
-     *         fewer than QUORUM are available.
+     *         nominees first (when eligible), then random fill. Reverts only
+     *         when the roster cannot staff the round at all (zero arbiters);
+     *         a 1- or 2-arbiter panel is a degraded round that decides on
+     *         `_requiredReveals` instead of the 2-of-3 QUORUM.
      * @dev    Randomness caveat: see the contract-level note. Draws are without
      *         replacement from the eligible set.
      */
@@ -592,7 +611,10 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         }
         count = _selectArbiters(milestoneId, m.client, m.freelancer, round, picked, count);
 
-        if (count < QUORUM) revert NotEnoughArbiters(count);
+        // Availability over panel size: a thin roster opens a degraded round
+        // rather than trapping the milestone (see DEGRADED ROUNDS). Zero
+        // arbiters is the only unrecoverable case — there is nobody to judge.
+        if (count == 0) revert NotEnoughArbiters(0);
 
         Round storage r = rounds_[milestoneId][round];
         r.arbiters = picked;
@@ -637,7 +659,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         uint8 count
     ) private view returns (uint8) {
         uint256 len = _rosterLength();
-        if (len < QUORUM) return 0; // not enough arbiters to ever reach quorum
+        if (len == 0) return 0; // empty roster: no round can be staffed (parties are drawn from it too)
 
         uint256 seed = uint256(
             keccak256(
@@ -646,7 +668,10 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         );
 
         uint256 start = seed % len;
-        uint256 stride = (seed % (len - 1)) + 1; // 1..len-1, co-prime-friendly walk
+        // 1..len-1, co-prime-friendly walk. A single-entry roster has no
+        // meaningful stride (and `len - 1` would be a division by zero), so
+        // step by 1 — the loop then visits index 0 on every pass.
+        uint256 stride = len == 1 ? 1 : (seed % (len - 1)) + 1;
         uint256 scanned;
 
         while (count < MAX_ARBITERS && scanned < len * POOL_SCAN) {
@@ -825,7 +850,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         uint8 reveals = r.revealCount;
 
         // ── No-quorum fallback: refund the opener, back to Submitted ──────────
-        if (reveals < QUORUM) {
+        if (reveals < _requiredReveals(r)) {
             r.winningOutcome = uint8(Outcome.Refund);
             _releaseActive(r.arbiters, r.arbiterCount);
             uint256 refund = d.fee;
@@ -923,6 +948,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      *      arbiter's staked collateral at the time they were drawn. Rounding
      *      dust is retained in rewardPool rather than lost (same policy as the
      *      former flat split).
+     *
+     *      A degraded 1-arbiter round has no minority and no non-revealers, so
+     *      that single arbiter takes the whole pot. The stake floor plus the
+     *      ±score deltas are what keep that from being free money: a lone
+     *      arbiter who rules badly is slashed by reputation, not by this split.
      */
     function _distributeRewards(uint256 milestoneId, Dispute storage d, Round storage r, uint8 winner) private {
         // Pass 1 — total stake weight of the winning (revealed-majority) set.
@@ -933,11 +963,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         }
         if (totalWeight == 0) totalWeight = 1; // defensive; cannot happen with quorum
 
-        // Reward pot = dispute fee + a protocol subsidy drawn from `rewardPool`.
-        // The subsidy MATCHES the opener's fee, capped at 1x it, so a single
-        // dispute can at most double the pot and can never drain the pool. It
-        // needs no configuration: it scales with the fee the user actually paid.
-        uint256 subsidy = rewardPool < d.fee ? rewardPool : d.fee;
+        // Reward pot = the opener's fee (0 when disputes are free) + the
+        // protocol's `disputeReward`, drawn from `rewardPool`. The draw is
+        // capped at the pool balance, so a single dispute can never drain it
+        // and a dry pool simply pays the arbiters from the fee alone.
+        uint256 subsidy = rewardPool < disputeReward ? rewardPool : disputeReward;
         if (subsidy > 0) {
             rewardPool -= subsidy;
             emit RewardSubsidized(milestoneId, subsidy);
@@ -976,10 +1006,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * @notice A party appeals a settled decision within `appealWindow`, paying a
-     *         further dispute fee. A fresh round of (re-selected) arbiters runs;
-     *         if the result differs from the original, the original majority is
-     *         penalised −25 each (REASON_OVERTURNED).
+     * @notice A party appeals a settled decision within `appealWindow`, paying
+     *         the same `disputeFee` (0 while disputes are free). A fresh round of
+     *         (re-selected) arbiters runs; if the result differs from the
+     *         original, the original majority is penalised −25 each
+     *         (REASON_OVERTURNED).
      * @dev    The milestone stays Disputed across an appeal; the appeal round
      *         re-runs commit → reveal → resolve.
      */
@@ -1036,7 +1067,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
         // Only a quorum decision can overturn; a no-quorum appeal falls back and
         // returns the milestone to Submitted (no overturn to score).
-        if (m.status == Status.Disputed && r.revealCount >= QUORUM) {
+        if (m.status == Status.Disputed && r.revealCount >= _requiredReveals(r)) {
             bool overturned = r.winningOutcome != prevOutcome;
             emit AppealResolved(milestoneId, round, overturned);
             if (overturned) {
@@ -1085,11 +1116,22 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         emit PlatformFeeUpdated(old, newFeeBps);
     }
 
-    /// @notice Set the dispute fee for FUTURE disputes.
+    /// @notice Set the dispute fee for FUTURE disputes (0 = free).
     function setDisputeFee(uint256 newFee) external onlyOwner {
         uint256 old = disputeFee;
         disputeFee = newFee;
         emit DisputeFeeUpdated(old, newFee);
+    }
+
+    /**
+     * @notice Set the protocol-funded arbiter reward per dispute.
+     * @dev The pot is drawn from `rewardPool`, so this sets the per-dispute
+     *      ceiling, not a mint: it can never pay out more than the pool holds.
+     */
+    function setDisputeReward(uint256 newReward) external onlyOwner {
+        uint256 old = disputeReward;
+        disputeReward = newReward;
+        emit DisputeRewardUpdated(old, newReward);
     }
 
     /**
@@ -1100,9 +1142,10 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         _setTrustedForwarder(forwarder_);
     }
 
-    /// @notice Fund the reward pool. Each subsequent dispute draws a matching
-    ///         subsidy from it (capped at 1x the dispute fee), so this is a
-    ///         standing per-dispute top-up rather than a one-off.
+    /// @notice Fund the reward pool — the protocol's arbiter budget. Each dispute
+    ///         draws up to `disputeReward` from it (free disputes pay the
+    ///         arbiters entirely out of this), so this is a standing per-dispute
+    ///         top-up rather than a one-off.
     function depositRewards() external payable {
         if (msg.value == 0) revert ZeroAmount();
         rewardPool += msg.value;
@@ -1225,6 +1268,14 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
             if (r.arbiters[i] == a) return true;
         }
         return false;
+    }
+
+    /// @dev Reveals a round needs before it can decide: the 2-of-3 QUORUM, or the
+    ///      whole seated panel when a degraded round could not staff that many.
+    ///      A 1-arbiter round therefore decides on one reveal; a full panel is
+    ///      unchanged at 2. Never returns 0 — `_startRound` refuses empty rounds.
+    function _requiredReveals(Round storage r) private view returns (uint8) {
+        return r.arbiterCount < QUORUM ? r.arbiterCount : QUORUM;
     }
 
     /// @dev Highest tally wins; a tie resolves to Split (index 2) for fairness.

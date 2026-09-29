@@ -1,13 +1,10 @@
 /**
- * Drawdown funding model — fundAllFromCredit → fundFromCredit → unlockBudget.
+ * Drawdown funding model — lockBudget → fundFromCredit → unlockBudget.
  *
- * The job budget is locked exactly once, by the client's first funding
- * signature: either a standalone `lockBudget`, or `fundAllFromCredit` with the
- * value attached (the award path, when the job was never pre-funded). Every
- * later milestone of that job is funded from the locked balance (one wallet
- * round, not one per milestone). Per-job balance sheet: reserved + paidOut <=
- * locked; the free balance (locked - paidOut - reserved) is what may be drawn
- * or unlocked.
+ * The client locks the full job budget once at publish; every milestone of that
+ * job is funded from the locked balance (one wallet round, not one per
+ * milestone). Per-job balance sheet: reserved + paidOut <= locked; the free
+ * balance (locked - paidOut - reserved) is what may be drawn or unlocked.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -149,19 +146,10 @@ describe("Escrow drawdown model", function () {
     assert.equal((await escrow.read.getMilestone([1n])).amount, parseEther("0.6"));
     assert.equal((await escrow.read.getMilestone([2n])).amount, parseEther("0.4"));
 
-    // A locked job draws from credit, so it must not take ETH with the call.
-    await assert.rejects(
-      () => escrow.write.fundAllFromCredit([JOB_REF, [MILESTONE_A], [freelancer.account.address], [parseEther("0.1")]], {
-        value: parseEther("0.1"),
-        account: client.account,
-      }),
-      /ValueMismatch/,
-    );
-
-    // All-or-nothing: a batch for a job nobody funded carries no value to lock.
+    // All-or-nothing: a batch that overdraws the free balance reverts entirely.
     await assert.rejects(
       () => escrow.write.fundAllFromCredit([OTHER_JOB, refs, frees, amounts], { account: client.account }),
-      /ValueMismatch/,
+      /NoBudgetLocked/,
     );
 
     // Only the locker may batch-fund.
@@ -177,51 +165,27 @@ describe("Escrow drawdown model", function () {
     );
   });
 
-  it("locks and funds in one signature when the job was never pre-funded", async function () {
-    const { escrow, client, freelancer, outsider } = await deployWithEoaOwner();
+  it("returns an under-ceiling award's surplus without unbacking the milestones", async function () {
+    const { escrow, client, freelancer } = await deployWithEoaOwner();
 
-    const refs = [MILESTONE_A, MILESTONE_B];
-    const frees = [freelancer.account.address, freelancer.account.address];
-    const amounts = [parseEther("0.6"), parseEther("0.4")];
-
-    // No lockBudget first: the attached value becomes the lock, so the client
-    // signs the awarded price once and the batch is funded by it.
-    await escrow.write.fundAllFromCredit([JOB_REF, refs, frees, amounts], { value: BUDGET, account: client.account });
-
-    assert.equal(await escrow.read.lockedBudget([JOB_REF]), BUDGET);
-    assert.equal(getAddress(await escrow.read.budgetLocker([JOB_REF])), getAddress(client.account.address));
-    assert.equal(await escrow.read.reservedBudget([JOB_REF]), BUDGET);
-    assert.equal((await escrow.read.getMilestone([1n])).amount, parseEther("0.6"));
-    assert.equal((await escrow.read.getMilestone([2n])).amount, parseEther("0.4"));
-    // Nothing free remains — the whole bid is committed, so there is no surplus
-    // left to unlock after the award.
-    assert.equal(await escrow.read.lockedBudget([JOB_REF]) - await escrow.read.reservedBudget([JOB_REF]), 0n);
-
-    // A partial lock would under-write the milestones the client approved.
-    await assert.rejects(
-      () => escrow.write.fundAllFromCredit(
-        [OTHER_JOB, [MILESTONE_A], [freelancer.account.address], [parseEther("0.5")]],
-        { value: parseEther("0.4"), account: client.account },
-      ),
-      /ValueMismatch/,
+    await escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account });
+    // The accepted bid (0.8) is below the 1.0 ceiling the client locked.
+    await escrow.write.fundAllFromCredit(
+      [JOB_REF, [MILESTONE_A, MILESTONE_B], [freelancer.account.address, freelancer.account.address], [parseEther("0.5"), parseEther("0.3")]],
+      { account: client.account },
     );
-    assert.equal(await escrow.read.lockedBudget([OTHER_JOB]), 0n);
 
-    // The reverts above reserved nothing, so the same job is still fundable —
-    // and the locker it creates is the client, not the outsider.
-    await escrow.write.fundAllFromCredit([OTHER_JOB, [MILESTONE_A], [freelancer.account.address], [parseEther("0.3")]], {
-      value: parseEther("0.3"),
-      account: client.account,
-    });
-    assert.equal(getAddress(await escrow.read.budgetLocker([OTHER_JOB])), getAddress(client.account.address));
-    assert.equal(await escrow.read.lockedBudget([OTHER_JOB]) - await escrow.read.reservedBudget([OTHER_JOB]), 0n);
+    // Free is now exactly ceiling − bid: the gap the client is owed back.
+    assert.equal(await escrow.read.reservedBudget([JOB_REF]), parseEther("0.8"));
+    const before = await escrowBalance(escrow);
+    await escrow.write.unlockBudget([JOB_REF, parseEther("0.2")], { account: client.account });
+    assert.equal(await escrowBalance(escrow), before - parseEther("0.2"));
+
+    // The 0.8 backing both live milestones stayed locked; the free balance is 0.
+    assert.equal(await escrow.read.reservedBudget([JOB_REF]), parseEther("0.8"));
+    assert.equal(await escrow.read.paidOutBudget([JOB_REF]), parseEther("0.2"));
     await assert.rejects(
-      () => escrow.write.fundFromCredit([OTHER_JOB, MILESTONE_B, freelancer.account.address, parseEther("0.1")], { account: outsider.account }),
-      /NotClient/,
-    );
-    // Award locks exactly the bid, so no further draw is possible on this job.
-    await assert.rejects(
-      () => escrow.write.fundFromCredit([OTHER_JOB, MILESTONE_B, freelancer.account.address, parseEther("0.1")], { account: client.account }),
+      () => escrow.write.unlockBudget([JOB_REF, parseEther("0.1")], { account: client.account }),
       /InsufficientBudget/,
     );
   });
@@ -230,7 +194,7 @@ describe("Escrow drawdown model", function () {
     const { escrow, client, freelancer } = await deployWithEoaOwner();
 
     await escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account });
-    // 0.7 + 0.5 = 1.2 > the 1.0 free balance → the whole batch must revert, nothing reserved.
+    // 0.7 + 0.5 = 1.2 > 1.0 → the whole batch must revert, nothing reserved.
     await assert.rejects(
       () => escrow.write.fundAllFromCredit(
         [JOB_REF, [MILESTONE_A, MILESTONE_B], [freelancer.account.address, freelancer.account.address], [parseEther("0.7"), parseEther("0.5")]],

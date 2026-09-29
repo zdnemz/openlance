@@ -66,9 +66,9 @@ attacker contract**, none in our production logic:
 8. **Parties never arbitrate.** Selection explicitly excludes the milestone's
    client and freelancer, and draws only from arbiters the registry reports as
    eligible (`test/disputes.ts`).
-9. **Stake is real skin.** A 2-of-3 quorum is impossible without a staked,
-   non-benched roster, so a dispute cannot be opened unless ≥ 2 eligible
-   arbiters exist (`test/disputes.ts`).
+9. **Stake is real skin.** A dispute cannot be opened at all unless ≥ 1 eligible,
+   staked, non-benched arbiter exists (`test/disputes.ts`). On a healthy roster
+   that is a 2-of-3 quorum.
 10. **Locked stakes.** Below `minScoreToWithdraw`, `requestUnstake`/`withdrawStake`
     revert with `StakeIsLocked` and the arbiter is dropped from selection
     (`test/registry.ts`).
@@ -78,8 +78,15 @@ attacker contract**, none in our production logic:
     must match (`keccak256(encode(outcome, salt, arbiter, milestoneId, round))`),
     so votes cannot be copied (`test/disputes.ts`).
 13. **Quorum + fallback.** 2-of-3 suffices; a missing third is a `−15` miss and
-    the other two decide. Fewer than 2 reveals → refund fallback to `Submitted`
-    (`test/disputes.ts`).
+    the other two decide. Fewer reveals than the round requires → refund
+    fallback to `Submitted` (`test/disputes.ts`).
+14. **Degraded panels decide on their own size.** When the roster cannot staff a
+    full panel, the round still opens (down to one arbiter) and the threshold
+    drops to the seated count — a 1-arbiter round is decided by that one vote
+    (`test/disputes.ts`). This deliberately trades verification strength for
+    availability; the offsetting controls are the `minStake` floor, the
+    `±5/−10/−15` score deltas, and the appeal window. It should be revisited
+    once the roster is reliably deep.
 14. **Scores bound to [0,100].** Majority `+5` (cap 100), minority `−10`,
     missed `−15`, overturned `−25` — applied only by the escrow
     (`test/registry.ts`, `test/disputes.ts`).
@@ -95,8 +102,13 @@ attacker contract**, none in our production logic:
 - **On-chain randomness is weak.** `prevrandao` + block metadata is
   producer-influenceable. The exposure is bounded: a biased producer can only
   reorder *which eligible, non-party* arbiters are drawn, and the money is still
-  gated by the commit-reveal 2-of-3 quorum and by staking/slashing. Mainnet
-  should migrate to Chainlink VRF via an upgrade.
+  gated by the commit-reveal quorum (2-of-3 on a healthy roster) and by
+  staking/slashing. Mainnet should migrate to Chainlink VRF via an upgrade.
+- **A degraded round is one vote.** When fewer than 2 arbiters are eligible the
+  panel shrinks rather than blocking the dispute, so a single arbiter can decide
+  a milestone. Availability is the deliberate trade; it also means a thin roster
+  concentrates real decision power in whoever showed up, which is a reason to
+  keep `minStake` meaningful and to grow the roster.
 - **Owner is trusted.** The timelock owner can change fees/parameters, the
   treasury, the arbiter registry pointer, and upgrade. The timelock delay + a
   Safe multisig (mainnet) are the mitigations; there is no on-chain veto yet.

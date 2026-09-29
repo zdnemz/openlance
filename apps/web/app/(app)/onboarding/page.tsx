@@ -8,15 +8,20 @@
  * stake page), never upfront.
  * Step state derives from the server user + a local confirm flag, so a
  * reload resumes where the user left off.
+ *
+ * There is no "you're in" step to click through: the KYC response stamps
+ * `el_onboarded`, and `enterApp` is a full document load so the edge proxy —
+ * the one owner of the gate — decides where a finished user goes. A soft
+ * `router.push` would stay on this page and re-derive the answer client-side,
+ * which is what left users parked on a dead-end panel.
  */
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { post } from "@/lib/api";
 import { useSession, useSessionHydrated } from "@/lib/session";
 import { useWallet, useWalletHydrated } from "@/lib/wallet";
 import { ConnectPanel } from "@/components/wallet/connect-panel";
-import { ROLES, TIER_NAMES } from "@/lib/roles";
-import { useMyArbiterState } from "@/lib/register-arbiter";
+import { ROLES } from "@/lib/roles";
+import { ROLE_HOME } from "@/lib/role-routes";
 import { COUNTRIES } from "@/lib/countries";
 import { press } from "@/components/design";
 import type { PublicUser, UserRole } from "@/lib/types";
@@ -27,11 +32,8 @@ import {
 import { toast } from "sonner";
 
 export default function OnboardingPage() {
-  const router = useRouter();
   const session = useSession();
   const walletAddress = useWallet((s) => s.address);
-  // Arbiter tier comes from the live registry, never a DB mirror.
-  const { state: arbiterState } = useMyArbiterState();
   const sessionHydrated = useSessionHydrated();
   const walletHydrated = useWalletHydrated();
   const hydrated = sessionHydrated && walletHydrated;
@@ -46,10 +48,22 @@ export default function OnboardingPage() {
   const user = session.user;
   const step =
     !walletAddress || !session.token ? 1
-    : user?.kycStatus === "verified" ? 4
     : user?.kycStatus === "pending" ? 3
     : roleConfirmed ? 3
     : 2;
+
+  /**
+   * Hand the routing decision to the edge proxy.
+   *
+   * `location.assign` (not `router.push`) is load-bearing: the KYC response
+   * only just set the gate cookie, and a soft navigation can be served from
+   * the client router cache without ever re-running the proxy. A document load
+   * always does — so the proxy sends a verified user to the seat home, and
+   * bounces an unfinished one straight back here.
+   */
+  function enterApp() {
+    window.location.assign(ROLE_HOME);
+  }
 
   return (
     <div className="mx-auto max-w-2xl py-10">
@@ -86,35 +100,7 @@ export default function OnboardingPage() {
         )}
 
         {step === 3 && user && (
-          <KycStep user={user} busy={busy} setBusy={setBusy} onDone={() => router.push("/dashboard")} onBack={() => setRoleConfirmed(false)} />
-        )}
-
-        {step === 4 && user && (
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-medium">
-              <SealCheck weight="fill" className="h-5 w-5 text-state-released" /> You&apos;re in as {user.role}
-            </h2>
-            <p className="mt-1 text-sm text-dim">
-              KYC {user.kycStatus} · tier {TIER_NAMES[(arbiterState?.tier ?? 0) as 0 | 1 | 2 | 3] ?? "Unstaked"}.
-              {user.role === "arbiter" ? " Stake collateral when you open disputes — not before." : ""}
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => router.push(user.role === "arbiter" ? "/stake" : "/dashboard")}
-                className="rounded-full bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright"
-              >
-                {user.role === "arbiter" ? "Review stake tiers" : "Enter app"}
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push("/dashboard")}
-                className="rounded-full border border-line px-5 py-2.5 text-sm text-dim hover:text-foreground"
-              >
-                Dashboard
-              </button>
-            </div>
-          </div>
+          <KycStep user={user} busy={busy} setBusy={setBusy} onDone={enterApp} onBack={() => setRoleConfirmed(false)} />
         )}
       </div>
     </div>
@@ -227,7 +213,12 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
       session.setUser(res.user);
       setSubmitted({ fullName: fullName.trim(), country: country.trim(), ...(user.role !== "client" ? { idType, idNumber: idNumber.trim() } : {}) });
       toast.success(res.autoVerified ? "KYC verified (simulated)" : "KYC submitted (simulated)");
-      onDone?.();
+      // Only leave once the server actually verified. A freelancer/arbiter
+      // submission comes back `pending` (this role's cookie is stamped
+      // el_onboarded=0), so navigating here would bounce straight back through
+      // the proxy and throw away the review details we just rendered. They
+      // leave via the reviewer-approval path instead.
+      if (res.user.kycStatus === "verified") onDone?.();
     } catch (err) {
       toast.error("KYC failed", { description: err instanceof Error ? err.message : "Unknown error" });
     } finally {

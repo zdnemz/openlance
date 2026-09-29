@@ -134,7 +134,7 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'ArbiterPenalized': return null // ledger-only; scores live on-chain
     case 'FeeWithdrawn': return null // ledger-only
     case 'BudgetLocked':
-    case 'BudgetUnlocked': return null // drawdown: ledger-only (the award signature carries the lock)
+    case 'BudgetUnlocked': return null // drawdown: ledger-only (publish verifies the lock tx directly)
     case 'FundsWithdrawn': return applyWithdrawn(tx, evt)
     // ── Registry events: NO off-chain arbiter table to mirror. Scores, stakes
     //    and the roster are read live from the contract. Only the registry's

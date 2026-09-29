@@ -67,7 +67,13 @@ async function main() {
   const unstakeCooldown = BigInt(process.env.UNSTAKE_COOLDOWN_SECONDS ?? (local ? "60" : String(3 * 86400)));
   const treasury = (process.env.TREASURY ?? finalAdmin) as `0x${string}`;
   const sponsorshipWallet = (process.env.SPONSORSHIP_WALLET ?? treasury) as `0x${string}`;
-  const disputeFee = BigInt(process.env.DISPUTE_FEE_WEI ?? parseEther("0.05"));
+  // Opening a dispute is free by default; the protocol pays the arbiters from
+  // its reward pool instead (see `disputeReward` below). DISPUTE_FEE_WEI still
+  // overrides it for a deployment that wants an opener fee.
+  const disputeFee = BigInt(process.env.DISPUTE_FEE_WEI ?? 0n);
+  // Per-dispute arbiter pot drawn from `rewardPool`. Ignored when disputeFee is
+  // non-zero and the opener's fee already funds the pot.
+  const disputeReward = BigInt(process.env.DISPUTE_REWARD_WEI ?? (disputeFee === 0n ? parseEther("0.05") : 0n));
   const commitWindow = BigInt(process.env.COMMIT_WINDOW_SECONDS ?? (local ? "120" : "86400")); // 24h
   const revealWindow = BigInt(process.env.REVEAL_WINDOW_SECONDS ?? (local ? "120" : "86400")); // 24h
   const appealWindow = BigInt(process.env.APPEAL_WINDOW_SECONDS ?? (local ? "600" : "172800")); // 48h
@@ -85,7 +91,8 @@ async function main() {
   console.log(`  min score:      ${minScoreToWithdraw}`);
   console.log(`  min stake time: ${minStakeDuration}s`);
   console.log(`  unstake cooldown: ${unstakeCooldown}s`);
-  console.log(`  dispute fee:    ${formatEther(disputeFee)} ETH`);
+  console.log(`  dispute fee:    ${formatEther(disputeFee)} ETH${disputeFee === 0n ? " (free — the protocol funds the arbiters)" : ""}`);
+  console.log(`  dispute reward: ${formatEther(disputeReward)} ETH (from rewardPool)`);
   console.log(`  windows (c/r/a): ${commitWindow}s / ${revealWindow}s / ${appealWindow}s`);
   console.log(`  treasury:       ${treasury}`);
   console.log(`  sponsorship:    ${sponsorshipWallet}`);
@@ -138,7 +145,7 @@ async function main() {
       registry.address, // arbiterRegistry
       timelock.address, // owner
       feeBps, // platform fee
-      disputeFee, // minimum dispute fee
+      disputeFee, // minimum dispute fee (0 = free)
       treasury, // treasury
       sponsorshipWallet, // sponsorship (50% of every fee split)
       commitWindow, // commit window
@@ -150,26 +157,43 @@ async function main() {
   );
   console.log(`✓ Escrow proxy                ${escrow.address}`);
 
-  // ── 4. Wire registry.setEscrow(escrow) through the timelock ───────────────
-  // setEscrow is onlyOwner; owner is the timelock, so it must be scheduled.
-  const registryAbi = registry.abi;
-  const calldata = encodeFunctionData({
-    abi: registryAbi,
-    functionName: "setEscrow",
-    args: [escrow.address],
-  });
+  // ── 4. Owner-only wiring through the timelock ──────────────────────────────
+  // Both contracts are owned by the timelock, so `registry.setEscrow` and
+  // `escrow.setDisputeReward` must be scheduled. They are independent calls on
+  // different targets, so one `minDelay` wait covers both.
+  const queued: { label: string; target: `0x${string}`; data: `0x${string}`; salt: `0x${string}` }[] = [
+    {
+      label: "registry.setEscrow(escrow)",
+      target: registry.address,
+      data: encodeFunctionData({ abi: registry.abi, functionName: "setEscrow", args: [escrow.address] }),
+      salt: "0x" + "00".repeat(32),
+    },
+    {
+      label: `escrow.setDisputeReward(${formatEther(disputeReward)} ETH)`,
+      target: escrow.address,
+      data: encodeFunctionData({ abi: escrow.abi, functionName: "setDisputeReward", args: [disputeReward] }),
+      salt: "0x" + "00".repeat(32),
+    },
+  ];
 
-  const salt = ("0x" + "00".repeat(32)) as `0x${string}`;
+  // The timelock keys an operation by (target, value, data, predecessor, salt),
+  // so a distinct salt per op keeps a re-run from colliding with a pending one.
+  // Each op carries its own salt so `execute-timelock.ts` can claim it later.
   const predecessor = ("0x" + "00".repeat(32)) as `0x${string}`;
+  for (const [i, op] of queued.entries()) {
+    op.salt = ("0x" + (i + 1).toString(16).padStart(2, "0").repeat(32)) as `0x${string}`;
+  }
 
-  console.log(`\n→ Scheduling registry.setEscrow(escrow) via timelock…`);
-  const scheduleHash = await timelock.write.schedule(
-    [registry.address, 0n, calldata, predecessor, salt, minDelay],
-    { account: deployer.account },
-  );
-  await publicClient.waitForTransactionReceipt({ hash: scheduleHash });
+  console.log(`\n→ Scheduling owner wiring via timelock…`);
+  for (const op of queued) {
+    const hash = await timelock.write.schedule([op.target, 0n, op.data, predecessor, op.salt, minDelay], {
+      account: deployer.account,
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+    console.log(`  scheduled ${op.label} (tx ${hash})`);
+  }
   const eta = BigInt(Math.floor(Date.now() / 1000)) + minDelay + 5n;
-  console.log(`  scheduled (tx ${scheduleHash}), eta ≈ ${eta}`);
+  console.log(`  eta ≈ ${eta}`);
 
   if (local) {
     // Local networks: we can advance time, but anvil/hardhat may not allow it
@@ -177,21 +201,26 @@ async function main() {
     console.log(`  waiting ${minDelay}s for the timelock…`);
     await new Promise((r) => setTimeout(r, Number(minDelay) * 1000 + 2000));
   } else {
-    console.log(
-      `\n  ⏳ On a public network the 48h delay must elapse before executing.\n` +
-        `     After it does, claim the wiring with:\n\n` +
-        `     npx hardhat run scripts/execute-timelock.ts --network ${networkName}\n`,
-    );
+    console.log(`\n  ⏳ On a public network the 48h delay must elapse before executing.`);
+    for (const op of queued) {
+      console.log(
+        `\n  ${op.label}:\n` +
+          `    TIMELOCK_ADDRESS=${timelock.address} TARGET=${op.target} \\\n` +
+          `    CALLDATA=${op.data} SALT=${op.salt} \\\n` +
+          `    npx hardhat run scripts/execute-timelock.ts --network ${networkName}`,
+      );
+    }
     printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, forwarder: forwarder.address, finalAdmin, networkName });
     return;
   }
 
-  const execHash = await timelock.write.execute(
-    [registry.address, 0n, calldata, predecessor, salt],
-    { account: deployer.account },
-  );
-  await publicClient.waitForTransactionReceipt({ hash: execHash });
-  console.log(`✓ registry.setEscrow wired (tx ${execHash})`);
+  for (const op of queued) {
+    const hash = await timelock.write.execute([op.target, 0n, op.data, predecessor, op.salt], {
+      account: deployer.account,
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+    console.log(`✓ ${op.label} (tx ${hash})`);
+  }
 
   printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, forwarder: forwarder.address, finalAdmin, networkName });
 }

@@ -34,19 +34,29 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
 
   const signedIn = !!session.token && !!address && session.boundAddress === address.toLowerCase();
 
+  // A write moves the balance without changing `address`, so reading once on
+  // connect left the pill showing the pre-transaction number (a deposit looked
+  // like it never left the wallet). Re-read on a slow tick and on focus.
   useEffect(() => {
     if (!address) {
       setBalance(null);
       return;
     }
     let alive = true;
-    void fetchBalance(address)
-      .then((wei) => {
-        if (alive) setBalance((Number(wei) / 1e18).toFixed(2));
-      })
-      .catch(() => {});
+    const read = () => {
+      void fetchBalance(address)
+        .then((wei) => {
+          if (alive) setBalance((Number(wei) / 1e18).toFixed(2));
+        })
+        .catch(() => {});
+    };
+    read();
+    const tick = setInterval(read, 10_000);
+    window.addEventListener("focus", read);
     return () => {
       alive = false;
+      clearInterval(tick);
+      window.removeEventListener("focus", read);
     };
   }, [address]);
 

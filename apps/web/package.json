@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check:login": "tsx scripts/check-login-signatures.ts",
-    "check:eip712": "tsx scripts/check-eip712-payload.ts"
+    "check:eip712": "tsx scripts/check-eip712-payload.ts",
+    "check:gasless": "tsx scripts/check-gasless-value.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
