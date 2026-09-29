@@ -61,6 +61,7 @@ import * as rprojectsIdArbitersPropose from './routes/projects/[id]/arbiters/pro
 import * as rprojectsIdArbitersReject from './routes/projects/[id]/arbiters/reject/route.ts'
 import * as rprojectsIdAttachments from './routes/projects/[id]/attachments/route.ts'
 import * as rprojectsIdMessages from './routes/projects/[id]/messages/route.ts'
+import * as rprojectsIdMessagesRead from './routes/projects/[id]/messages/read/route.ts'
 import * as rprojectsIdMilestones from './routes/projects/[id]/milestones/route.ts'
 import * as rprojectsIdMilestonesMidDisputes from './routes/projects/[id]/milestones/[mid]/disputes/route.ts'
 import * as rprojectsIdMilestonesMidRequestChanges from './routes/projects/[id]/milestones/[mid]/request-changes/route.ts'
@@ -147,6 +148,7 @@ export const ROUTES: Array<[string, string, RouteHandler]> = [
   ['POST', '/api/projects/:id/attachments', rprojectsIdAttachments.POST],
   ['GET', '/api/projects/:id/messages', rprojectsIdMessages.GET],
   ['POST', '/api/projects/:id/messages', rprojectsIdMessages.POST],
+  ['POST', '/api/projects/:id/messages/read', rprojectsIdMessagesRead.POST],
   ['GET', '/api/projects/:id/milestones', rprojectsIdMilestones.GET],
   ['POST', '/api/projects/:id/milestones/:mid/disputes', rprojectsIdMilestonesMidDisputes.POST],
   ['DELETE', '/api/projects/:id/milestones/:mid/disputes', rprojectsIdMilestonesMidDisputes.DELETE],

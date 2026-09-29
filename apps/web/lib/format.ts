@@ -67,6 +67,16 @@ export function timeAgo(iso: string | Date | null | undefined): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
+/** Wall-clock time for a chat bubble: 14:07 today, "Mar 3" once it is not. */
+export function clockTime(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return "";
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return d.toLocaleTimeString("en-GB", sameDay
+    ? { hour: "2-digit", minute: "2-digit" }
+    : { month: "short", day: "numeric" });
+}
+
 export function dateLabel(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

@@ -266,6 +266,25 @@ export const messages = pgTable('messages', {
 ])
 
 /**
+ * How far each participant has read, one row per (project, viewer). It lives
+ * here instead of a `read_at` on `messages` so the evidence log stays literally
+ * append-only: reading never mutates a message, it moves a viewer-side
+ * watermark. `read_through` is a timestamp rather than a message id because
+ * that is the same cursor `listMessages` already paginates with, and because a
+ * 1:1 room only needs the boundary, not a row per message per reader.
+ *
+ * Not evidence: it records what someone's screen showed, nothing more.
+ */
+export const messageReadCursors = pgTable('message_read_cursors', {
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  /** Messages created at or before this have been seen. */
+  readThrough: timestamp('read_through', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.projectId, t.userId] }),
+])
+
+/**
  * One file store for two owners. A project file (deliverable, submission
  * evidence) and a proposal file (a bid's supporting material, attached before
  * any project exists) are the same bytes in the same bucket, so they share the
@@ -537,6 +556,7 @@ export type Proposal = typeof proposals.$inferSelect
 export type Project = typeof projects.$inferSelect
 export type ProjectMilestone = typeof projectMilestones.$inferSelect
 export type Message = typeof messages.$inferSelect
+export type MessageReadCursor = typeof messageReadCursors.$inferSelect
 export type Attachment = typeof attachments.$inferSelect
 export type Submission = typeof submissions.$inferSelect
 export type Review = typeof reviews.$inferSelect

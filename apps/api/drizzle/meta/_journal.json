@@ -50,6 +50,13 @@
       "when": 1790627841788,
       "tag": "0006_drop_job_template_proposal_files",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790630000000,
+      "tag": "0008_message_read_cursors",
+      "breakpoints": true
     }
   ]
 }

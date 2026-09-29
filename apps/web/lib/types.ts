@@ -146,6 +146,8 @@ export interface MessageView {
   body: string;
   attachmentId: string | null;
   createdAt: string;
+  /** Only ever true on your own messages: the counterparty's cursor is past this one. */
+  readByOther: boolean;
 }
 
 export interface SubmissionView {

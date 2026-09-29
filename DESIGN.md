@@ -47,6 +47,7 @@ editorial, own-world voice against the technical mono data.
 - `AddressAvatar` — deterministic geometry from address bits.
 - `EmptyState` — dashed hairline container, honest copy, one action.
 - `press` — standardized tactile press (translate-y + scale).
+- `MessageBubble` (project room chat) — the one place a rounded shape is allowed inside another rounded shape, because a conversation is not a list. Own messages right on `rose-soft` at low alpha, counterparty left on neutral; the accent stays near-mono so a thread of own-messages never floods the page.
 
 ## Rules (detector + craft-floor enforced)
 
@@ -63,3 +64,4 @@ editorial, own-world voice against the technical mono data.
 - `hairline-grid` hero backdrop: detector advisory (generated-UI signature risk) — kept deliberately; ledger-paper grid is the product's own metaphor under the escrow instrument, masked to the hero only.
 - `layout-transition` rule ignored project-wide (documented in `.impeccable/config.json`): the only height-transition CSS in the app is sonner's runtime-injected `[data-sonner-toast]` stack-expansion mechanic, not our stylesheet.
 - Project room `/projects/[id]`: the live URL detector reports 2 residual `nested-cards` findings that do not exist in the rendered DOM — computed-style probes of the authenticated page find zero boxed-in-boxed elements, the frozen authenticated DOM snapshot scans clean, and every suspect pattern (pills, buttons, inputs, avatars, bubbles in cards) tests clean in isolation. Treated as a measurement artifact of the detector's own browsing session.
+- Project room chat tab: the `nested-cards` detector will fire on message bubbles and this time it is **real** — a bubble is a rounded box inside the pane's rounded box. Kept deliberately: a conversation rendered as a flat ledger table is the thing this replaced. The exemption is scoped to `.glass .rounded-2xl` inside the chat thread, and the pane stops being a card everywhere else.
