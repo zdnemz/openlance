@@ -20,7 +20,8 @@ import Link from "next/link";
 import { useUser, useUserReviews, useArbiters, useInvalidate, patch } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { useRuntime } from "@/lib/runtime";
-import { TIER_NAMES, arbiterStanding, roleLabel } from "@/lib/roles";
+import { TIER_NAMES, PROFILE_FORM, arbiterStanding, roleLabel } from "@/lib/roles";
+import type { ProfileField } from "@/lib/roles";
 import {
   AddressAvatar, Chip, EthAmount, ListHead, Skeleton, EmptyState, Copyable, InlineLoading,
 } from "@/components/design";
@@ -30,6 +31,7 @@ import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
 import { PencilSimple } from "@phosphor-icons/react/dist/csr/PencilSimple";
 import { Check } from "@phosphor-icons/react/dist/csr/Check";
 import { X } from "@phosphor-icons/react/dist/csr/X";
+import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -248,29 +250,146 @@ function Stat({ label, value, tone = "text-foreground" }: { label: string; value
   );
 }
 
+type LinkRow = { k: string; v: string };
+
+/**
+ * /users/me — the only editable profile form.
+ *
+ * Edits exactly the fields the card renders: name, links, skills, bio. All four
+ * are present for every seat; PROFILE_FORM decides the wording and the lead
+ * position. `avatarUrl` is deliberately absent from both sides — it is in the
+ * DB and the API contract but nothing renders or sets it, so the card and the
+ * form agree by both ignoring it.
+ */
 function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser }) {
+  const copy = PROFILE_FORM[user.role];
   const [displayName, setDisplayName] = useState(user.displayName ?? "");
   const [bio, setBio] = useState(user.bio ?? "");
   const [skills, setSkills] = useState(user.skills.join(", "));
+  const [links, setLinks] = useState<LinkRow[]>(
+    Object.entries(user.links ?? {}).map(([k, v]) => ({ k, v })),
+  );
   const [saving, setSaving] = useState(false);
   const invalidate = useInvalidate();
 
-  return (
-    <div className="mt-5 space-y-4 border-t border-line pt-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+  const setLink = (i: number, patch: Partial<LinkRow>) =>
+    setLinks((rows) => rows.map((r, n) => (n === i ? { ...r, ...patch } : r)));
+
+  /** Blank rows are dropped; a half-filled row is an error, not a silent skip. */
+  function collectLinks(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const r of links) {
+      const k = r.k.trim();
+      const v = r.v.trim();
+      if (!k && !v) continue;
+      if (!k) throw new Error(`"${v}" needs a label`);
+      try {
+        new URL(v);
+      } catch {
+        throw new Error(`"${v}" is not a valid URL`);
+      }
+      out[k] = v;
+    }
+    return out;
+  }
+
+  const field = (f: ProfileField) => {
+    if (f === "name") {
+      return (
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">Display name</label>
+          <label className="text-[13px] font-medium">{copy.name}</label>
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
         </div>
+      );
+    }
+    if (f === "skills") {
+      return (
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">Skills (comma-separated)</label>
+          <label className="text-[13px] font-medium">{copy.skills} (comma-separated)</label>
           <Input value={skills} onChange={(e) => setSkills(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
         </div>
-      </div>
+      );
+    }
+    if (f === "bio") {
+      return (
+        <div className="space-y-2">
+          <label className="text-[13px] font-medium">{copy.bio}</label>
+          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="resize-none border-line bg-white/[0.03] text-sm" />
+        </div>
+      );
+    }
+    return (
       <div className="space-y-2">
-        <label className="text-[13px] font-medium">Bio</label>
-        <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="resize-none border-line bg-white/[0.03] text-sm" />
+        <div className="flex items-center justify-between">
+          <label className="text-[13px] font-medium">{copy.links}</label>
+          <button
+            type="button"
+            onClick={() => setLinks((rows) => [...rows, { k: "", v: "" }])}
+            className="num text-[11.5px] text-rose-bright hover:underline"
+          >
+            + add
+          </button>
+        </div>
+        {links.length === 0 ? (
+          <p className="num text-[11.5px] text-faint">None yet — the card renders these as labelled links.</p>
+        ) : (
+          <div className="space-y-2">
+            {links.map((r, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={r.k}
+                  onChange={(e) => setLink(i, { k: e.target.value })}
+                  placeholder="label"
+                  aria-label={`${copy.links} label ${i + 1}`}
+                  className="h-10 w-32 shrink-0 border-line bg-white/[0.03] text-sm"
+                />
+                <Input
+                  value={r.v}
+                  onChange={(e) => setLink(i, { v: e.target.value })}
+                  placeholder="https://…"
+                  aria-label={`${copy.links} URL ${i + 1}`}
+                  className="h-10 border-line bg-white/[0.03] text-sm"
+                />
+                <Button
+                  variant="ghost"
+                  onClick={() => setLinks((rows) => rows.filter((_, n) => n !== i))}
+                  aria-label={`Remove ${r.k || `link ${i + 1}`}`}
+                  className="h-10 w-10 shrink-0 rounded-full p-0 text-faint hover:text-state-disputed"
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    );
+  };
+
+  /**
+   * Seat order decides sequence; layout only pairs ADJACENT narrow fields
+   * (name/skills — one input each) onto one row. `links` carries three inputs
+   * and `bio` wants width, so both always take a full row.
+   */
+  const narrow = (f: ProfileField) => f === "name" || f === "skills";
+  const rows: (ProfileField | ProfileField[])[] = [];
+  for (const f of copy.order) {
+    const last = rows[rows.length - 1];
+    if (narrow(f) && Array.isArray(last) && last.length === 1) last.push(f);
+    else rows.push(narrow(f) ? [f] : f);
+  }
+
+  return (
+    <div className="mt-5 space-y-4 border-t border-line pt-6">
+      {rows.map((r, i) =>
+        Array.isArray(r) ? (
+          <div key={i} className="grid gap-4 sm:grid-cols-2">
+            {r.map((f) => <div key={f}>{field(f)}</div>)}
+          </div>
+        ) : (
+          <div key={i}>{field(r)}</div>
+        ),
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <Button
           disabled={saving}
@@ -281,6 +400,7 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
                 displayName: displayName.trim() || undefined,
                 bio: bio.trim() || undefined,
                 skills: skills.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 20),
+                links: collectLinks(),
               });
               invalidate.user(user.walletAddress);
               onDone();

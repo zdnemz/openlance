@@ -16,6 +16,45 @@ export function roleLabel(role: UserRole): string {
   return ROLES.find((r) => r.id === role)?.title ?? role;
 }
 
+/** The four fields the profile form edits — all of them, for every seat. */
+export type ProfileField = "name" | "links" | "skills" | "bio";
+
+/**
+ * Seat-shaped labels and field order for the profile form. All four fields stay
+ * present for every seat — only the wording and the lead position change,
+ * because the card renders all four. Hiding a field here while the card shows
+ * it (or vice versa) is the bug this table exists to prevent.
+ *
+ * The same `skills` column carries a different thing per seat: what you can do
+ * (freelancer), what you hire for (client), what you can rule on (arbiter).
+ */
+export const PROFILE_FORM: Record<UserRole, {
+  name: string; links: string; skills: string; bio: string;
+  order: readonly ProfileField[];
+}> = {
+  client: {
+    name: "Name or company",
+    links: "Links",
+    skills: "Focus areas",
+    bio: "What you hire for",
+    order: ["name", "links", "skills", "bio"],
+  },
+  freelancer: {
+    name: "Display name",
+    links: "Portfolio links",
+    skills: "Skills",
+    bio: "Bio",
+    order: ["name", "skills", "links", "bio"],
+  },
+  arbiter: {
+    name: "Display name",
+    links: "Credentials",
+    skills: "Dispute domains you rule on",
+    bio: "Professional background",
+    order: ["name", "skills", "links", "bio"],
+  },
+};
+
 /**
  * An arbiter's current availability, mirroring the registry:
  *   locked    → score below the withdrawal floor: benched + stake locked
