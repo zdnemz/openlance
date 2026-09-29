@@ -23,6 +23,21 @@ export type Handler<P = Record<string, string>> = (
 ) => Promise<unknown>
 
 /**
+ * True for a Response the handler built itself, which `route()` passes through
+ * instead of wrapping in the `{ data }` envelope.
+ *
+ * Deliberately NOT `instanceof Response`: @hono/node-server swaps the global
+ * `Response` for a lightweight wrapper class, and the real Responses app code
+ * creates are not instances of it. `instanceof` therefore answered "no" and
+ * every direct-Response route was re-wrapped as `ok(response)` — a Response
+ * serializes to `{}`, so those routes answered `{"data":{}}`. Silent, and it
+ * broke login: `/auth/verify` handed the client an empty body, the client
+ * stored `token: undefined`, and every later call came back 401.
+ */
+const isResponse = (v: unknown): v is Response =>
+  typeof v === 'object' && v !== null && typeof (v as Response).arrayBuffer === 'function'
+
+/**
  * Wraps a handler with request id, structured logging and the error envelope.
  */
 export function route<P extends Record<string, string> = Record<string, string>>(handler: Handler<P>) {
@@ -33,7 +48,7 @@ export function route<P extends Record<string, string> = Record<string, string>>
     const start = Date.now()
     try {
       const result = await handler(request, { requestId, url, params: c.req.param() as P })
-      const res = result instanceof Response ? result : ok(result)
+      const res = isResponse(result) ? result : ok(result)
       res.headers.set('X-Request-Id', requestId)
       logger.debug('request', { method: request.method, path: url.pathname, status: res.status, ms: Date.now() - start })
       return res

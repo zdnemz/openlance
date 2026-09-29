@@ -131,7 +131,7 @@ disagree — the one failure mode a 70-file move can produce silently.
 ## Key routes
 
 `/` cinematic landing · `/jobs` marketplace · `/jobs/:id` propose/award ·
-`/jobs/new` milestone builder · `/dashboard` role-aware control room ·
+`/jobs/new` job post (brief + max budget) · `/dashboard` role-aware control room ·
 `/projects/:id` the project room (state machine + chat + on-chain activity) ·
 `/disputes` arbiter queue · `/arbiters` SBT trust registry · `/profile/:address`
 public identity · `/admin` reconciliation + fees · `/console` backend console.

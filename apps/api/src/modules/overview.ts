@@ -3,7 +3,7 @@
  * backend console UI and uptime checks. No auth: contains counts + latest
  * ledger rows + config summary only.
  */
-import { count, desc, eq } from 'drizzle-orm'
+import { count, desc, eq, inArray } from 'drizzle-orm'
 import { env } from '../config.ts'
 import { execSql, getDb } from '../db/index.ts'
 import { cached } from '../lib/cache.ts'
@@ -88,7 +88,8 @@ export function runtimeConfig() {
       escrow: adapter.escrowAddress,
       arbiterRegistry: adapter.registryAddress,
       timelock: env.TIMELOCK_ADDRESS ?? null,
-      vault: env.VAULT_ADDRESS ?? null,
+      // No `vault` key: job budgets are held by the Escrow itself, locked under
+      // the job's ref at award, so there is no separate vault contract to report.
       sponsorshipForwarder: env.sponsorship.forwarderAddress,
     },
     // Gasless sponsorship: when enabled, signed-in users pay no gas (relayer
@@ -155,17 +156,29 @@ async function loadOverview() {
     latestLedger = await db.select().from(ledgerEvents)
       .orderBy(desc(ledgerEvents.blockNumber), desc(ledgerEvents.logIndex)).limit(12)
 
-    // milestone status histogram
-    const milestones = await db.select({ chainStatus: projectMilestones.chainStatus }).from(projectMilestones)
-    for (const m of milestones) histogram[m.chainStatus] = (histogram[m.chainStatus] ?? 0) + 1
+    // Milestone status histogram. Was `select chain_status from project_milestones`
+    // — the WHOLE table into memory, counted in JS. This is a GROUP BY the
+    // database exists to do: the row count is unbounded (one row per milestone
+    // per project, forever) and this endpoint is cached for only 10 seconds.
+    const byStatus = await db.select({
+      chainStatus: projectMilestones.chainStatus,
+      total: count(),
+    }).from(projectMilestones).groupBy(projectMilestones.chainStatus)
+    for (const r of byStatus) histogram[r.chainStatus] = r.total
 
     // newest project snapshot (the demo project)
     const [newest] = await db.select().from(projects).orderBy(desc(projects.createdAt)).limit(1)
     if (newest) {
-      const ms = (await db.select().from(projectMilestones).where(eq(projectMilestones.projectId, newest.id)))
-        .sort((a, b) => a.position - b.position)
-      const [client] = await db.select().from(users).where(eq(users.id, newest.clientId)).limit(1)
-      const [freelancer] = await db.select().from(users).where(eq(users.id, newest.freelancerId)).limit(1)
+      // Was three sequential round-trips (milestones, client, freelancer).
+      // These are independent, and the two party lookups collapse into one
+      // query on the two ids.
+      const [ms, parties] = await Promise.all([
+        db.select().from(projectMilestones).where(eq(projectMilestones.projectId, newest.id)),
+        db.select().from(users).where(inArray(users.id, [newest.clientId, newest.freelancerId])),
+      ])
+      ms.sort((a, b) => a.position - b.position)
+      const client = parties.find((u) => u.id === newest.clientId)
+      const freelancer = parties.find((u) => u.id === newest.freelancerId)
       demoProject = {
         id: newest.id, status: newest.status, createdAt: newest.createdAt,
         client: client ? { displayName: client.displayName, walletAddress: client.walletAddress } : null,

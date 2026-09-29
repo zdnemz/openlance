@@ -67,6 +67,7 @@ import * as rprojectsIdMilestonesMidRequestChanges from './routes/projects/[id]/
 import * as rprojectsIdMilestonesMidSubmissions from './routes/projects/[id]/milestones/[mid]/submissions/route.ts'
 import * as rprojectsIdReviews from './routes/projects/[id]/reviews/route.ts'
 import * as rproposalsIdAccept from './routes/proposals/[id]/accept/route.ts'
+import * as rproposalsIdAttachments from './routes/proposals/[id]/attachments/route.ts'
 import * as rproposalsIdWithdraw from './routes/proposals/[id]/withdraw/route.ts'
 import * as rready from './routes/ready/route.ts'
 import * as rrelay from './routes/relay/route.ts'
@@ -153,6 +154,7 @@ export const ROUTES: Array<[string, string, RouteHandler]> = [
   ['GET', '/api/projects/:id/milestones/:mid/submissions', rprojectsIdMilestonesMidSubmissions.GET],
   ['GET', '/api/projects/:id/reviews', rprojectsIdReviews.GET],
   ['POST', '/api/proposals/:id/accept', rproposalsIdAccept.POST],
+  ['POST', '/api/proposals/:id/attachments', rproposalsIdAttachments.POST],
   ['PATCH', '/api/proposals/:id/withdraw', rproposalsIdWithdraw.PATCH],
   ['GET', '/api/ready', rready.GET],
   ['POST', '/api/relay', rrelay.POST],

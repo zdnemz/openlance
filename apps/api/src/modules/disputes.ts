@@ -18,7 +18,7 @@ import { requireAuth, requireKyc } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
 import { isDisputable } from '../domain/state-machine.ts'
 import { getChainAdapter } from '../chain/adapter.ts'
-import { emitNotification } from './notify.ts'
+import { enqueueDeliveries, writeOutbox } from './notify.ts'
 import { disputes, jobs, projectMilestones, projects } from '../db/schema.ts'
 import { loadMilestone, requireParticipant } from './helpers.ts'
 
@@ -50,26 +50,36 @@ export async function openDispute(request: Request, projectId: string, milestone
   const [already] = await getDb().select().from(disputes)
     .where(eq(disputes.milestoneId, milestone.id)).limit(1)
   const body = await validate(request, z.object({ reason: z.string().min(10).max(4000) }).strict())
-  const db = getDb()
   if (already) {
     logger.info('dispute open retried — returning existing row', { disputeId: already.id, milestoneId: milestone.id })
     return { ...already, onchainActionRequired: 'openDispute', onchainId: milestone.onchainId }
   }
-  const [dispute] = await db.insert(disputes).values({
-    milestoneId: milestone.id,
-    projectId: project.id,
-    openedById: user.id,
-    reason: body.reason,
-    // Clocks come from the on-chain round (indexer mirror + live overlay).
-  }).returning()
 
-  await emitNotification({
-    type: 'dispute.opened',
-    actorAddress: user.walletAddress,
-    projectId: project.id,
-    milestoneId: milestone.id,
-    payload: { reason: body.reason, milestoneTitle: milestone.title, disputeId: dispute!.id },
+  // The dispute row and its notification are ONE write. They used to be a
+  // separate commit each, which loses the notification permanently: a transient
+  // failure between them leaves a dispute nobody was told about, and the retry
+  // path above returns the existing row WITHOUT re-emitting, so it never
+  // recovers. `writeOutbox(tx, …)` is the existing transaction-bound API
+  // (see chain/indexer.ts) — enqueue after commit, never inside the tx.
+  const [dispute, deliveryIds] = await getDb().transaction(async (tx) => {
+    const [row] = await tx.insert(disputes).values({
+      milestoneId: milestone.id,
+      projectId: project.id,
+      openedById: user.id,
+      reason: body.reason,
+      // Clocks come from the on-chain round (indexer mirror + live overlay).
+    }).returning()
+    const ids = await writeOutbox(tx, {
+      type: 'dispute.opened',
+      actorAddress: user.walletAddress,
+      projectId: project.id,
+      milestoneId: milestone.id,
+      payload: { reason: body.reason, milestoneTitle: milestone.title, disputeId: row!.id },
+    })
+    return [row, ids] as const
   })
+  await enqueueDeliveries(deliveryIds)
+
   return { ...dispute, onchainActionRequired: 'openDispute', onchainId: milestone.onchainId }
 }
 

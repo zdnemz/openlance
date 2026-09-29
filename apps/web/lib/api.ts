@@ -58,6 +58,30 @@ export const patch = <T = unknown>(path: string, body?: unknown) => api<T>("PATC
 export const del = <T = unknown>(path: string) => api<T>("DELETE", path);
 
 /**
+ * Upload raw bytes to an API-originated URL (the local storage driver's
+ * `PUT /api/files/:id/raw`). `api` JSON-encodes, which would corrupt the file,
+ * so this sends the body verbatim while keeping the Bearer token and the
+ * cross-origin credentials the error envelope needs.
+ */
+export async function putBytes(url: string, body: Blob, contentType: string): Promise<void> {
+  const token = useSession.getState().token;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": contentType,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body,
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as { error?: { code: string; message: string } };
+    throw new ApiError(res.status, json.error?.code ?? "unknown", json.error?.message ?? `Upload failed (${res.status})`);
+  }
+}
+
+/**
  * Resolve a file URL to something the browser can fetch.
  *
  * The API builds absolute URLs from API_URI (e.g. http://localhost:4000/api/

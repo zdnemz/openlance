@@ -1,23 +1,27 @@
 "use client";
 
 /** /jobs/:id — detail + proposal flow. Awarding bridges into a project. */
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useJob, useProposals, useInvalidate, post } from "@/lib/queries";
+import { get, fileUrl } from "@/lib/api";
+import { uploadAttachment } from "@/lib/uploads";
 import { useSession } from "@/lib/session";
 import {
-  AddressAvatar, Chip, EthAmount, Skeleton, EmptyState, press, ListHead, StatusBadge, AddressText,
+  AddressAvatar, Chip, EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText,
 } from "@/components/design";
 import { JobForm, CATEGORIES, CUSTOM_CATEGORY, type JobDraft } from "@/components/job-form";
-import type { JobView } from "@/lib/types";
+import type { AttachmentView, JobView } from "@/lib/types";
 import { formatEth, timeAgo, toWei } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
-import { sendContractCall, waitForReceipt, readContract } from "@/lib/wallet";
+import { sendContractCall, waitForReceipt } from "@/lib/wallet";
 import { describeFundingRevert, readJobBudget } from "@/lib/chain-actions";
 import { ESCROW_ABI } from "@/lib/contracts";
 import { toast } from "sonner";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
+import { Paperclip } from "@phosphor-icons/react/dist/csr/Paperclip";
+import { X } from "@phosphor-icons/react/dist/csr/X";
 import { Check } from "@phosphor-icons/react/dist/csr/Check";
 import { Stack } from "@phosphor-icons/react/dist/csr/Stack";
 import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
@@ -58,15 +62,15 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
     try {
       const result = await post<{
         project: { id: string };
-        surplusRefundedWei: string;
-        funding: { jobRef: string; freelancer: string; items: { ref: string; amountWei: string }[] };
+        funding: { jobRef: string; freelancer: string; totalWei: string; items: { ref: string; amountWei: string }[] };
       }>(`/proposals/${proposalId}/accept`);
       invalidate.job(id);
       invalidate.proposals(id);
       invalidate.projects();
 
-      // One signature locks EVERY milestone of the project up front: the client
-      // never signs again as milestones start.
+      // One signature locks the budget AND every milestone of the project up
+      // front: nothing was escrowed at publish, so this call's value becomes the
+      // job's lock, and the client never signs again as milestones start.
       let funded = true;
       if (escrow && result.funding?.items?.length) {
         const total = result.funding.items.reduce((a, m) => a + BigInt(m.amountWei), 0n);
@@ -87,6 +91,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
               result.funding.items.map(() => result.funding.freelancer),
               result.funding.items.map((m) => BigInt(m.amountWei)),
             ],
+            value: total,
             expectedChainId: chainId,
           });
           const receipt = await waitForReceipt(hash);
@@ -102,11 +107,8 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       }
 
       if (funded) {
-        const surplus = result.surplusRefundedWei && BigInt(result.surplusRefundedWei) > 0n
-          ? ` Surplus ${formatEth(result.surplusRefundedWei)} ETH stays unlocked — withdraw it from the project.`
-          : "";
         toast.success("Proposal accepted — milestones funded", {
-          description: `Every milestone is locked from the job budget; work needs no further signatures.${surplus}`,
+          description: `${formatEth(result.funding?.totalWei ?? "0")} ETH is locked from the awarded bid. Work needs no further signatures.`,
           action: { label: "Open project", onClick: () => router.push(`/projects/${result.project.id}`) },
         });
       }
@@ -159,7 +161,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
             </Link>
           )}
           <span className="num text-sm">
-            budget <span className="text-foreground">{formatEth(job.budget.maxWei)} ETH</span> · fixed rate
+            up to <span className="text-foreground">{formatEth(job.budget.maxWei)} ETH</span>
           </span>
         </div>
       </div>
@@ -174,13 +176,13 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       )}
 
       <div className="grid gap-10 lg:grid-cols-[1.55fr_1fr]">
-        {/* left: description + template */}
+        {/* left: the brief */}
         <div className="min-w-0 space-y-10">
           {isPoster && job.status === "draft" && (
             <section>
               <ListHead>Edit draft</ListHead>
               <p className="mt-2.5 max-w-[58ch] text-[13px] text-faint">
-                Everything is editable while it's a draft — the milestone sum must still equal the fixed budget.
+                Everything is editable while it's a draft.
               </p>
               <div className="mt-5">
                 <JobForm jobId={id} initial={jobToDraft(job)} />
@@ -201,38 +203,11 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
               ))}
             </div>
           </section>
-
-          <section>
-            <ListHead>Milestone template</ListHead>
-            <p className="mt-2.5 max-w-[58ch] text-[13px] text-faint">
-              The poster's proposed breakdown — your bid can reshape it, but every milestone must be funded before its
-              work starts.
-            </p>
-            <ol className="mt-5 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
-              {job.milestones.map((m) => (
-                <li key={m.id} className="flex items-start gap-5 bg-white/[0.012] px-6 py-5">
-                  <span className="num mt-0.5 text-[11px] text-faint">{String(m.position).padStart(2, "0")}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[14.5px] font-medium">{m.title}</div>
-                    <p className="mt-1.5 max-w-[62ch] text-[13px] leading-relaxed text-faint">{m.description}</p>
-                  </div>
-                  <EthAmount wei={m.amountWei} className="mt-0.5 shrink-0 text-sm text-foreground" />
-                </li>
-              ))}
-              <li className="flex items-center justify-between bg-white/[0.03] px-6 py-4">
-                <span className="num text-[11px] uppercase tracking-wider text-faint">template total</span>
-                <EthAmount wei={job.templateTotalWei} className="text-base font-medium text-rose-bright" />
-              </li>
-            </ol>
-          </section>
         </div>
 
-        {/* right: deposit gate (draft) / proposals / propose */}
+        {/* right: publish (draft) / proposals / propose */}
         <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-          {isPoster && job.status === "draft" && <DepositPanel jobId={id} jobRef={job.jobRef} budgetWei={job.budget.maxWei} />}
-          {isPoster && job.status !== "draft" && (
-            <SurplusPanel jobId={id} jobRef={job.jobRef} />
-          )}
+          {isPoster && job.status === "draft" && <PublishPanel jobId={id} />}
           {isPoster ? (
             <section>
               <ListHead>Proposals · {proposals?.length ?? 0}</ListHead>
@@ -242,7 +217,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
                   title="No proposals yet"
                   body={
                     job.status === "draft"
-                      ? "Publish first — freelancers can propose once the deposit locks."
+                      ? "Publish first — freelancers can only propose on an open job."
                       : "Freelancers see this job the moment it's open. Switch to the freelancer seat to propose."
                   }
                 />
@@ -292,145 +267,91 @@ function jobToDraft(job: JobView): JobDraft {
     customCategory: known ? "" : job.category,
     skills: job.skills.join(", "),
     budget: job.budget.maxEth,
-    milestones: job.milestones.map((m) => ({ title: m.title, description: m.description, amount: m.amountEth })),
   };
 }
 
-/* ── deposit gate (poster view, draft only) ─────────────────────────────── */
+/* ── publish (poster view, draft only) ──────────────────────────────────────
+   No chain call. The ceiling is a number in the brief; escrow happens once,
+   at award, when the client signs the bid they chose. */
 
-function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: string; budgetWei: string }) {
-  const escrow = useRuntime((s) => s.escrow);
-  const chainId = useRuntime((s) => s.chainId);
+function PublishPanel({ jobId }: { jobId: string }) {
   const invalidate = useInvalidate();
-  const [phase, setPhase] = useState<"idle" | "depositing" | "publishing">("idle");
+  const [publishing, setPublishing] = useState(false);
 
-  async function depositAndPublish() {
-    setPhase("depositing");
+  async function publish() {
+    setPublishing(true);
     try {
-      let depositTxHash: string;
-      if (escrow) {
-        // Drawdown model: lock the full budget in the escrow contract once;
-        // every milestone of this job is then funded from that locked balance.
-        const hash = await sendContractCall({
-          to: escrow,
-          abi: ESCROW_ABI,
-          functionName: "lockBudget",
-          args: [jobRef],
-          value: BigInt(budgetWei),
-          expectedChainId: chainId,
-        });
-        const receipt = await waitForReceipt(hash);
-        if (receipt.status !== "success") throw new Error("Deposit transaction reverted on-chain");
-        depositTxHash = hash;
-      } else {
-        // Dev mode (no escrow configured): the server accepts the hash shape
-        // alone; real mode verifies the lock on-chain before publishing.
-        depositTxHash = `0x${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}`;
-      }
-      setPhase("publishing");
-      await post(`/jobs/${jobId}/publish`, { depositTxHash });
+      await post(`/jobs/${jobId}/publish`);
       invalidate.job(jobId);
-      toast.success("Job published", { description: "Budget locked in escrow — it's live in the marketplace." });
+      toast.success("Job published", { description: "It's live in the marketplace. Freelancers can bid now." });
     } catch (err) {
       toast.error("Could not publish", { description: err instanceof Error ? err.message : "Unknown error" });
     } finally {
-      setPhase("idle");
+      setPublishing(false);
     }
   }
 
   return (
     <section className="glass-raised rounded-3xl p-6">
-      <ListHead>Publish — lock the budget first</ListHead>
+      <ListHead>Publish</ListHead>
       <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
-        This draft is private. Publishing locks <EthAmount wei={budgetWei} className="text-foreground" /> (the fixed
-        budget) in the escrow contract — the funding guarantee every milestone draws from. Only then do freelancers see
-        it.
+        This draft is private. Publishing puts it in front of freelancers — no funds move until you accept a bid, and
+        then you sign once for the amount you accepted.
       </p>
-      {escrow ? (
-        <p className="num mt-3 break-all text-[11px] text-faint">escrow {escrow}</p>
-      ) : (
-        <p className="mt-3 text-[11px] text-faint">Dev mode: no escrow configured, publishing records a simulated deposit.</p>
-      )}
       <Button
-        disabled={phase !== "idle"}
-        onClick={depositAndPublish}
+        disabled={publishing}
+        onClick={publish}
         className="mt-4 w-full rounded-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
       >
-        {phase === "idle" ? `Lock ${formatEth(budgetWei)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
+        {publishing ? "Publishing…" : "Publish job"}
       </Button>
     </section>
   );
 }
 
-/* ── surplus withdrawal (poster view, published jobs) ─────────────────── */
 
-function SurplusPanel({ jobId, jobRef }: { jobId: string; jobRef: string }) {
-  const escrow = useRuntime((s) => s.escrow);
-  const chainId = useRuntime((s) => s.chainId);
-  const invalidate = useInvalidate();
-  const [free, setFree] = useState<bigint | null>(null);
-  const [withdrawing, setWithdrawing] = useState(false);
+/* ── a bid's file ────────────────────────────────────────────────────────
+   The API signs a short-lived URL on GET, so opening one is one round-trip and
+   the bytes never touch a public path. */
 
-  const loadFree = useCallback(async () => {
-    if (!escrow) return setFree(null);
-    const [locked, reserved, paidOut] = await Promise.all([
-      readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "lockedBudget", args: [jobRef] }),
-      readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "reservedBudget", args: [jobRef] }),
-      readContract<bigint>({ to: escrow, abi: ESCROW_ABI, functionName: "paidOutBudget", args: [jobRef] }),
-    ]);
-    if (locked === null || reserved === null || paidOut === null) return setFree(null);
-    setFree(locked - reserved - paidOut);
-  }, [escrow, jobRef]);
+const EMPTY_MILESTONE = { title: "", description: "", amount: "" };
 
-  useEffect(() => {
-    void loadFree();
-    const t = setInterval(loadFree, 8000);
-    return () => clearInterval(t);
-  }, [loadFree]);
+function AttachmentChip({ attachment }: { attachment: AttachmentView }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  if (!escrow || free === null || free <= 0n) return null;
-
-  async function withdraw() {
-    setWithdrawing(true);
+  async function open() {
+    setBusy(true);
+    setErr(null);
     try {
-      const hash = await sendContractCall({
-        to: escrow!,
-        abi: ESCROW_ABI,
-        functionName: "unlockBudget",
-        args: [jobRef, free!],
-        expectedChainId: chainId,
-      });
-      const receipt = await waitForReceipt(hash);
-      if (receipt.status !== "success") throw new Error("Withdrawal reverted on-chain");
-      await loadFree();
-      invalidate.job(jobId);
-      toast.success("Surplus withdrawn", { description: `${formatEth(free!.toString())} ETH back to your wallet.` });
-    } catch (err) {
-      toast.error("Could not withdraw", { description: err instanceof Error ? err.message : "Unknown error" });
+      const { url } = await get<{ url: string }>(`/attachments/${attachment.id}/url`);
+      window.open(fileUrl(url), "_blank", "noopener");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not open the file");
     } finally {
-      setWithdrawing(false);
+      setBusy(false);
     }
   }
 
   return (
-    <section className="glass rounded-3xl p-6">
-      <ListHead>Free budget</ListHead>
-      <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
-        What the locked budget has left after the awarded milestones — unlocked milestones and any surplus are
-        withdrawable any time.
-      </p>
-      <div className="mt-4 flex items-center justify-between">
-        <EthAmount wei={free.toString()} className="text-lg font-medium text-rose-bright" />
-        <Button
-          disabled={withdrawing}
-          onClick={withdraw}
-          className="rounded-full bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20"
-        >
-          {withdrawing ? "Withdrawing…" : "Withdraw"}
-        </Button>
-      </div>
-    </section>
+    <button
+      type="button"
+      onClick={open}
+      disabled={busy}
+      title={err ?? attachment.filename}
+      className="inline-flex max-w-[15rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim transition-colors hover:border-line-strong hover:text-foreground disabled:opacity-50"
+    >
+      <Paperclip className="h-3.5 w-3.5 shrink-0 text-faint" weight="bold" />
+      <span className="truncate">{attachment.filename}</span>
+      <span className="num shrink-0 text-faint">{formatBytes(attachment.sizeBytes)}</span>
+    </button>
   );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /* ── proposal card (poster view) ──────────────────────────────────────── */
@@ -457,9 +378,16 @@ function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/li
           </div>
         ))}
       </div>
+      {proposal.attachments.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {proposal.attachments.map((a) => (
+            <AttachmentChip key={a.id} attachment={a} />
+          ))}
+        </div>
+      )}
       {proposal.status === "submitted" && (
         <Button onClick={onAccept} disabled={awarding} className="mt-5 w-full rounded-full bg-rose-accent hover:bg-rose-bright">
-          {awarding ? "Awarding…" : "Accept + create project"}
+          {awarding ? "Awarding…" : `Accept ${formatEth(proposal.bidTotalWei)} ETH bid`}
         </Button>
       )}
     </article>
@@ -477,17 +405,16 @@ function ProposeForm({ jobId }: { jobId: string }) {
 
   const [coverNote, setCoverNote] = useState("");
   const [deliveryDays, setDeliveryDays] = useState("14");
-  const [milestones, setMilestones] = useState<{ title: string; description: string; amount: string }[]>([]);
+  const [milestones, setMilestones] = useState<{ title: string; description: string; amount: string }[]>([EMPTY_MILESTONE]);
+  const [files, setFiles] = useState<File[]>([]);
   const [open, setOpen] = useState(!mine);
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // seed the editor with the job template once
-  if (job && milestones.length === 0 && !mine) {
-    setMilestones(job.milestones.map((m) => ({ title: m.title, description: m.description, amount: m.amountEth })));
-  }
-
   const total = milestones.reduce((acc, m) => acc + (Number(m.amount) || 0), 0);
+  const ceiling = Number(job?.budget.maxEth ?? 0);
+  const overCeiling = ceiling > 0 && total > ceiling;
 
   async function submit() {
     setError(null);
@@ -498,13 +425,22 @@ function ProposeForm({ jobId }: { jobId: string }) {
     if (!milestones.every((m) => m.title.trim() && m.description.trim() && /^\d*\.?\d+$/.test(m.amount))) {
       return setError("Every milestone needs a title, a description, and a valid ETH amount.");
     }
+    if (overCeiling) return setError(`Your bid (${total.toFixed(3)} ETH) is over the client's ceiling of ${ceiling} ETH.`);
     setSubmitting(true);
     try {
-      await post(`/jobs/${jobId}/proposals`, {
+      // Files hang off the proposal, so the proposal row has to exist first.
+      // A failed upload leaves a valid bid without the file — reported, not hidden.
+      const created = await post<{ id: string }>(`/jobs/${jobId}/proposals`, {
         coverNote: coverNote.trim(),
         deliveryDays: days,
         milestones: milestones.map((m) => ({ title: m.title.trim(), description: m.description.trim(), amount: m.amount })),
       });
+      if (files.length) {
+        setUploading(true);
+        for (const f of files) {
+          await uploadAttachment(`/proposals/${created.id}`, f);
+        }
+      }
       invalidate.proposals(jobId);
       setOpen(false);
       toast.success("Proposal submitted", { description: "The poster sees it instantly. Awarding creates the project." });
@@ -512,6 +448,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setSubmitting(false);
+      setUploading(false);
     }
   }
 
@@ -525,6 +462,11 @@ function ProposeForm({ jobId }: { jobId: string }) {
             <StatusBadge status={mine.status} pulse={false} />
           </div>
           <p className="mt-3 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{mine.coverNote}</p>
+          {mine.attachments.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {mine.attachments.map((a) => <AttachmentChip key={a.id} attachment={a} />)}
+            </div>
+          )}
         </div>
       </section>
     );
@@ -562,11 +504,14 @@ function ProposeForm({ jobId }: { jobId: string }) {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-[13px] font-medium">Your milestone breakdown</label>
+            <div>
+              <label className="text-[13px] font-medium">Your milestone breakdown</label>
+              <p className="mt-1 text-[11px] text-faint">You shape the work. The client reviews this and pays the total if they accept.</p>
+            </div>
             <button
               type="button"
-              onClick={() => setMilestones([...milestones, { title: "", description: "", amount: "" }])}
-              className="text-[12px] text-rose-bright hover:underline"
+              onClick={() => setMilestones([...milestones, { ...EMPTY_MILESTONE }])}
+              className="shrink-0 text-[12px] text-rose-bright hover:underline"
             >
               + add milestone
             </button>
@@ -600,10 +545,42 @@ function ProposeForm({ jobId }: { jobId: string }) {
               />
             </div>
           ))}
-          <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3">
-            <span className="num text-[11px] uppercase tracking-wider text-faint">your bid</span>
-            <span className="num text-lg font-medium text-rose-bright">{total.toFixed(3)} ETH</span>
+          <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${overCeiling ? "bg-destructive/10" : "bg-white/[0.04]"}`}>
+            <span className="num text-[11px] uppercase tracking-wider text-faint">
+              your bid {ceiling > 0 ? `· ceiling ${ceiling} ETH` : ""}
+            </span>
+            <span className={`num text-lg font-medium ${overCeiling ? "text-destructive" : "text-rose-bright"}`}>
+              {total.toFixed(3)} ETH
+            </span>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[13px] font-medium">Supporting files</label>
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-2xl border border-dashed border-line px-4 py-3.5 text-[13px] text-dim transition-colors hover:border-line-strong hover:text-foreground">
+            <Paperclip className="h-4 w-4 shrink-0 text-faint" weight="bold" />
+            {files.length ? `${files.length} file${files.length > 1 ? "s" : ""} ready` : "Attach a portfolio piece, past audit, or spec"}
+            <input
+              type="file" multiple className="sr-only"
+              onChange={(e) => {
+                setFiles([...files, ...Array.from(e.target.files ?? [])]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {files.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {files.map((f, i) => (
+                <span key={`${f.name}-${i}`} className="inline-flex max-w-[14rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim">
+                  <span className="truncate">{f.name}</span>
+                  <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-faint hover:text-destructive">
+                    <X className="h-3 w-3" weight="bold" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-faint">The poster can read these while reviewing your bid. They move to the project if you win.</p>
         </div>
 
         {error && (
@@ -612,12 +589,14 @@ function ProposeForm({ jobId }: { jobId: string }) {
           </p>
         )}
 
-        <Button onClick={submit} disabled={submitting} className="w-full rounded-full bg-rose-accent hover:bg-rose-bright">
-          {submitting ? "Submitting…" : <span className="flex items-center gap-2"><PaperPlaneTilt className="h-4 w-4" /> Submit proposal</span>}
+        <Button onClick={submit} disabled={submitting || uploading} className="w-full rounded-full bg-rose-accent hover:bg-rose-bright">
+          {submitting
+            ? uploading ? "Uploading files…" : "Submitting…"
+            : <span className="flex items-center gap-2"><PaperPlaneTilt className="h-4 w-4" /> Submit proposal</span>}
         </Button>
         <p className="flex items-center gap-1.5 text-[11px] text-faint">
           <Check className="h-3 w-3 text-state-released" />
-          {job ? `Fixed budget ${formatEth(job.budget.maxWei)} ETH — your bid total must match it` : ""}
+          {job ? `Client's ceiling ${formatEth(job.budget.maxWei)} ETH — your bid can be any amount at or under it` : ""}
         </p>
       </div>
     </section>

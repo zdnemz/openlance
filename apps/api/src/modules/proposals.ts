@@ -1,13 +1,18 @@
 /**
  * /jobs/:id/proposals + /proposals/:id/* (PRD F2).
  *
+ * A proposal is the freelancer's own answer to the brief: their milestone
+ * breakdown, their price (a bid, capped by the client's ceiling), their
+ * delivery window, and any files backing it. The job post carries none of that.
+ *
  * ACCEPTING a proposal is the bridge event: it creates the project + its
- * milestones from the winning proposal's own breakdown (which may differ from
- * the job template), locks the job, auto-rejects every other proposal, and
- * fans out notifications. All inside one transaction — a half-awarded job
- * must be impossible.
+ * milestones from the winning proposal's breakdown, locks the job, auto-rejects
+ * every other proposal, and fans out notifications — all inside one
+ * transaction, because a half-awarded job must be impossible. The money moves
+ * one step later, when the client signs the returned funding payload; the
+ * contract locks the budget on that first call.
  */
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db/index.ts'
 import { validate } from '../lib/http.ts'
@@ -16,13 +21,17 @@ import { Errors } from '../lib/errors.ts'
 import { isValidEthAmount, toWei, toEth } from '../lib/money.ts'
 import { emitNotification } from './notify.ts'
 import { uuidToBytes32 } from '../chain/events.ts'
-import { loadJobWithTemplate } from './helpers.ts'
-import { jobs, projectMilestones, projects, proposalMilestones, proposals, users } from '../db/schema.ts'
+import { loadJob } from './helpers.ts'
+import { attachments, jobs, projectMilestones, projects, proposalMilestones, proposals, users } from '../db/schema.ts'
 
-const proposalSchema = z.object({
+/**
+ * A bid: the freelancer's breakdown, their price, their window. There is no
+ * client template to reshape — this breakdown IS the plan, and it becomes the
+ * project's milestones if the client accepts.
+ */
+export const proposalSchema = z.object({
   coverNote: z.string().min(20).max(4000),
   deliveryDays: z.number().int().min(1).max(365),
-  /** The freelancer's own milestone breakdown — may differ from the job template. */
   milestones: z.array(z.object({
     title: z.string().min(1).max(120),
     description: z.string().min(1).max(4000),
@@ -30,7 +39,25 @@ const proposalSchema = z.object({
   }).strict()).min(1).max(20),
 }).strict()
 
-function proposalView(p: typeof proposals.$inferSelect, ms: (typeof proposalMilestones.$inferSelect)[]) {
+/**
+ * The client's ceiling is the only budget rule left: a bid above it can never
+ * be funded, so it is rejected at the edge. A bid under it is legitimate — the
+ * price is the freelancer's to set, and the client accepts it explicitly.
+ */
+export function bidExceedsCeiling(bidWei: bigint, ceilingWei: bigint): boolean {
+  return bidWei > ceilingWei
+}
+
+function attachmentView(a: typeof attachments.$inferSelect) {
+  return { id: a.id, filename: a.filename, mimeType: a.mimeType, sizeBytes: a.sizeBytes, status: a.status }
+}
+
+async function proposalView(p: typeof proposals.$inferSelect) {
+  const db = getDb()
+  const [ms, files] = await Promise.all([
+    db.select().from(proposalMilestones).where(eq(proposalMilestones.proposalId, p.id)),
+    db.select().from(attachments).where(eq(attachments.proposalId, p.id)),
+  ])
   return {
     id: p.id, jobId: p.jobId, freelancerId: p.freelancerId, coverNote: p.coverNote,
     deliveryDays: p.deliveryDays, status: p.status,
@@ -38,37 +65,33 @@ function proposalView(p: typeof proposals.$inferSelect, ms: (typeof proposalMile
     milestones: ms.sort((a, b) => a.position - b.position).map((m) => ({
       position: m.position, title: m.title, description: m.description, amountWei: m.amountWei, amountEth: toEth(m.amountWei),
     })),
+    attachments: files.map(attachmentView),
     createdAt: p.createdAt,
   }
 }
 
-async function proposalMilestonesFor(proposalId: string) {
-  return (await getDb().select().from(proposalMilestones).where(eq(proposalMilestones.proposalId, proposalId)))
-}
-
 export async function listProposals(request: Request, jobId: string) {
   const user = await requireAuth(request)
-  const { job } = await loadJobWithTemplate(jobId)
+  const job = await loadJob(jobId)
   // Poster sees all proposals; anyone else sees only their own.
   const db = getDb()
   const where = job.posterId === user.id
     ? eq(proposals.jobId, job.id)
     : and(eq(proposals.jobId, job.id), eq(proposals.freelancerId, user.id))
   const rows = await db.select().from(proposals).where(where).orderBy(desc(proposals.createdAt))
-  return Promise.all(rows.map(async (p) => proposalView(p, await proposalMilestonesFor(p.id))))
+  return Promise.all(rows.map(proposalView))
 }
 
 export async function createProposal(request: Request, jobId: string) {
   const user = await requireRole(request, ['freelancer'])
   await requireKyc(request)
-  const { job } = await loadJobWithTemplate(jobId)
+  const job = await loadJob(jobId)
   if (job.status !== 'open') throw Errors.conflict('job_not_open', 'Only open jobs accept proposals')
   if (job.posterId === user.id) throw Errors.conflict('own_job', 'You cannot bid on your own job')
 
   const body = await validate(request, proposalSchema)
-  // Bids above the locked budgetMax can never be funded from the vault.
   const bidTotal = body.milestones.reduce((acc, m) => acc + BigInt(toWei(m.amount)), 0n)
-  if (bidTotal > BigInt(job.budgetMaxWei)) {
+  if (bidExceedsCeiling(bidTotal, BigInt(job.budgetMaxWei))) {
     throw Errors.badRequest(`Bid total (${toEth(bidTotal.toString())} ETH) exceeds the job budget max (${toEth(job.budgetMaxWei)} ETH)`)
   }
   const db = getDb()
@@ -83,10 +106,9 @@ export async function createProposal(request: Request, jobId: string) {
   const posterAddress = poster?.walletAddress ?? null
 
   const created = await db.transaction(async (tx) => {
-    const bidTotal = body.milestones.reduce((acc, m) => acc + BigInt(toWei(m.amount)), 0n).toString()
     const [p] = await tx.insert(proposals).values({
       jobId: job.id, freelancerId: user.id, coverNote: body.coverNote,
-      deliveryDays: body.deliveryDays, bidTotalWei: bidTotal,
+      deliveryDays: body.deliveryDays, bidTotalWei: bidTotal.toString(),
     }).returning()
     await tx.insert(proposalMilestones).values(body.milestones.map((m, i) => ({
       proposalId: p!.id, position: i + 1, title: m.title, description: m.description, amountWei: toWei(m.amount),
@@ -99,7 +121,7 @@ export async function createProposal(request: Request, jobId: string) {
     actorAddress: user.walletAddress,
     payload: { jobId: job.id, jobTitle: job.title, proposalId: created.id, bidTotalWei: created.bidTotalWei, posterAddress: posterAddress ?? null },
   })
-  return proposalView(created, await proposalMilestonesFor(created.id))
+  return proposalView(created)
 }
 
 /** Withdraw — freelancer, while submitted. */
@@ -112,7 +134,7 @@ export async function withdrawProposal(request: Request, proposalId: string) {
   if (p.status !== 'submitted') throw Errors.conflict('proposal_not_withdrawable', `Proposal is ${p.status}`)
   const [updated] = await db.update(proposals).set({ status: 'withdrawn', updatedAt: new Date() })
     .where(eq(proposals.id, p.id)).returning()
-  return proposalView(updated!, await proposalMilestonesFor(updated!.id))
+  return proposalView(updated!)
 }
 
 /** ACCEPT — the bridge event (see module doc). */
@@ -139,14 +161,11 @@ export async function acceptProposal(request: Request, proposalId: string) {
       .sort((a, b) => a.position - b.position)
     if (ms.length === 0) throw Errors.precondition('proposal_has_no_milestones', 'Cannot award a proposal without milestones')
 
-    // Surplus refund: the vault locked budgetMax at publish; only the winning
-    // bid total stays escrowed. The remainder returns to the client.
-    // ponytail: recorded as ledger intent (depositAmountWei drawdown); actual
-    // on-chain custody move lands with the JobVault contract.
-    const locked = BigInt(lockedJob!.depositAmountWei ?? lockedJob!.budgetMaxWei)
     const bid = ms.reduce((acc, m) => acc + BigInt(m.amountWei), 0n)
-    if (bid > locked) throw Errors.conflict('bid_exceeds_deposit', 'Winning bid exceeds the locked deposit')
-    const surplus = locked - bid
+    // Re-check against the row we locked, not the pre-transaction read.
+    if (bidExceedsCeiling(bid, BigInt(lockedJob!.budgetMaxWei))) {
+      throw Errors.conflict('bid_exceeds_ceiling', 'Winning bid exceeds the job budget max')
+    }
 
     const [project] = await tx.insert(projects).values({
       jobId: job.id, proposalId: proposal.id, clientId: user.id, freelancerId: freelancer.id,
@@ -156,49 +175,65 @@ export async function acceptProposal(request: Request, proposalId: string) {
       projectId: project!.id, position: i + 1, title: m.title, description: m.description, amountWei: m.amountWei,
     }))).returning({ id: projectMilestones.id, amountWei: projectMilestones.amountWei })
 
+    // The bid's files follow the bid into the project: the winning freelancer
+    // still has to deliver the work they put those files forward for.
+    const files = await tx.select({ id: attachments.id }).from(attachments).where(eq(attachments.proposalId, proposal.id))
+    if (files.length) {
+      await tx.update(attachments).set({ proposalId: null, projectId: project!.id })
+        .where(inArray(attachments.id, files.map((f) => f.id)))
+    }
+
     await tx.update(proposals).set({ status: 'accepted', updatedAt: new Date() }).where(eq(proposals.id, proposal.id))
     const losers = await tx.select().from(proposals)
       .where(and(eq(proposals.jobId, job.id), eq(proposals.status, 'submitted')))
     for (const l of losers.filter((l) => l.id !== proposal.id)) {
       await tx.update(proposals).set({ status: 'rejected', updatedAt: new Date() }).where(eq(proposals.id, l.id))
     }
-    await tx.update(jobs).set({ status: 'in_progress', depositAmountWei: bid.toString(), updatedAt: new Date() }).where(eq(jobs.id, job.id))
+    // The winning bid is the amount the client is about to lock on-chain. The
+    // escrow call is the client's signature (returned below); this row records
+    // what the lock must equal, and there is no surplus to refund — the lock is
+    // the bid, not the ceiling.
+    await tx.update(jobs).set({
+      status: 'in_progress', depositAmountWei: bid.toString(), depositedAt: new Date(), updatedAt: new Date(),
+    }).where(eq(jobs.id, job.id))
 
     return {
       project,
       milestones: ms.length,
+      attachments: files.length,
       rejected: losers.filter((l) => l.id !== proposal.id).length,
-      surplusRefundedWei: surplus.toString(),
+      bidTotalWei: bid.toString(),
       fundingItems: createdMilestones.map((m) => ({ ref: uuidToBytes32(m.id), amountWei: m.amountWei })),
     }
   })
 
+  // One action, one inbox row: the award IS "proposal accepted → project
+  // created". A second `project.created` event repeated the same fact to both
+  // parties and doubled every webhook delivery. `proposal.accepted` already
+  // carries projectId, so the row deep-links into the new project.
   await emitNotification({
     type: 'proposal.accepted',
     actorAddress: user.walletAddress,
     projectId: result.project.id,
-    payload: { jobId: job.id, jobTitle: job.title, proposalId: proposal.id, freelancer: freelancer.walletAddress, surplusRefundedWei: result.surplusRefundedWei },
-  })
-  await emitNotification({
-    type: 'project.created',
-    actorAddress: user.walletAddress,
-    projectId: result.project.id,
-    payload: { jobId: job.id, jobTitle: job.title, milestones: result.milestones },
+    payload: { jobId: job.id, jobTitle: job.title, proposalId: proposal.id, freelancer: freelancer.walletAddress, bidTotalWei: result.bidTotalWei, milestones: result.milestones, attachments: result.attachments },
   })
 
   return {
     project: result.project,
     milestonesCreated: result.milestones,
+    attachmentsMoved: result.attachments,
     proposalsRejected: result.rejected,
-    surplusRefundedWei: result.surplusRefundedWei,
     /**
      * One-signature funding payload: the client signs a single
-     * `fundAllFromCredit(jobRef, refs, freelancers, amounts)` tx that locks every
-     * milestone at once. After that, starting a milestone needs no signature.
+     * `fundAllFromCredit(jobRef, refs, freelancers, amounts)` tx carrying
+     * `value = bidTotalWei`. Nothing was locked at publish, so that call locks
+     * the budget AND funds every milestone. Starting a milestone needs no
+     * further signature.
      */
     funding: {
       jobRef: uuidToBytes32(job.id),
       freelancer: freelancer.walletAddress,
+      totalWei: result.bidTotalWei,
       items: result.fundingItems,
     },
   }

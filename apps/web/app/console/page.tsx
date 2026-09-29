@@ -104,9 +104,11 @@ const API_GROUPS: { title: string; icon: typeof ServerCog; rows: [string, string
     ['GET /auth/me', 'profile + on-chain-derived stats'],
   ] },
   { title: 'Marketplace (F1–F2)', icon: Blocks, rows: [
-    ['POST /jobs', 'milestone template sum validated server-side'],
-    ['POST /jobs/:id/proposals', 'one per freelancer, own breakdown'],
-    ['POST /proposals/:id/accept', 'bridge event → project + milestones'],
+    ['POST /jobs', 'brief + max budget, no chain call'],
+    ['POST /jobs/:id/publish', 'draft → open, no funds moved'],
+    ['POST /jobs/:id/proposals', 'one per freelancer, own breakdown + bid'],
+    ['POST /proposals/:id/attachments', "a bid's files, poster + bidder only"],
+    ['POST /proposals/:id/accept', 'bridge event → project + milestones, one-signature funding'],
   ] },
   { title: 'Collaboration (F6–F8)', icon: MessageSquare, rows: [
     ['POST /projects/:id/messages', 'append-only evidence log + realtime'],

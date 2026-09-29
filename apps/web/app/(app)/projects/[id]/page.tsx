@@ -433,9 +433,15 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
     (Array.isArray(status) ? status : [status]).includes(p.milestones.find((x) => x.id === m.id)!.chainStatus);
 
   /**
-   * Fund-all: one signature locks every outstanding milestone from the job
-   * budget. This is the recovery path for when the award-time batch tx was
-   * skipped or rejected — the normal flow funds at award.
+   * Fund-all: one signature funds every outstanding milestone of this project.
+   * This is the recovery path for when the award-time batch was skipped or
+   * rejected — the normal flow funds at award.
+   *
+   * The batch carries value only when the job has no budget locked yet. Nothing
+   * is locked at publish any more (the client posts a ceiling, not a deposit),
+   * so an award whose funding tx never landed leaves `lockedBudget == 0` and
+   * this call is the one that becomes the lock. When a lock does exist, the
+   * batch must send no ETH and draws from it.
    *
    * Pre-flight against on-chain truth first: the mirror can lag a mined funding
    * tx, and sending a second batch would just revert with InsufficientBudget.
@@ -444,17 +450,21 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
     if (!outstanding.length || fundState !== "idle") return;
     const jobRef = outstanding[0]!.fund!.jobRef ?? outstanding[0]!.fund!.ref;
     const freelancer = project!.freelancer.walletAddress;
+    let lockValue = 0n;
     if (escrow) {
       setFundState("checking");
       const budget = await readJobBudget(escrow, jobRef).catch(() => null);
-      if (budget && outstandingWei > budget.free) {
-        setFundState("landed");
-        toast.success("Already funded on-chain", {
-          description: "The funding transaction landed — the view refreshes as soon as the indexer mirrors it.",
-        });
-        invalidate.project(projectId);
-        invalidate.overview();
-        return;
+      if (budget) {
+        if (outstandingWei > budget.free) {
+          setFundState("landed");
+          toast.success("Already funded on-chain", {
+            description: "The funding transaction landed — the view refreshes as soon as the indexer mirrors it.",
+          });
+          invalidate.project(projectId);
+          invalidate.overview();
+          return;
+        }
+        lockValue = budget.locked > 0n ? 0n : outstandingWei;
       }
       setFundState("idle");
     }
@@ -468,6 +478,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         outstanding.map(() => freelancer),
         outstanding.map((x) => BigInt(x.fund!.amountWei)),
       ],
+      value: lockValue,
       projectId,
       expect: (p) => p.milestones.every((x) => x.chainStatus !== "pending_funding"),
       successMessage: "Milestones funded — work needs no further signatures",
@@ -1065,7 +1076,7 @@ function DisputePanel({
         {dispute.finalized && (
           <div className="flex items-center gap-2 border-t border-line pt-4 text-[12.5px] text-state-split">
             <SealCheck weight="fill" className="h-4 w-4" />
-            Settled — {dispute.outcome ?? "—"} · majority {dispute.majorityArbiters?.length ?? 0} arbiter(s)
+            Settled — {dispute.outcome ?? "—"} · majority {shortAddress(dispute.resolvedArbiter)}
           </div>
         )}
       </div>

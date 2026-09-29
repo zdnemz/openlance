@@ -4,8 +4,8 @@ import { getDb } from '../db/index.ts'
 import { Errors } from '../lib/errors.ts'
 import { getChainAdapter } from '../chain/adapter.ts'
 import { uuidToBytes32 } from '../chain/events.ts'
-import { disputes, jobMilestones, jobs, projectMilestones, projects } from '../db/schema.ts'
-import type { Project, ProjectMilestone, User } from '../db/schema.ts'
+import { disputes, jobs, projectMilestones, projects, proposals } from '../db/schema.ts'
+import type { Job, Project, ProjectMilestone, User } from '../db/schema.ts'
 
 export async function loadProject(projectId: string): Promise<Project> {
   const [p] = await getDb().select().from(projects).where(eq(projects.id, projectId)).limit(1)
@@ -51,13 +51,29 @@ export async function loadMilestone(milestoneId: string): Promise<{ milestone: P
   return { milestone: m, project }
 }
 
-/** Job + its milestone template (positions ordered). */
-export async function loadJobWithTemplate(jobId: string) {
-  const db = getDb()
-  const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1)
+export async function loadJob(jobId: string): Promise<Job> {
+  const [job] = await getDb().select().from(jobs).where(eq(jobs.id, jobId)).limit(1)
   if (!job) throw Errors.notFound('Job')
-  const template = await db.select().from(jobMilestones).where(eq(jobMilestones.jobId, jobId))
-  return { job, template: template.sort((a, b) => a.position - b.position) }
+  return job
+}
+
+/**
+ * Read guard for a file attached to a proposal (a bid's supporting material).
+ * Deliberately not `requireParticipant`: a proposal has no project yet, and its
+ * audience is the job's poster — who is deciding between bids and must be able
+ * to read what each one attaches — plus the freelancer who bid.
+ */
+export async function requireProposalReader(proposalId: string, user: User): Promise<void> {
+  const [row] = await getDb()
+    .select({ freelancerId: proposals.freelancerId, posterId: jobs.posterId })
+    .from(proposals)
+    .innerJoin(jobs, eq(jobs.id, proposals.jobId))
+    .where(eq(proposals.id, proposalId))
+    .limit(1)
+  if (!row) throw Errors.notFound('Proposal')
+  if (user.id !== row.freelancerId && user.id !== row.posterId) {
+    throw Errors.forbidden('Only the job poster and the bidding freelancer may read this file')
+  }
 }
 
 export async function isParticipant(projectId: string, userId: string): Promise<boolean> {

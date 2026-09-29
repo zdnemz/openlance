@@ -1,11 +1,18 @@
 /**
- * /attachments + /files — project file storage (PRD F7).
+ * /attachments + /files — file storage (PRD F7).
  *
  * Flow: init (metadata + upload target) → client uploads → confirm (HEAD).
  * Drivers: Supabase Storage signed URLs (production) or local disk with
  * HMAC-signed download URLs (zero-infra dev).
+ *
+ * Two owners, one pipeline. A file belongs to a project (a deliverable or
+ * submission) or to a proposal (a bid's supporting material, uploaded before
+ * any project exists) — `attachments_single_owner` keeps it to exactly one. The
+ * read guard differs by owner and is NOT `requireParticipant` in both cases: a
+ * proposal file is readable by the job's poster (they are reviewing the bid)
+ * and the bidding freelancer, and by nobody else.
  */
-import { createHmac } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -15,8 +22,8 @@ import { getDb } from '../db/index.ts'
 import { validate } from '../lib/http.ts'
 import { requireAuth, requireKyc } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
-import { attachments } from '../db/schema.ts'
-import { requireParticipant } from './helpers.ts'
+import { attachments, proposals } from '../db/schema.ts'
+import { requireParticipant, requireProposalReader } from './helpers.ts'
 import { isMimeAllowed, storageConfig, storageKey, supabaseAdmin } from '../storage/index.ts'
 
 // ── Supabase Storage driver ─────────────────────────────────────────────────
@@ -56,14 +63,37 @@ function signedLocalUrl(attachmentId: string): string {
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
+
+const uploadInput = z.object({
+  filename: z.string().min(1).max(200).regex(/^[\w\-. ()]+$/, 'Filename contains forbidden characters'),
+  mimeType: z.string().min(3).max(100),
+  sizeBytes: z.number().int().min(1).max(storageConfig().maxUploadBytes),
+}).strict()
+
 export async function initAttachment(request: Request, projectId: string) {
   const user = await requireKyc(request)
   const project = await requireParticipant(projectId, user)
-  const body = await validate(request, z.object({
-    filename: z.string().min(1).max(200).regex(/^[\w\-. ()]+$/, 'Filename contains forbidden characters'),
-    mimeType: z.string().min(3).max(100),
-    sizeBytes: z.number().int().min(1).max(storageConfig().maxUploadBytes),
-  }).strict())
+  return createAttachment(request, user.id, { projectId: project.id }, project.id)
+}
+
+/** A bid's supporting file. Only the bidding freelancer may add one. */
+export async function initProposalAttachment(request: Request, proposalId: string) {
+  const user = await requireKyc(request)
+  const [row] = await getDb().select({ id: proposals.id, freelancerId: proposals.freelancerId }).from(proposals)
+    .where(eq(proposals.id, proposalId)).limit(1)
+  if (!row) throw Errors.notFound('Proposal')
+  if (row.freelancerId !== user.id) throw Errors.forbidden('Only the bidding freelancer may attach to this proposal')
+  return createAttachment(request, user.id, { proposalId: row.id }, row.id)
+}
+
+async function createAttachment(
+  request: Request,
+  uploaderId: string,
+  owner: { projectId: string } | { proposalId: string },
+  /** Storage prefix: keeps each owner's files in their own directory. */
+  dirId: string,
+) {
+  const body = await validate(request, uploadInput)
 
   if (!isMimeAllowed(body.mimeType)) {
     throw Errors.badRequest('mime_not_allowed', `MIME type not allowed: ${body.mimeType}. Allowed: pdf, images, zip, docs, text/code files.`)
@@ -71,18 +101,24 @@ export async function initAttachment(request: Request, projectId: string) {
 
   const cfg = storageConfig()
   const db = getDb()
+  // The id is generated here, not by the DB, so `storagePath` is known BEFORE
+  // the insert. This used to be insert(storagePath: '') → update(storagePath),
+  // two round-trips with a broken state in between: if the update failed the row
+  // kept an empty path, `localPath('')` resolved to the project directory, and
+  // confirmAttachment's HEAD "succeeded" against a directory — the attachment
+  // confirmed with no bytes behind it. One write, no window, no transaction.
+  const attachmentId = randomUUID()
+  const storagePath = storageKey(`${dirId}/${attachmentId}/${body.filename}`)
   const [att] = await db.insert(attachments).values({
-    projectId: project.id,
-    uploaderId: user.id,
+    id: attachmentId,
+    ...owner,
+    uploaderId,
     filename: body.filename,
     mimeType: body.mimeType,
     sizeBytes: body.sizeBytes,
     storageDriver: cfg.driver,
-    storagePath: '', // set below
+    storagePath,
   }).returning()
-
-  const storagePath = storageKey(`${project.id}/${att!.id}/${body.filename}`)
-  await db.update(attachments).set({ storagePath }).where(eq(attachments.id, att!.id))
 
   if (cfg.driver === 'supabase') {
     const target = await supabaseUploadUrl(storagePath)
@@ -119,13 +155,14 @@ export async function confirmAttachment(request: Request, attachmentId: string) 
   return updated
 }
 
-/** Participant-checked download URL. */
+/** Owner-checked download URL (see the module doc for the two owner rules). */
 export async function attachmentUrl(request: Request, attachmentId: string) {
   const user = await requireAuth(request)
   const db = getDb()
   const [att] = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1)
   if (!att) throw Errors.notFound('Attachment')
-  await requireParticipant(att.projectId, user)
+  if (att.projectId) await requireParticipant(att.projectId, user)
+  else await requireProposalReader(att.proposalId!, user)
   if (att.status !== 'confirmed') throw Errors.badRequest('upload_missing', 'Attachment not uploaded yet')
   const cfg = storageConfig()
   const url = cfg.driver === 'supabase'

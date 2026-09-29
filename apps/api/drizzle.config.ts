@@ -2,8 +2,15 @@ import { defineConfig } from 'drizzle-kit'
 
 /**
  * Drizzle Kit config for the API service.
- * Push schema straight to the env database — no versioned migration files:
- *   DATABASE_URL=postgresql://... pnpm db:migrate
+ *
+ * Versioned migrations, not `drizzle-kit push`:
+ *   pnpm db:generate   # diff src/db/schema.ts against drizzle/meta → new .sql
+ *   pnpm db:migrate    # apply pending migrations in order
+ *
+ * `push` diffs the schema straight against the live database. It never wrote to
+ * `drizzle/`, so the migration files there were decorative — unreviewed,
+ * unapplied, and one `rm -rf drizzle` from gone. A schema change is now a
+ * reviewable SQL file plus an ordered, replayable history.
  *
  * `.env.local` is a symlink to the repo-root env file, created by the root
  * `postinstall`, so `process.loadEnvFile` finds it from this package's cwd.

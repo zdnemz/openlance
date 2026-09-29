@@ -220,6 +220,18 @@ async function main() {
   const freeTypes = (freelancerInbox.json.data?.items ?? []).map((i: { type: string }) => i.type)
   check('the ACTOR does not get an unread copy of their own action', !(freelancerInbox.json.data?.unread > 0 && freeTypes[0] === 'proposal.received' && freelancerInbox.json.data.items[0].readAt === null))
 
+  // ── One action, one inbox row (the award used to fan out twice) ──────────
+  const beforeAward = (await api('GET', '/notifications', freelancerToken)).json.data?.items?.length ?? 0
+  const award = await api('POST', `/proposals/${proposal.json.data.id}/accept`, clientToken, {})
+  check('the job poster can award the proposal', award.status === 201, award.json)
+
+  await new Promise((r) => setTimeout(r, 400))
+  const afterAward = await api('GET', '/notifications', freelancerToken)
+  const awardRows = (afterAward.json.data?.items ?? []).slice(0, (afterAward.json.data?.items?.length ?? 0) - beforeAward)
+  check('the award lands as exactly ONE inbox row for the freelancer', awardRows.length === 1, awardRows.map((i: { type: string }) => i.type))
+  check('that row is proposal.accepted', awardRows[0]?.type === 'proposal.accepted', awardRows[0]?.type)
+  check('the award does not also emit project.created', !awardRows.some((i: { type: string }) => i.type === 'project.created'))
+
   // ── Auth guards ────────────────────────────────────────────────────────
   const anon = await api('GET', '/notifications')
   check('GET /notifications without auth → 401', anon.status === 401, anon.status)

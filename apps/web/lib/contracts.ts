@@ -7,10 +7,12 @@ import type { Abi } from "viem";
 
 export const ESCROW_ABI = [
   { type: "function", name: "fund", stateMutability: "payable", inputs: [{ name: "ref", type: "bytes32" }, { name: "freelancer", type: "address" }], outputs: [] },
-  // Drawdown model: lock the full budget at publish, milestones draw from it.
+  // Drawdown model: the budget is locked by the first funding signature for
+  // that jobRef — either lockBudget (pre-funding) or fundAllFromCredit with
+  // value attached (the award path) — and every later milestone draws from it.
   { type: "function", name: "lockBudget", stateMutability: "payable", inputs: [{ name: "jobRef", type: "bytes32" }], outputs: [] },
   { type: "function", name: "fundFromCredit", stateMutability: "nonpayable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "ref", type: "bytes32" }, { name: "freelancer", type: "address" }, { name: "amount", type: "uint256" }], outputs: [] },
-  { type: "function", name: "fundAllFromCredit", stateMutability: "nonpayable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "refs", type: "bytes32[]" }, { name: "freelancers", type: "address[]" }, { name: "amounts", type: "uint256[]" }], outputs: [] },
+  { type: "function", name: "fundAllFromCredit", stateMutability: "payable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "refs", type: "bytes32[]" }, { name: "freelancers", type: "address[]" }, { name: "amounts", type: "uint256[]" }], outputs: [] },
   { type: "function", name: "unlockBudget", stateMutability: "nonpayable", inputs: [{ name: "jobRef", type: "bytes32" }, { name: "amount", type: "uint256" }], outputs: [] },
   { type: "function", name: "lockedBudget", stateMutability: "view", inputs: [{ name: "jobRef", type: "bytes32" }], outputs: [{ name: "", type: "uint256" }] },
   { type: "function", name: "reservedBudget", stateMutability: "view", inputs: [{ name: "jobRef", type: "bytes32" }], outputs: [{ name: "", type: "uint256" }] },

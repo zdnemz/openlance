@@ -14,7 +14,8 @@
  */
 import { sql } from 'drizzle-orm'
 import {
-  bigint, bigserial, boolean, index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid,
+  bigint, bigserial, boolean, check, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 
 // ── Enums ───────────────────────────────────────────────────────────────────
@@ -45,6 +46,18 @@ export const deliveryStatus = pgEnum('delivery_status', ['pending', 'success', '
 /** Wei amounts can exceed PG bigint range (2^63) — numeric(78,0) is uint256-safe. */
 const wei = (name: string) => numeric(name, { precision: 78, scale: 0 })
 
+/**
+ * `col >= 0` for one or more columns.
+ *
+ * Every money amount here is a uint256 on-chain, where a negative value cannot
+ * be expressed. A negative `amount_wei` is therefore never a legitimate state —
+ * it is a decode bug, a subtraction that underflowed, or a hand-written insert —
+ * and it silently corrupts the balance sheet (`reserved + paidOut <= locked`).
+ * Reject it at the storage boundary rather than trusting every writer to agree.
+ */
+const nonNeg = (name: string, ...cols: AnyPgColumn[]) =>
+  check(name, sql`${sql.join(cols.map((c) => sql`${c} >= 0`), sql` and `)}`)
+
 // ── Identity ────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -71,7 +84,10 @@ export const users = pgTable('users', {
   completedProjectsAsFreelancer: integer('completed_projects_as_freelancer').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => [
+  nonNeg('users_totals_nonneg', t.totalEarnedWei, t.totalPaidWei),
+  check('users_completed_nonneg', sql`${t.completedProjectsAsClient} >= 0 and ${t.completedProjectsAsFreelancer} >= 0`),
+])
 
 // ── Gasless sponsorship sessions ────────────────────────────────────────────
 /**
@@ -112,31 +128,35 @@ export const jobs = pgTable('jobs', {
   description: text('description').notNull(),
   category: text('category').notNull(),
   skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
-  budgetMinWei: wei('budget_min_wei').notNull(),
+  /** Always 0: the client sets a ceiling, the freelancer's bid sets the price. */
+  budgetMinWei: wei('budget_min_wei').notNull().default(sql`'0'::numeric`),
+  /** The client's ceiling — the hard cap on any bid (createProposal enforces it). */
   budgetMaxWei: wei('budget_max_wei').notNull(),
   status: jobStatus('status').notNull().default('draft'),
-  // ── Publish vault (agreed flow: draft → deposit budgetMax → publish) ─────
+  // ── Award vault (draft → publish (free) → award → fund) ──────────────────
+  // The client posts a ceiling and no counterparty exists at publish, so the
+  // budget is locked on-chain by the award signature, not before. These columns
+  // are the off-chain ledger of that lock.
   // ponytail: off-chain vault ledger (amount + tx hash); on-chain JobVault
   // contract later if custodial trust demands it.
-  /** Amount locked at publish (always == budgetMaxWei at publish time). */
+  /** Amount locked on-chain for this job = the winning bid, set at award. */
   depositAmountWei: wei('deposit_amount_wei'),
-  /** Deposit tx hash anchoring the lock (verified by amount, not by contract yet). */
+  /** Funding tx hash anchoring the lock (the client's fundAllFromCredit call). */
   depositTxHash: text('deposit_tx_hash'),
   depositedAt: timestamp('deposited_at', { withTimezone: true }),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('jobs_status_idx').on(t.status), index('jobs_category_idx').on(t.category)])
-
-/** Ordered milestone template attached to a job post (PRD F1). */
-export const jobMilestones = pgTable('job_milestones', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  jobId: uuid('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
-  position: integer('position').notNull(),
-  title: text('title').notNull(),
-  description: text('description').notNull(),
-  amountWei: wei('amount_wei').notNull(),
-}, (t) => [uniqueIndex('job_milestones_job_position_idx').on(t.jobId, t.position)])
+}, (t) => [
+  index('jobs_status_idx').on(t.status),
+  index('jobs_category_idx').on(t.category),
+  // "my jobs" is the poster's landing query; the FK had no index, so it seq-scanned.
+  index('jobs_poster_idx').on(t.posterId),
+  nonNeg('jobs_budget_nonneg', t.budgetMinWei, t.budgetMaxWei, t.depositAmountWei),
+  // A max below the min is an inverted range, not a budget. Every listing filter
+  // (`budget_max >= ?`) assumes max is the upper bound.
+  check('jobs_budget_ordered', sql`${t.budgetMaxWei} >= ${t.budgetMinWei}`),
+])
 
 export const proposals = pgTable('proposals', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -148,7 +168,15 @@ export const proposals = pgTable('proposals', {
   status: proposalStatus('status').notNull().default('submitted'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex('proposals_job_freelancer_idx').on(t.jobId, t.freelancerId)])
+}, (t) => [
+  uniqueIndex('proposals_job_freelancer_idx').on(t.jobId, t.freelancerId),
+  // "proposals on this job" and "this freelancer's proposals" are both hot; the
+  // unique index only serves the composite, so neither leading lookup was covered.
+  index('proposals_job_idx').on(t.jobId),
+  index('proposals_freelancer_idx').on(t.freelancerId),
+  nonNeg('proposals_bid_nonneg', t.bidTotalWei),
+  check('proposals_delivery_days_positive', sql`${t.deliveryDays} > 0`),
+])
 
 export const proposalMilestones = pgTable('proposal_milestones', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -157,7 +185,11 @@ export const proposalMilestones = pgTable('proposal_milestones', {
   title: text('title').notNull(),
   description: text('description').notNull(),
   amountWei: wei('amount_wei').notNull(),
-}, (t) => [uniqueIndex('proposal_milestones_position_idx').on(t.proposalId, t.position)])
+}, (t) => [
+  uniqueIndex('proposal_milestones_position_idx').on(t.proposalId, t.position),
+  nonNeg('proposal_milestones_amount_nonneg', t.amountWei),
+  check('proposal_milestones_position_nonneg', sql`${t.position} >= 0`),
+])
 
 // ── Projects (created at award — the off-chain bridge event, PRD F2) ────────
 export const projects = pgTable('projects', {
@@ -175,7 +207,11 @@ export const projects = pgTable('projects', {
   arbitersLockedAt: timestamp('arbiters_locked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => [
+  // "my projects" as client and as freelancer — the two home screens.
+  index('projects_client_idx').on(t.clientId),
+  index('projects_freelancer_idx').on(t.freelancerId),
+])
 
 /**
  * Per-project milestones. Created from the accepted proposal's breakdown;
@@ -205,7 +241,11 @@ export const projectMilestones = pgTable('project_milestones', {
   withdrawTxHash: text('withdraw_tx_hash'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex('project_milestones_position_idx').on(t.projectId, t.position)])
+}, (t) => [
+  uniqueIndex('project_milestones_position_idx').on(t.projectId, t.position),
+  nonNeg('project_milestones_amount_nonneg', t.amountWei),
+  check('project_milestones_position_nonneg', sql`${t.position} >= 0`),
+])
 
 // ── Collaboration ───────────────────────────────────────────────────────────
 /** Append-only evidence log: no update, no delete — by design (PRD F6). */
@@ -214,13 +254,29 @@ export const messages = pgTable('messages', {
   projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   senderId: uuid('sender_id').notNull().references(() => users.id),
   body: text('body').notNull(),
-  attachmentId: uuid('attachment_id'),
+  // Was a bare uuid: a message could point at an attachment that never existed
+  // (or was deleted), and the chat UI rendered a broken tile. `set null` keeps the
+  // message — it is append-only evidence — and drops only the dangling pointer.
+  attachmentId: uuid('attachment_id').references(() => attachments.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('messages_project_created_idx').on(t.projectId, t.createdAt)])
+}, (t) => [
+  index('messages_project_created_idx').on(t.projectId, t.createdAt),
+  index('messages_sender_idx').on(t.senderId),
+  index('messages_attachment_idx').on(t.attachmentId),
+])
 
+/**
+ * One file store for two owners. A project file (deliverable, submission
+ * evidence) and a proposal file (a bid's supporting material, attached before
+ * any project exists) are the same bytes in the same bucket, so they share the
+ * table and the init → upload → confirm pipeline. Exactly one owner is set:
+ * an attachment with both, or neither, has no readable scope and every read
+ * guard would have to guess.
+ */
 export const attachments = pgTable('attachments', {
   id: uuid('id').primaryKey().defaultRandom(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  proposalId: uuid('proposal_id').references(() => proposals.id, { onDelete: 'cascade' }),
   uploaderId: uuid('uploader_id').notNull().references(() => users.id),
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
@@ -229,7 +285,17 @@ export const attachments = pgTable('attachments', {
   storagePath: text('storage_path').notNull(),
   status: attachmentStatus('status').notNull().default('pending'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('attachments_project_idx').on(t.projectId)])
+}, (t) => [
+  index('attachments_project_idx').on(t.projectId),
+  index('attachments_proposal_idx').on(t.proposalId),
+  index('attachments_uploader_idx').on(t.uploaderId),
+  check('attachments_single_owner', sql`num_nonnulls(${t.projectId}, ${t.proposalId}) = 1`),
+  // `initAttachment` writes storagePath='' in a two-step insert→update, so an
+  // interrupted write leaves an empty path. files.ts resolves `join(dir, '')` to
+  // the project directory itself, where a HEAD "succeeds" and the attachment
+  // confirms against nothing. Reject the empty path at the boundary.
+  check('attachments_storage_path_present', sql`length(${t.storagePath}) > 0`),
+])
 
 export const submissions = pgTable('submissions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -237,12 +303,22 @@ export const submissions = pgTable('submissions', {
   authorId: uuid('author_id').notNull().references(() => users.id),
   notes: text('notes').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('submissions_milestone_idx').on(t.milestoneId)])
+}, (t) => [index('submissions_milestone_idx').on(t.milestoneId), index('submissions_author_idx').on(t.authorId)])
 
+/**
+ * Join table. It had a uniqueIndex but NO primary key, so Postgres had no
+ * identity for the row and replication/upsert paths had nothing to key on. The
+ * composite PK is the uniqueness guarantee; the separate uniqueIndex is dropped
+ * as redundant. `attachmentId` is indexed on its own for the reverse lookup
+ * ("which submissions use this attachment?").
+ */
 export const submissionAttachments = pgTable('submission_attachments', {
   submissionId: uuid('submission_id').notNull().references(() => submissions.id, { onDelete: 'cascade' }),
   attachmentId: uuid('attachment_id').notNull().references(() => attachments.id, { onDelete: 'cascade' }),
-}, (t) => [uniqueIndex('submission_attachment_idx').on(t.submissionId, t.attachmentId)])
+}, (t) => [
+  primaryKey({ columns: [t.submissionId, t.attachmentId] }),
+  index('submission_attachments_attachment_idx').on(t.attachmentId),
+])
 
 // ── Trust layer ─────────────────────────────────────────────────────────────
 /** One review per side per milestone; only accepted after on-chain settlement. */
@@ -255,7 +331,16 @@ export const reviews = pgTable('reviews', {
   body: text('body'),
   txHash: text('tx_hash').notNull(), // settlement tx that unlocked this review
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex('reviews_milestone_reviewer_idx').on(t.milestoneId, t.reviewerId)])
+}, (t) => [
+  uniqueIndex('reviews_milestone_reviewer_idx').on(t.milestoneId, t.reviewerId),
+  // The zod schema validated 1..5 at the edge; this is the storage-level backstop
+  // for any other writer (a script, a future import, a hand-rolled admin call).
+  check('reviews_rating_range', sql`${t.rating} between 1 and 5`),
+  // "my reviews" and "reviews about me" (the public profile feed) — the composite
+  // unique index above only serves milestone-scoped lookups.
+  index('reviews_reviewer_idx').on(t.reviewerId),
+  index('reviews_reviewee_created_idx').on(t.revieweeId, t.createdAt),
+])
 
 /**
  * Dispute coordination lives off-chain; funds/outcomes live on-chain.
@@ -288,24 +373,38 @@ export const disputes = pgTable('disputes', {
   committedArbiters: jsonb('committed_arbiters').notNull().default(sql`'[]'::jsonb`),
   finalized: boolean('finalized').notNull().default(false),
   finalizedAt: timestamp('finalized_at', { withTimezone: true }),
-  // ── Legacy nomination fields (kept for older rows; unused by v2 flow) ────
-  clientProposedArbiter: text('client_proposed_arbiter'),
-  freelancerProposedArbiter: text('freelancer_proposed_arbiter'),
-  agreedArbiter: text('agreed_arbiter'),
-  adminAssignedArbiter: text('admin_assigned_arbiter'),
-  /** Dead v1 clock (selection is on-chain now); nullable so new rows write nothing. */
-  agreementDeadline: timestamp('agreement_deadline', { withTimezone: true }),
   // ── Settlement ───────────────────────────────────────────────────────────
-  /** Winning arbiter (majority representative) for the settled round. */
+  /**
+   * Winning arbiter (majority representative) for the settled round, from the
+   * `DisputeResolved` log. This is the on-chain majority, and it is what the UI
+   * shows.
+   *
+   * It replaces `majority_arbiters` (jsonb array), which was dropped: nothing
+   * ever wrote it, so it sat at its `'[]'` default and the project page
+   * rendered "majority 0 arbiter(s)" on every settled dispute — impossible,
+   * since settlement requires a 2-of-3 quorum. The full majority set is
+   * derivable on-chain from the `VoteRevealed` logs; only the representative
+   * was ever needed here.
+   */
   resolvedArbiter: text('resolved_arbiter'),
-  /** Majority arbiters of the settled round. */
-  majorityArbiters: jsonb('majority_arbiters').notNull().default(sql`'[]'::jsonb`),
   outcome: disputeOutcome('outcome'),
   resolutionTxHash: text('resolution_tx_hash'),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => [
+  // "disputes on this project" (listDisputes, project timeline) and "disputes I
+  // opened" (party inbox) — both were seq-scans on unindexed FKs.
+  index('disputes_project_idx').on(t.projectId),
+  index('disputes_opened_by_idx').on(t.openedById),
+  // slaScan runs every 15 min: `status = 'open' AND reveal_deadline <= now()`
+  // (workers/crons.ts:24). It was a full scan of the dispute table on a timer.
+  index('disputes_sla_scan_idx').on(t.status, t.revealDeadline),
+  // `round` is a chain-supplied round index (0 = original, 1+ = appeals). A
+  // negative value is a decode error, and it would silently mis-address the
+  // round the appeal/overturn logic reads.
+  check('disputes_round_nonneg', sql`${t.round} >= 0`),
+])
 
 // ── Chain mirror (untrusted cache — PRD F13) ───────────────────────────────
 export const ledgerEvents = pgTable('ledger_events', {
@@ -326,6 +425,10 @@ export const ledgerEvents = pgTable('ledger_events', {
   index('ledger_project_idx').on(t.projectId),
   index('ledger_type_idx').on(t.eventType),
   index('ledger_milestone_idx').on(t.milestoneOnchainId), // stats recompute filters on this
+  // The indexer's whole job is "give me blocks after N", and overview orders by
+  // block DESC. blockNumber was the only column with no index — the single most
+  // selective column in the table, and the one that grows without bound.
+  index('ledger_chain_block_idx').on(t.chainId, t.blockNumber),
 ])
 
 /** Indexer checkpoint per contract (last fully ingested block). */
@@ -345,7 +448,12 @@ export const notificationEvents = pgTable('notification_events', {
   milestoneId: uuid('milestone_id'),
   payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('notification_events_created_idx').on(t.createdAt)])
+}, (t) => [
+  index('notification_events_created_idx').on(t.createdAt),
+  // slaScan de-dupes with `type = ? AND milestone_id = ?` per pending dispute,
+  // inside a loop (crons.ts:31) — milestone_id is the selective side.
+  index('notification_events_milestone_type_idx').on(t.milestoneId, t.type),
+])
 
 /**
  * Per-user inbox projection of the outbox. One row per (event, recipient) —
@@ -386,7 +494,12 @@ export const webhookSubscriptions = pgTable('webhook_subscriptions', {
   eventTypes: text('event_types').array().notNull().default(sql`'{}'::text[]`), // empty = all
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => [
+  // writeOutbox's fan-out filters `active = true` across ALL subscriptions
+  // (notify.ts:141) — this is on the hot path of every single emitted event.
+  index('webhook_subscriptions_active_idx').on(t.active),
+  index('webhook_subscriptions_user_idx').on(t.userId),
+])
 
 export const webhookDeliveries = pgTable('webhook_deliveries', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -400,7 +513,12 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
   nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
   deliveredAt: timestamp('delivered_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('webhook_deliveries_sub_idx').on(t.subscriptionId, t.createdAt)])
+}, (t) => [
+  index('webhook_deliveries_sub_idx').on(t.subscriptionId, t.createdAt),
+  // eventId cascades from notificationEvents; an unindexed FK makes every
+  // outbox delete a seq-scan of this table.
+  index('webhook_deliveries_event_idx').on(t.eventId),
+])
 
 /** Nightly mirror-vs-chain reconciliation reports (PRD §7.3 + interviews). */
 export const reconciliationRuns = pgTable('reconciliation_runs', {

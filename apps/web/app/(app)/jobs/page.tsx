@@ -84,7 +84,7 @@ export default function JobsPage() {
         {isClient && !!drafts?.items.length && (
           <div className="mb-8 overflow-hidden rounded-3xl border border-amber-400/25 bg-amber-400/[0.04]">
             <div className="px-6 pt-5">
-              <span className="num text-[11px] uppercase tracking-wider text-amber-300">your drafts · deposit to publish</span>
+              <span className="num text-[11px] uppercase tracking-wider text-amber-300">your drafts · publish when ready</span>
             </div>
             <div className="divide-y divide-white/[0.05]">
               {drafts.items.map((job) => (
@@ -147,12 +147,9 @@ export default function JobsPage() {
                       {job.title}
                     </h2>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {job.skills.slice(0, 4).map((s) => (
+                      {job.skills.slice(0, 5).map((s) => (
                         <Chip key={s}>{s}</Chip>
                       ))}
-                      <span className="num text-[11px] text-faint">
-                        {job.milestones.length} {job.milestones.length === 1 ? "milestone" : "milestones"}
-                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-6 sm:flex-col sm:items-end sm:gap-1.5">
@@ -160,7 +157,7 @@ export default function JobsPage() {
                       <div className="num text-xl font-medium tracking-tight">
                         {formatEth(job.budget.maxWei)} <span className="text-xs text-faint">ETH</span>
                       </div>
-                      <div className="num mt-0.5 text-[12px] text-faint">fixed rate · {job.milestones.length} {job.milestones.length === 1 ? "milestone" : "milestones"}</div>
+                      <div className="num mt-0.5 text-[12px] text-faint">max budget</div>
                     </div>
                     <ArrowUpRight className="h-4 w-4 text-faint opacity-0 transition-opacity group-hover:opacity-70" />
                   </div>

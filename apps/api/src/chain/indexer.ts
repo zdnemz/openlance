@@ -134,7 +134,7 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'ArbiterPenalized': return null // ledger-only; scores live on-chain
     case 'FeeWithdrawn': return null // ledger-only
     case 'BudgetLocked':
-    case 'BudgetUnlocked': return null // drawdown: ledger-only (publish verifies the lock tx directly)
+    case 'BudgetUnlocked': return null // drawdown: ledger-only (the award signature carries the lock)
     case 'FundsWithdrawn': return applyWithdrawn(tx, evt)
     // ── Registry events: NO off-chain arbiter table to mirror. Scores, stakes
     //    and the roster are read live from the contract. Only the registry's
@@ -312,12 +312,16 @@ async function applySplit(tx: Tx, evt: RawChainLog): Promise<PlannedNotification
   const fee = str(evt.args.fee ?? '0')
   await adjustStats(tx, m.projectId, freelancerAmount, (BigInt(freelancerAmount) + BigInt(fee)).toString())
   const completed = await completeProjectIfDone(tx, m.projectId)
+  // `viaDisputeResolution` is not a contract arg here: Escrow.sol only ever
+  // emits MilestoneSplit from _settleMilestone (finalizeDispute), so a split is
+  // always a dispute settlement — and the flag is what pulls the round's
+  // arbiters into this row's audience (see resolveRecipients).
   return {
     type: 'milestone.split',
     actorAddress: null,
     projectId: m.projectId,
     milestoneId: m.id,
-    payload: { clientAmount: str(evt.args.clientAmount), freelancerAmount, fee, txHash: evt.txHash, projectCompleted: completed },
+    payload: { clientAmount: str(evt.args.clientAmount), freelancerAmount, fee, txHash: evt.txHash, projectCompleted: completed, viaDisputeResolution: true },
   }
 }
 
@@ -375,13 +379,11 @@ async function applyDisputeResolved(tx: Tx, evt: RawChainLog): Promise<PlannedNo
   } else {
     log.warn('DRIFT: DisputeResolved with no off-chain dispute record', { milestoneId: m.id, txHash: evt.txHash })
   }
-  return {
-    type: 'dispute.resolved',
-    actorAddress: str(evt.args.arbiter).toLowerCase(),
-    projectId: m.projectId,
-    milestoneId: m.id,
-    payload: { outcome, txHash: evt.txHash },
-  }
+  // Silent: the settlement itself is the announcement. `finalizeDispute` emits
+  // Milestone{Released,Refunded,Split} in this same tx, and that applier
+  // notifies both parties AND the round's arbiters (`viaDisputeResolution`) —
+  // one row for the settlement instead of two saying the same thing.
+  return null
 }
 
 // ── Multi-arbiter dispute round mirror ──────────────────────────────────────
@@ -461,6 +463,10 @@ async function applyDisputeFinalized(tx: Tx, evt: RawChainLog): Promise<PlannedN
     finalizedAt: evt.blockTime,
     updatedAt: evt.blockTime,
   }).where(eq(disputes.id, dispute.id))
+  // No quorum: `NoQuorumFallback` fires in the SAME tx, right after this log,
+  // and its notification (`dispute.no_quorum`) carries the refund. Emitting
+  // here too gave the parties two rows saying the identical thing.
+  if (!quorumMet) return null
   return {
     type: 'dispute.finalized',
     actorAddress: null,

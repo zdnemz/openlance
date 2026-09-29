@@ -47,7 +47,11 @@ export function describeFundingRevert(message: string, totalWei: bigint, freeWei
     if (freeWei <= 0n) return "Already fully funded on-chain — nothing left to draw from the job budget.";
     return `Job budget too small: needs ${formatEth(totalWei)} ETH but only ${formatEth(freeWei)} ETH is free.`;
   }
-  if (/NoBudgetLocked/i.test(message)) return "No budget locked for this job on the current chain — lock the budget first, then fund.";
+  // fundAllFromCredit takes two shapes: the first call for a job carries the
+  // value that becomes the lock (and must equal the batch), later calls must
+  // send nothing. A mismatch between the two is the usual funding failure.
+  if (/ValueMismatch/i.test(message)) return "The funding value didn't match the milestone total — refresh and retry; if the budget was already locked, the batch must carry no value.";
+  if (/NoBudgetLocked/i.test(message)) return "No budget locked for this job on the current chain.";
   if (/NotClient/i.test(message)) return "Only the wallet that locked the job budget can fund from it — switch wallets and retry.";
   if (/BadBatch/i.test(message)) return "Funding batch malformed — refresh the page and try again.";
   return message;

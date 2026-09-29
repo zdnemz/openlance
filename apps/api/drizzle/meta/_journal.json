@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789884853629,
+      "tag": "0000_glorious_justin_hammer",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789890644562,
+      "tag": "0001_good_dark_phoenix",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789897329576,
+      "tag": "0002_messy_alex_wilder",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789908116970,
+      "tag": "0003_boring_big_bertha",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790611913997,
+      "tag": "0004_powerful_mole_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790612496302,
+      "tag": "0005_clammy_magdalene",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790627841788,
+      "tag": "0006_drop_job_template_proposal_files",
+      "breakpoints": true
+    }
+  ]
+}

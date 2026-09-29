@@ -11,12 +11,16 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "check:routes": "node scripts/check-routes.mjs",
+    "check:envelope": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-response-envelope.ts",
+    "check:notification-rows": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-notification-rows.ts",
+    "check:kv": "node --experimental-strip-types scripts/check-kv.ts",
     "gen:routes": "node scripts/gen-routes.mjs",
-    "check:fixed-rate": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-fixed-rate.ts",
+    "check:job-bid": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-job-bid.ts",
     "verify:notifications": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/verify-notifications.ts",
-    "db:migrate": "drizzle-kit push --config drizzle.config.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
     "db:setup": "pnpm db:migrate",
-    "clean": "rm -rf drizzle"
+    "check:db": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-db-integrity.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",

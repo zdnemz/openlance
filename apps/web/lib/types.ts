@@ -45,27 +45,20 @@ export interface PublicUser {
   createdAt: string;
 }
 
-export interface MilestoneTemplate {
-  id: string;
-  position: number;
-  title: string;
-  description: string;
-  amountWei: string;
-  amountEth: string;
-}
-
 export interface JobView {
   id: string;
   /** The awarded project, if any (null until a proposal is accepted). */
   projectId: string | null;
-  /** bytes32 of the job uuid — the lockBudget key (drawdown funding model). */
+  /** bytes32 of the job uuid — the key the escrow locks this job's budget under. */
   jobRef: string;
   title: string;
   description: string;
   category: string;
   skills: string[];
   status: JobStatus;
-  budget: { minWei: string; maxWei: string; minEth: string; maxEth: string };
+  /** The client's ceiling. There is no min and no milestone template: the price
+   *  and the breakdown both come from the bid the client accepts. */
+  budget: { maxWei: string; maxEth: string };
   poster?: {
     id: string;
     walletAddress: string;
@@ -73,12 +66,19 @@ export interface JobView {
     avatarUrl: string | null;
     stats: { completedProjectsAsClient: number; totalPaidWei: string };
   };
-  milestones: MilestoneTemplate[];
-  templateTotalWei: string;
-  deposit: { amountWei: string; txHash: string | null; depositedAt: string | null } | null;
+  /** The amount locked on-chain for this job — the winning bid, set at award. */
+  funded: { amountWei: string; txHash: string | null; fundedAt: string | null } | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AttachmentView {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: string;
 }
 
 export interface ProposalView {
@@ -91,6 +91,7 @@ export interface ProposalView {
   bidTotalWei: string;
   bidTotalEth: string;
   milestones: { position: number; title: string; description: string; amountWei: string; amountEth: string }[];
+  attachments: AttachmentView[];
   createdAt: string;
 }
 
@@ -187,15 +188,17 @@ export interface DisputeView {
   appealCount: number;
   finalized: boolean;
   finalizedAt: string | null;
-  // ── Legacy nomination fields (schema-compatible; unused by the v2 flow) ─
-  clientProposedArbiter: string | null;
-  freelancerProposedArbiter: string | null;
-  agreedArbiter: string | null;
-  adminAssignedArbiter: string | null;
-  agreementDeadline: string | null;
   // ── Settlement ──────────────────────────────────────────────────────────
+  /**
+   * Winning arbiter (majority representative) for the settled round, from the
+   * on-chain `DisputeResolved` log.
+   *
+   * Replaces `majorityArbiters`, which the API never populated — the UI read it
+   * as an always-empty array and printed "majority 0 arbiter(s)" on every
+   * settled dispute. The full majority set is derivable on-chain from the
+   * `VoteRevealed` logs if it is ever needed again.
+   */
   resolvedArbiter: string | null;
-  majorityArbiters: string[];
   outcome: "release" | "refund" | "split" | null;
   resolutionTxHash: string | null;
   resolvedAt: string | null;

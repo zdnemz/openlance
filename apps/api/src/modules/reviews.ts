@@ -13,7 +13,7 @@ import { requireKyc } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
 import { unlocksReviews } from '../domain/state-machine.ts'
 import { getChainAdapter } from '../chain/adapter.ts'
-import { emitNotification } from './notify.ts'
+import { enqueueDeliveries, writeOutbox } from './notify.ts'
 import { projectMilestones, reviews, users } from '../db/schema.ts'
 import { loadMilestone } from './helpers.ts'
 
@@ -75,23 +75,29 @@ export async function createReview(request: Request, milestoneId: string) {
   const settlementTxHash = milestone.settlementTxHash
   if (!settlementTxHash) throw Errors.precondition('no_settlement_tx', 'Settlement tx hash missing from the mirror — rerun reconciliation')
 
-  const [review] = await db.insert(reviews).values({
-    milestoneId: milestone.id,
-    reviewerId: user.id,
-    revieweeId,
-    rating: body.rating,
-    body: body.body ?? null,
-    txHash: settlementTxHash,
-  }).returning()
-
-  const [reviewee] = await db.select({ walletAddress: users.walletAddress }).from(users).where(eq(users.id, revieweeId)).limit(1)
-  await emitNotification({
-    type: 'review.received',
-    actorAddress: user.walletAddress,
-    projectId: project.id,
-    milestoneId: milestone.id,
-    payload: { rating: body.rating, reviewId: review!.id, revieweeAddress: reviewee?.walletAddress ?? null },
+  // The review and its notification commit together — a review the reviewee is
+  // never told about is a silent loss with no retry path (the duplicate-review
+  // guard above 409s a second attempt). See disputes.ts for the same fix.
+  const [review, deliveryIds] = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(reviews).values({
+      milestoneId: milestone.id,
+      reviewerId: user.id,
+      revieweeId,
+      rating: body.rating,
+      body: body.body ?? null,
+      txHash: settlementTxHash,
+    }).returning()
+    const [reviewee] = await tx.select({ walletAddress: users.walletAddress }).from(users).where(eq(users.id, revieweeId)).limit(1)
+    const ids = await writeOutbox(tx, {
+      type: 'review.received',
+      actorAddress: user.walletAddress,
+      projectId: project.id,
+      milestoneId: milestone.id,
+      payload: { rating: body.rating, reviewId: row!.id, revieweeAddress: reviewee?.walletAddress ?? null },
+    })
+    return [row, ids] as const
   })
+  await enqueueDeliveries(deliveryIds)
   return review
 }
 

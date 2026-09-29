@@ -51,11 +51,14 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
  *                                          differs the original majority is
  *                                          penalised −25 each.
  *
- *          FUNDING MODEL — the full job budget is locked once at publish via
- *          `lockBudget(jobRef)`; every milestone of that job is then funded from
- *          the locked balance by `fundFromCredit` (the client signs once, the
- *          contract releases value per milestone). `unlockBudget` returns the
- *          unspent remainder; paidOutBudget/reservedBudget are the source of truth.
+ *          FUNDING MODEL — the budget is locked once, at award, by the first
+ *          `fundAllFromCredit` call for that jobRef (it carries `msg.value` and
+ *          becomes the lock). `lockBudget` remains for clients that would rather
+ *          pre-fund a job. Either way every later milestone of that job is
+ *          funded from the locked balance by `fundFromCredit` (the client signs
+ *          once, the contract releases value per milestone). `unlockBudget`
+ *          returns the unspent remainder; paidOutBudget/reservedBudget are the
+ *          source of truth.
  *
  * @dev UPGRADEABLE (UUPS), owner = TimelockController in production.
  *
@@ -192,6 +195,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     error BudgetAlreadyLocked(bytes32 jobRef);
     error NoBudgetLocked(bytes32 jobRef);
     error InsufficientBudget(uint256 needed, uint256 available);
+    error ValueMismatch(uint256 expected, uint256 provided);
     error BadBatch();
     error UnknownMilestone(uint256 milestoneId);
     error NotClient();
@@ -363,31 +367,45 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     }
 
     /**
-     * @notice Fund the whole milestone set from the job's locked budget in one
-     *         call (no ETH attached). This is what the award flow signs: the
-     *         client authorises every milestone of the project at once, so no
-     *         per-milestone signature is ever needed as work starts.
-     *         The batch is all-or-nothing: the total is checked once against the
-     *         job's free balance, so a single bad item reverts the whole call.
+     * @notice Fund the whole milestone set of a job in one call. This is the
+     *         award flow: the client authorises every milestone of the project
+     *         at once, so no per-milestone signature is ever needed as work starts.
+     *         A job needs no prior `lockBudget` — on the first call for a jobRef,
+     *         `msg.value` becomes the lock itself (the caller becomes the locker
+     *         and `BudgetLocked` is emitted) and must equal the batch total, so
+     *         the client signs the price they accepted and nothing more. The batch
+     *         is all-or-nothing: the total is checked once, so a single bad item
+     *         reverts the whole call.
+     * @param  jobRef bytes32 of the off-chain job uuid (the same key the indexer
+     *         uses to map milestone refs back to rows).
      */
     function fundAllFromCredit(
         bytes32 jobRef,
         bytes32[] calldata refs,
         address[] calldata freelancers,
         uint256[] calldata amounts
-    ) external nonReentrant {
-        address client = budgetLocker[jobRef];
-        if (client == address(0)) revert NoBudgetLocked(jobRef);
-        if (_msgSender() != client) revert NotClient();
+    ) external payable nonReentrant {
         uint256 n = refs.length;
         if (n == 0 || n != freelancers.length || n != amounts.length) revert BadBatch();
         uint256 total;
         for (uint256 i = 0; i < n; i++) total += amounts[i];
-        uint256 free = lockedBudget[jobRef] - paidOutBudget[jobRef] - reservedBudget[jobRef];
-        if (total > free) revert InsufficientBudget(total, free);
+        if (lockedBudget[jobRef] == 0) {
+            // First touch of this job: the attached value IS the lock. It has to
+            // cover the batch exactly — a partial lock would under-write the
+            // milestones the client just approved.
+            if (msg.value != total) revert ValueMismatch(total, msg.value);
+            budgetLocker[jobRef] = _msgSender();
+            lockedBudget[jobRef] = total;
+            emit BudgetLocked(jobRef, _msgSender(), total);
+        } else {
+            if (msg.value != 0) revert ValueMismatch(0, msg.value);
+            if (_msgSender() != budgetLocker[jobRef]) revert NotClient();
+            uint256 free = lockedBudget[jobRef] - paidOutBudget[jobRef] - reservedBudget[jobRef];
+            if (total > free) revert InsufficientBudget(total, free);
+        }
         reservedBudget[jobRef] += total;
         for (uint256 i = 0; i < n; i++) {
-            uint256 milestoneId = _createMilestone(refs[i], client, freelancers[i], amounts[i]);
+            uint256 milestoneId = _createMilestone(refs[i], _msgSender(), freelancers[i], amounts[i]);
             _milestoneJob[milestoneId] = jobRef;
         }
     }

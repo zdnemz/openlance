@@ -4,18 +4,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { post, patch, useInvalidate } from "@/lib/queries";
-import { press } from "@/components/design";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus } from "@phosphor-icons/react/dist/csr/Plus";
+import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CaretDown } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { Check } from "@phosphor-icons/react/dist/csr/Check";
-import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
-import { X } from "@phosphor-icons/react/dist/csr/X";
 import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { X } from "@phosphor-icons/react/dist/csr/X";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -28,7 +25,6 @@ export interface JobDraft {
   customCategory: string;
   skills: string;
   budget: string;
-  milestones: { title: string; description: string; amount: string }[];
 }
 
 const START: JobDraft = {
@@ -38,7 +34,6 @@ const START: JobDraft = {
   customCategory: "",
   skills: "",
   budget: "0.5",
-  milestones: [{ title: "", description: "", amount: "" }],
 };
 
 export const CATEGORIES = ["frontend", "backend", "contracts", "security", "design", "other"];
@@ -53,8 +48,10 @@ function skillTokens(skills: string): string[] {
 }
 
 /**
- * Fixed-rate job form. `jobId` switches create → full-draft-edit. The milestone
- * sum must equal the budget exactly — that single number is the deposit at publish.
+ * Job post: a brief and a ceiling. The milestone breakdown is the freelancer's
+ * to shape — each bid brings its own — so the only number the client commits to
+ * here is the maximum they are willing to pay. Nothing is escrowed at this point;
+ * the client signs the winning bid once, at award.
  */
 export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft }) {
   const router = useRouter();
@@ -63,20 +60,13 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const total = d.milestones.reduce((acc, m) => acc + (Number(m.amount) || 0), 0);
-  const budget = Number(d.budget) || 0;
-  const sumFits = budget > 0 && total === budget;
-
   async function submit() {
     setError(null);
     const category = d.category === CUSTOM_CATEGORY ? d.customCategory.trim() : d.category;
     if (d.title.trim().length < 4) return setError("Give the job a real title (4+ characters).");
     if (d.description.trim().length < 20) return setError("The brief needs at least 20 characters — describe the work and the acceptance bar.");
     if (category.length < 2) return setError("Pick a category, or type a custom one (2+ characters).");
-    if (budget <= 0) return setError("Budget must be a positive ETH amount.");
-    if (!d.milestones.length || !d.milestones.every((m) => m.title.trim() && m.description.trim() && /^\d*\.?\d+$/.test(m.amount)))
-      return setError("Every milestone needs a title, a description, and a valid ETH amount.");
-    if (!sumFits) return setError(`Milestone sum (${total.toFixed(3)} ETH) must equal the fixed budget (${budget} ETH). The server re-checks this.`);
+    if (!(Number(d.budget) > 0)) return setError("Max budget must be a positive ETH amount.");
     setSubmitting(true);
     try {
       const payload = {
@@ -85,15 +75,14 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
         category,
         skills: skillTokens(d.skills).slice(0, 15),
         budget: d.budget,
-        milestones: d.milestones.map((m) => ({ title: m.title.trim(), description: m.description.trim(), amount: m.amount })),
       };
       if (jobId) {
         await patch(`/jobs/${jobId}`, payload);
         invalidate.job(jobId);
-        toast.success("Draft updated", { description: "Budget and milestones re-validated." });
+        toast.success("Draft updated", { description: "Freelancers bidding on it see the new ceiling." });
       } else {
         const job = await post<{ id: string }>("/jobs", payload);
-        toast.success("Draft saved", { description: "Deposit the budget to publish it to the marketplace." });
+        toast.success("Draft saved", { description: "Publish it when the brief reads right." });
         router.push(`/jobs/${job.id}`);
       }
     } catch (err) {
@@ -119,7 +108,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
         <Textarea
           value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })}
           rows={7}
-          placeholder="Context, scope, acceptance criteria, what the reviewer checks at each milestone. Markdown-ish paragraphs work well."
+          placeholder="Context, scope, acceptance criteria, what the reviewer checks when a milestone lands. Markdown-ish paragraphs work well."
           className="resize-none border-line bg-white/[0.03] text-sm"
         />
         <p className="text-[12px] text-faint">Minimum 20 characters. This is what proposals will be written against.</p>
@@ -132,7 +121,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex h-11 w-full items-center justify-between rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus:border-rose-accent/50"
+                className="flex h-11 w-full items-center justify-between rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
               >
                 <span>{d.category === CUSTOM_CATEGORY ? "Custom…" : d.category}</span>
                 <CaretDown className="h-4 w-4 shrink-0 text-faint" />
@@ -166,9 +155,9 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
           )}
         </div>
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">Budget (ETH) — fixed rate</label>
+          <label className="text-[13px] font-medium">Max budget (ETH)</label>
           <Input value={d.budget} onChange={(e) => setD({ ...d, budget: e.target.value })} className="num h-11 border-line bg-white/[0.03] text-sm" />
-          <p className="text-[12px] text-faint">The milestone sum must equal this. It is also the amount you deposit to publish.</p>
+          <p className="text-[12px] text-faint">The ceiling on any bid. You pay the bid you accept, not this.</p>
         </div>
       </div>
 
@@ -182,78 +171,26 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
         <p className="text-[12px] text-faint">Up to 15 — presets or your own, comma-free.</p>
       </div>
 
-      {/* milestone builder */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-[13px] font-medium">Milestone template</label>
-          <button
-            type="button"
-            onClick={() => setD({ ...d, milestones: [...d.milestones, { title: "", description: "", amount: "" }] })}
-            className={`flex items-center gap-1.5 text-[12px] text-rose-bright hover:underline ${press}`}
-          >
-            <Plus className="h-3.5 w-3.5" /> add milestone
-          </button>
-        </div>
-        {d.milestones.map((m, i) => (
-          <div key={i} className="space-y-2.5 rounded-2xl border border-line bg-white/[0.02] p-5">
-            <div className="flex items-center gap-3">
-              <span className="num text-[11px] text-faint">{String(i + 1).padStart(2, "0")}</span>
-              <Input
-                value={m.title}
-                onChange={(e) => setD({ ...d, milestones: d.milestones.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) })}
-                placeholder="Threat model + attack surface map"
-                className="h-10 flex-1 border-line bg-white/[0.03] text-[13.5px]"
-              />
-              <Input
-                value={m.amount}
-                onChange={(e) => setD({ ...d, milestones: d.milestones.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)) })}
-                placeholder="0.00"
-                className="num h-10 w-28 shrink-0 border-line bg-white/[0.03] text-[13.5px]"
-              />
-              {d.milestones.length > 1 && (
-                <button type="button" aria-label="Remove" onClick={() => setD({ ...d, milestones: d.milestones.filter((_, j) => j !== i) })} className="shrink-0 text-faint transition-colors hover:text-destructive">
-                  <Trash className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-            <Textarea
-              value={m.description} rows={2}
-              onChange={(e) => setD({ ...d, milestones: d.milestones.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)) })}
-              placeholder="What gets delivered, and what the reviewer checks before release"
-              className="resize-none border-line bg-white/[0.03] text-[13px]"
-            />
-          </div>
-        ))}
-
-        <div className={`flex items-center justify-between rounded-2xl px-5 py-4 transition-colors ${sumFits ? "bg-white/[0.04]" : "bg-amber-400/[0.07]"}`}>
-          <span className="flex items-center gap-2.5">
-            {sumFits ? (
-              <span className="num text-[11px] uppercase tracking-wider text-faint">template sum</span>
-            ) : (
-              <span className="flex items-center gap-2 text-[12px] text-amber-300">
-                <Warning weight="bold" className="h-3.5 w-3.5" /> sum must equal {budget} ETH
-              </span>
-            )}
-          </span>
-          <span className={`num text-lg font-medium ${sumFits ? "text-rose-bright" : "text-amber-300"}`}>
-            {total.toFixed(3)} ETH
-          </span>
-        </div>
-      </div>
-
       {error && (
         <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
           <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
         </p>
       )}
 
-      <Button onClick={submit} disabled={submitting} className="w-full rounded-full bg-rose-accent py-3.5 text-sm font-medium hover:bg-rose-bright">
+      <Button
+        onClick={submit}
+        disabled={submitting}
+        className="w-full rounded-full bg-rose-accent py-3.5 text-sm font-medium hover:bg-rose-bright"
+      >
         {submitting
           ? "Saving…"
           : jobId
             ? <span className="flex items-center gap-2">Save changes <ArrowRight className="h-4 w-4" weight="bold" /></span>
             : <span className="flex items-center gap-2">Save draft <ArrowRight className="h-4 w-4" weight="bold" /></span>}
       </Button>
+      <p className="text-center text-[12px] text-faint">
+        Freelancers shape the milestone breakdown themselves — you review the bids.
+      </p>
     </div>
   );
 }
@@ -287,7 +224,7 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus:border-rose-accent/50"
+            className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
           >
             <span className={`min-w-0 truncate ${tokens.length ? "" : "text-faint"}`}>
               {tokens.length ? preview : "Select skills…"}
@@ -301,8 +238,7 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
         <DropdownMenuContent align="start" className="glass-raised w-64 rounded-2xl border-line p-1.5">
           {PRESET_SKILLS.map((s) => (
             <DropdownMenuItem
-              key={s}
-              onSelect={(e) => { e.preventDefault(); toggle(s); }}
+              key={s} onSelect={(e) => { e.preventDefault(); toggle(s); }}
               className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm"
             >
               {s}

@@ -29,7 +29,9 @@
     "db:setup": "pnpm db:migrate",
     "export:abi": "pnpm --filter @openlance/contracts export:abi",
     "verify:notifications": "pnpm --filter @openlance/api verify:notifications",
-    "check:fixed-rate": "pnpm --filter @openlance/api check:fixed-rate",
+    "check:job-bid": "pnpm --filter @openlance/api check:job-bid",
+    "check:notification-rows": "pnpm --filter @openlance/api check:notification-rows",
+    "check:envelope": "pnpm --filter @openlance/api check:envelope",
     "clean": "pnpm -r clean",
     "postinstall": "node scripts/link-env.mjs"
   },

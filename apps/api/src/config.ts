@@ -71,12 +71,14 @@ const schema = z.object({
   ARBITER_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   /** TimelockController that owns the UUPS proxies (informational). */
   TIMELOCK_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
-  /**
-   * Job publish vault: publish requires a successful plain transfer of exactly
-   * budgetMax from the poster to this address (verified on-chain in real mode).
-   * Unset → publish is rejected in real mode; mock mode skips verification.
-   */
-  VAULT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  // NOTE: there is no VAULT_ADDRESS, and ESCROW_ADDRESS no longer gates
+  // publishing. An earlier revision had both: a vault variable that was read by
+  // nothing, and a publish gate that verified a `lockBudget(jobRef)` deposit
+  // from the poster before the job went live. A job post is now a brief and a
+  // ceiling, with no counterparty to pay — so the budget is locked by the
+  // client's award signature instead (fundAllFromCredit with value, see
+  // modules/proposals.ts), and nothing verifies a tx at publish. ESCROW_ADDRESS
+  // is still the address the API reports and the client's funding txs go to.
 
   // ── Gasless sponsorship (ERC-2771 forwarder + relayer) ─────────────────────
   /** The deployed SponsorshipForwarder (trusted ERC-2771 forwarder). */

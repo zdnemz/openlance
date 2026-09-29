@@ -27,7 +27,7 @@ import { TrendDown } from "@phosphor-icons/react/dist/csr/TrendDown";
 const HEAD: Record<string, { title: string; desc: string; cta: { href: string; label: string } }> = {
   client: {
     title: "Commission work.",
-    desc: "Fund milestones into escrow, review delivery, release on proof. Disputes go to staked arbiters — never custody.",
+    desc: "Set a brief and a ceiling, accept the bid you want, fund it into escrow in one signature. Release on proof — disputes go to staked arbiters, never custody.",
     cta: { href: "/jobs/new", label: "Post a job" },
   },
   freelancer: {
@@ -171,7 +171,7 @@ export default function DashboardPage() {
           <section>
             <ListHead>Your open jobs</ListHead>
             {!myJobs.length ? (
-              <p className="mt-4 max-w-[60ch] text-sm text-faint">Nothing posted. <Link href="/jobs/new" className="text-rose-bright hover:underline">Post one</Link> with its milestone template.</p>
+              <p className="mt-4 max-w-[60ch] text-sm text-faint">Nothing posted. <Link href="/jobs/new" className="text-rose-bright hover:underline">Post one</Link> with a brief and your max budget.</p>
             ) : (
               <JobRows jobs={myJobs} />
             )}
@@ -183,7 +183,7 @@ export default function DashboardPage() {
           <section>
             <ListHead>Open jobs to propose on</ListHead>
             {!openJobs.length ? (
-              <p className="mt-4 max-w-[60ch] text-sm text-faint">Nothing open right now. Check back — new jobs land with validated milestone templates.</p>
+              <p className="mt-4 max-w-[60ch] text-sm text-faint">Nothing open right now. Check back — new jobs land as soon as their poster publishes.</p>
             ) : (
               <JobRows jobs={openJobs.slice(0, 5)} />
             )}

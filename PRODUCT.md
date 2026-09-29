@@ -12,8 +12,8 @@ Next.js 16 (App Router, Turbopack) + Tailwind CSS v4 + TanStack Query + viem (no
 
 ## Users
 
-- **Clients** (freelance buyers) posting work broken into milestone templates and funding each milestone on-chain.
-- **Freelancers** proposing with their own milestone breakdowns, submitting delivery on-chain, getting paid by contract.
+- **Clients** (freelance buyers) posting a brief and a maximum budget, then accepting one freelancer's bid and funding it on-chain with a single signature.
+- **Freelancers** proposing with their own milestone breakdown, price, and supporting files, submitting delivery on-chain, getting paid by contract.
 - **Arbiters** holding soulbound badges, resolving disputes inside a 72h SLA.
 - **Platform admin** (single operator wallet) running reconciliation and fee exit.
 - Demo personae (5 anvil accounts) let any visitor try every seat instantly; this is a portfolio piece, so the visitor IS the user.

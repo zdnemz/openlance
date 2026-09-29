@@ -52,7 +52,10 @@ async function resolveRecipients(tx: Tx, n: NotifyInput): Promise<{ userId: stri
   }
 
   // Dispute round events additionally reach the selected arbiters (by address).
-  if (n.type.startsWith('dispute.') && n.milestoneId) {
+  // A settlement is announced once, on the milestone event, so a
+  // dispute-sourced payout pulls the round's arbiters in the same way.
+  const disputeScoped = n.type.startsWith('dispute.') || n.payload?.viaDisputeResolution === true
+  if (disputeScoped && n.milestoneId) {
     const arbiterAddresses = new Set<string>()
     const [d] = await tx.select().from(disputes).where(eq(disputes.milestoneId, n.milestoneId)).limit(1)
     const selected = d && Array.isArray(d.selectedArbiters) ? (d.selectedArbiters as string[]) : []
@@ -153,13 +156,25 @@ export async function writeOutbox(tx: Tx, n: NotifyInput): Promise<string[]> {
   return rows.map((r) => r.id)
 }
 
+/**
+ * Hand freshly-committed delivery ids to the queue. MUST run after the
+ * transaction commits: enqueueing inside a tx publishes work for rows that a
+ * rollback would erase.
+ *
+ * Exported so a caller that folds `writeOutbox` into its own transaction (rather
+ * than using `emitNotification`) can still get the after-commit step right
+ * instead of open-coding it a third time.
+ */
+export async function enqueueDeliveries(deliveryIds: string[]): Promise<void> {
+  if (!deliveryIds.length) return
+  const queues = await getQueues()
+  await Promise.all(deliveryIds.map((id) => queues.enqueueWebhookDelivery(id)))
+}
+
 /** Standalone emission for API routes: outbox in one tx, enqueue after commit. */
 export async function emitNotification(n: NotifyInput): Promise<void> {
   const deliveryIds = await (getDb()).transaction(async (tx) => writeOutbox(tx, n))
-  if (deliveryIds.length) {
-    const queues = await getQueues()
-    await Promise.all(deliveryIds.map((id) => queues.enqueueWebhookDelivery(id)))
-  }
+  await enqueueDeliveries(deliveryIds)
 }
 
 // ── Inbox read model ────────────────────────────────────────────────────────

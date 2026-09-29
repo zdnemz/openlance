@@ -91,7 +91,9 @@ class UpstashKv implements Kv {
     if (keys.length) await this.redis.del(...keys)
   }
   async incrWindow(k: string, windowSeconds: number) {
-    const n = await this.redis.incr(k)
+    // Deserialization is off, so INCR hands back the raw RESP value — coerce
+    // to keep the `Promise<number>` contract of Kv.incrWindow.
+    const n = Number(await this.redis.incr(k))
     if (n === 1) await this.redis.expire(k, windowSeconds)
     return n
   }
@@ -113,7 +115,15 @@ export async function getKv(): Promise<Kv> {
   }
   if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
     const { Redis } = await import('@upstash/redis')
-    const redis = new Redis({ url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN })
+    const redis = new Redis({
+      url: env.UPSTASH_REDIS_REST_URL,
+      token: env.UPSTASH_REDIS_REST_TOKEN,
+      // Kv is a string API and its callers own serialization (cache.ts and
+      // sponsorship.ts JSON.parse what they stored). Upstash auto-deserializes
+      // by default, which hands back objects/arrays and makes those double
+      // parses throw — keep exactly one serialization layer.
+      automaticDeserialization: false,
+    })
     kvInstance = new UpstashKv(redis)
     logger.info('KV: upstash redis', { url: env.UPSTASH_REDIS_REST_URL })
   } else {
