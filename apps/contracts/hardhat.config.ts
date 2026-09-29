@@ -27,9 +27,6 @@ export default defineConfig({
           // Base Sepolia is on the Shanghai/Cancun EVM; cancun is safe and enables
           // transient storage (used by OZ's transient ReentrancyGuard if selected).
           evmVersion: "cancun",
-          // Needed by the clock-rewind test: it reaches for `arbiters[a].stakedAt`
-          // directly, because a rewound chain is the one state EDR cannot produce.
-          outputSelection: { "*": { "*": ["storageLayout"] } },
         },
       },
       production: {

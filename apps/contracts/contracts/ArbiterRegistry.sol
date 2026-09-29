@@ -295,7 +295,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
             emit StakeLocked(who, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
         }
-        uint256 readyAt = _agedSince(info.stakedAt) + unstakeCooldown;
+        uint256 readyAt = info.stakedAt + unstakeCooldown;
         if (block.timestamp < readyAt) revert UnstakeTooEarly(readyAt);
 
         // EFFECTS before INTERACTION.
@@ -324,7 +324,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
             emit StakeLocked(who, info.stake, info.trustScore);
             revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
         }
-        uint256 readyAt = _agedSince(info.stakedAt) + unstakeCooldown;
+        uint256 readyAt = info.stakedAt + unstakeCooldown;
         if (block.timestamp < readyAt) revert UnstakeTooEarly(readyAt);
 
         info.unstakeRequested = true;
@@ -439,7 +439,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
             && !info.unstakeRequested
             && info.trustScore >= minScoreToWithdraw
             && info.stake >= minStake
-            && block.timestamp >= _agedSince(info.stakedAt) + minStakeDuration;
+            && block.timestamp >= info.stakedAt + minStakeDuration;
     }
 
     function trustScoreOf(address arbiter) external view returns (uint256) {
@@ -475,7 +475,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
 
     /// @notice Unix time at which `arbiter` first becomes eligible (stakedAt + minStakeDuration).
     function eligibleAt(address arbiter) external view returns (uint256) {
-        return _agedSince(arbiters[arbiter].stakedAt) + minStakeDuration;
+        return arbiters[arbiter].stakedAt + minStakeDuration;
     }
 
     /// @notice Unix time at which a pending unstake may be withdrawn: the
@@ -562,19 +562,6 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // ── Internals ─────────────────────────────────────────────────────────────
-
-    /**
-     * @dev When did the current stake start counting? Normally `stakedAt`, but a
-     *      chain whose clock rewound (anvil's `anvil_setTime`, a dev-chain reset)
-     *      leaves `stakedAt` in the future — a record of the drift, not a stake
-     *      that begins later. Measuring from the earlier of the two keeps every
-     *      age-based rule completable instead of stranding the stake, and its
-     *      collateral, forever. No-op on a monotonic chain, where
-     *      `stakedAt <= block.timestamp` always holds.
-     */
-    function _agedSince(uint256 stakedAt) private view returns (uint256) {
-        return stakedAt > block.timestamp ? block.timestamp : stakedAt;
-    }
 
     function _enroll(address arbiter, uint256 value) private returns (uint256 tokenId) {
         ArbiterInfo storage info = arbiters[arbiter];
