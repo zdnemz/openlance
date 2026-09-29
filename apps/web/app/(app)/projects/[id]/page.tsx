@@ -16,6 +16,9 @@ import {
 } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { del } from "@/lib/api";
+import { uploadAttachment } from "@/lib/uploads";
+import { AttachmentChip } from "@/components/attachment-chip";
+import { AttachmentPicker } from "@/components/attachment-picker";
 import {
   useChainAction, openDisputeAction, commitVoteAction, revealVoteAction, tallyDisputeAction,
   finalizeDisputeAction, appealDisputeAction, readJobBudget,
@@ -380,11 +383,17 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   const { data: reviews } = useMilestoneReviews(m.id);
   const { data: disputes } = useDisputes();
   const { data: arbiters } = useArbiters();
-  const { feeBps, disputeFeeWei, escrow, chainMode } = useRuntime();
+  const { feeBps, disputeFeeWei, escrow, chainMode, storage } = useRuntime();
+  // The server's evidence ceiling, not a local copy — the API refuses past it.
+  const maxAttachments = storage?.maxAttachments ?? 3;
   const invalidate = useInvalidate();
   const chain = useChainAction();
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
+  /** The client's revision request — its own field, never the delivery notes. */
+  const [changeNote, setChangeNote] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   // Mirror-lag guard: once the chain says funded while the mirror still says
   // pending, the Fund button stays dead until the indexer catches up.
   const [fundState, setFundState] = useState<"idle" | "checking" | "landed">("idle");
@@ -396,6 +405,11 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   const outstandingJobRef = outstanding[0]?.fund?.jobRef ?? outstanding[0]?.fund?.ref ?? null;
   const outstandingKey = outstandingJobRef ? `${outstandingJobRef}:${outstandingWei}` : "";
   const cardStatus = m.chainStatus;
+  // Request-changes is an off-chain soft state: the chain stays `submitted`, so
+  // this is what tells the freelancer the work is back with them. It is also the
+  // only thing that makes a second submission legal (the API keys the revision
+  // branch off exactly this pair).
+  const changesRequested = m.softStatus === "changes_requested" && m.chainStatus === "submitted";
 
   // Proactive stale-mirror check: a mined funding tx can leave the mirror at
   // pending_funding (indexer lag/outage) while work has already started. Chain
@@ -488,17 +502,37 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
     });
   }
 
-  async function offchainThenChain<T>(path: string, body: unknown, chainCall: (posted: T | null) => Promise<{ ok: boolean }>) {
+  /**
+   * Record off-chain, then flip the chain — the shape every money action takes.
+   *
+   * `chainCall` may return `null` to say "this act is off-chain only" (a
+   * revision re-records a delivery against a milestone the chain already holds
+   * as Submitted, so there is no transaction to send). That is a success, not a
+   * skip: the record is written and the views still need invalidating.
+   *
+   * Returns whether the record landed. The error is toasted here, so a caller
+   * that clears a form afterwards has to know it survived — otherwise a failed
+   * post silently discards what the user typed.
+   */
+  async function offchainThenChain<T>(
+    path: string,
+    body: unknown,
+    chainCall: (posted: T | null) => { ok: boolean } | null | Promise<{ ok: boolean } | null>,
+  ): Promise<boolean> {
     try {
       const posted = path ? await post<T>(path, body) : null;
       const result = await chainCall(posted);
-      if (result.ok) {
+      if (result === null || result.ok) {
         invalidate.project(projectId);
+        invalidate.submissions();
         invalidate.disputes();
         invalidate.overview();
+        return true;
       }
+      return false;
     } catch (err) {
       toast.error("Action failed", { description: err instanceof Error ? err.message : "Unknown error" });
+      return false;
     }
   }
 
@@ -550,14 +584,20 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
           </ActionBlock>
         )}
 
-        {(m.chainStatus === "funded" || fundState === "landed") && (
+        {(m.chainStatus === "funded" || fundState === "landed" || changesRequested) && (
           <ActionBlock
             icon={<PaperPlaneTilt className="h-4 w-4" />}
-            title={isFreelancer ? "Deliver + submit on-chain" : "In escrow · freelancer working"}
+            title={
+              changesRequested
+                ? isFreelancer ? "Changes requested — revise and resubmit" : "Waiting on the revised delivery"
+                : isFreelancer ? "Deliver + submit on-chain" : "In escrow · freelancer working"
+            }
             body={
-              isFreelancer
-                ? "Record the delivery notes, then flip the state with submit(). The client's review window opens the moment it mines."
-                : "Value is locked. The freelancer submits delivery notes and calls submit() when the work is ready for review."
+              changesRequested
+                ? "Answer the note below with a fresh delivery record. No second transaction — the milestone is already submitted on-chain and only the client can move it from here."
+                : isFreelancer
+                  ? "Record the delivery notes, then flip the state with submit(). The client's review window opens the moment it mines."
+                  : "Value is locked. The freelancer submits delivery notes and calls submit() when the work is ready for review."
             }
           >
             {fundState === "landed" && (
@@ -565,21 +605,38 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                 Funding landed on-chain — waiting for the indexer to mirror it.
               </p>
             )}
+            {changesRequested && m.softStatusNote && (
+              <p className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-amber-200">
+                <span className="num block text-[11px] uppercase tracking-wider text-amber-300/80">Client asks for</span>
+                {m.softStatusNote}
+              </p>
+            )}
             {isFreelancer && (
               <div className="space-y-3">
                 <Textarea
                   value={notes} onChange={(e) => setNotes(e.target.value)} rows={4}
-                  placeholder="Delivery notes: what shipped, where to look, what to check before approving."
+                  placeholder={
+                    changesRequested
+                      ? "What changed since the last delivery, and what the client should look at now."
+                      : "Delivery notes: what shipped, where to look, what to check before approving."
+                  }
                   className="resize-none border-line bg-white/[0.03] text-[13px]"
                 />
+                <SubmissionFiles files={files} onChange={setFiles} max={maxAttachments} />
+                {submitError && (
+                  <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+                    <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {submitError}
+                  </p>
+                )}
                 <Button
                   disabled={active || notes.trim().length < 1}
-                  onClick={() =>
-                    offscreenSubmit()
-                  }
+                  onClick={() => offscreenSubmit()}
                   className="w-full rounded-full bg-state-submitted py-3 text-[13px] font-medium text-ink hover:brightness-110"
                 >
-                  <PhaseLabel phase={chain.phase} idle="Record submission + submit()" />
+                  <PhaseLabel
+                    phase={chain.phase}
+                    idle={changesRequested ? "Record revision" : "Record submission + submit()"}
+                  />
                 </Button>
               </div>
             )}
@@ -590,8 +647,18 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
           <>
             <ActionBlock
               icon={<CheckCircle className="h-4 w-4" />}
-              title={isClient ? "Review window open" : "Submitted · awaiting client review"}
-              body={isClient ? "Approve to make the payout claimable — the freelancer then withdraws it with one click. Not right yet? Request changes off-chain, or lock it into dispute." : "The client can approve, request changes, or dispute. You keep the delivery notes as evidence."}
+              title={
+                changesRequested
+                  ? isClient ? "Waiting on the revision" : "Revising — your note is with the client"
+                  : isClient ? "Review window open" : "Submitted · awaiting client review"
+              }
+              body={
+                changesRequested
+                  ? "The milestone stays submitted on-chain while the delivery is revised, so you can still approve what landed or open a dispute."
+                  : isClient
+                    ? "Approve to make the payout claimable — the freelancer then withdraws it with one click. Not right yet? Request changes off-chain, or lock it into dispute."
+                    : "The client can approve, request changes, or dispute. You keep the delivery notes as evidence."
+              }
             >
               {isClient && m.onchainId !== null && (
                 <div className="space-y-2.5">
@@ -612,18 +679,32 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                   >
                     <PhaseLabel phase={chain.phase} idle={`Approve · ${formatEth(toWei(m.amountWei) - fee)} ETH claimable`} />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={active}
-                    onClick={async () => {
-                      await post(`/projects/${projectId}/milestones/${m.id}/request-changes`, { note: notes.trim() || undefined });
-                      invalidate.project(projectId);
-                      toast("Changes requested", { description: "Soft state only; the chain stays 'submitted'." });
-                    }}
-                    className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
-                  >
-                    <ArrowClockwise className="mr-2 h-3.5 w-3.5" /> Request changes (off-chain)
-                  </Button>
+                  {!changesRequested && (
+                    <>
+                      <Textarea
+                        value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={3}
+                        placeholder="What needs to change. This is the note the freelancer revises against — say it precisely."
+                        className="resize-none border-line bg-white/[0.03] text-[13px]"
+                      />
+                      <Button
+                        variant="ghost"
+                        disabled={active || changeNote.trim().length < 3}
+                        onClick={async () => {
+                          try {
+                            await post(`/projects/${projectId}/milestones/${m.id}/request-changes`, { note: changeNote.trim() });
+                            setChangeNote("");
+                            invalidate.project(projectId);
+                            toast("Changes requested", { description: "Soft state only; the chain stays 'submitted'." });
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Could not request changes");
+                          }
+                        }}
+                        className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+                      >
+                        <ArrowClockwise className="mr-2 h-3.5 w-3.5" /> Request changes (off-chain)
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
             </ActionBlock>
@@ -762,10 +843,21 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         <div className="mt-6 border-t border-line pt-5">
           <ListHead>Submissions</ListHead>
           <div className="mt-3 divide-y divide-white/[0.06] border-y border-line">
-            {submissions.map((s) => (
+            {submissions.map((s, i) => (
               <div key={s.id} className="py-3.5">
-                <div className="num text-[11px] text-faint">{timeAgo(s.createdAt)}</div>
+                <div className="num text-[11px] text-faint">
+                  {timeAgo(s.createdAt)}
+                  {/* Revisions are the deliveries after a request-changes. The
+                      newest is first, so the top entry is the live one and a
+                      later "changes requested" note explains the one below. */}
+                  {i === 0 && changesRequested && <span className="text-amber-300"> · awaiting revision</span>}
+                </div>
                 <p className="mt-1.5 max-w-[62ch] text-[12.5px] leading-relaxed text-dim">{s.notes}</p>
+                {s.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {s.attachments.map((a) => <AttachmentChip key={a.id} attachment={a} />)}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -788,27 +880,70 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   );
 
   async function offscreenSubmit() {
-    await offchainThenChain<{ onchainId: number | null }>(
-      `/projects/${projectId}/milestones/${m.id}/submissions`,
-      { notes: notes.trim(), attachmentIds: [] },
-      (posted) => {
-        // The server resolve-on-write repairs a missed funding and returns the
-        // id — never submit(0) from a stale mirror.
-        const onchainId = posted?.onchainId ?? m.onchainId;
-        if (onchainId == null) throw new Error("Milestone has no on-chain id yet — the funding may not have landed.");
-        return chain.run({
-          label: "Submit milestone",
-          contract: "escrow",
-          functionName: "submit",
-          args: [toWei(onchainId)],
-          projectId,
-          expect: wait("submitted"),
-          successMessage: "Submitted on-chain: client review window open",
-        });
-      },
-    );
-    setNotes("");
+    setSubmitError(null);
+    try {
+      // Files are project-scoped, so they exist before the submission can name
+      // them: upload first, then post the record with the ids it returns. A
+      // failed upload aborts before any record or tx exists — the milestone
+      // simply stays in the state it was in.
+      const attachmentIds: string[] = [];
+      for (const f of files) {
+        const uploaded = await uploadAttachment(`/projects/${projectId}`, f);
+        attachmentIds.push(uploaded.id);
+      }
+      const landed = await offchainThenChain<{ onchainId: number | null; onchainActionRequired: string | null }>(
+        `/projects/${projectId}/milestones/${m.id}/submissions`,
+        { notes: notes.trim(), attachmentIds },
+        async (posted) => {
+          // A revision owes the chain nothing — the milestone is already
+          // Submitted and submit() would revert. The server says which it was.
+          if (posted?.onchainActionRequired == null) {
+            toast.success("Revision recorded", { description: "The client sees it immediately — no new transaction." });
+            return null;
+          }
+          // The server resolve-on-write repairs a missed funding and returns the
+          // id — never submit(0) from a stale mirror.
+          const onchainId = posted?.onchainId ?? m.onchainId;
+          if (onchainId == null) throw new Error("Milestone has no on-chain id yet — the funding may not have landed.");
+          return chain.run({
+            label: "Submit milestone",
+            contract: "escrow",
+            functionName: "submit",
+            args: [toWei(onchainId)],
+            projectId,
+            expect: wait("submitted"),
+            successMessage: "Submitted on-chain: client review window open",
+          });
+        },
+      );
+      // Only clear on success: a failed record is still in the box, and the
+      // files are already uploaded so re-posting must not duplicate them.
+      if (landed) {
+        setNotes("");
+        setFiles([]);
+      }
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : "Submission failed");
+    }
   }
+}
+
+/**
+ * The delivery's evidence picker. Same component the propose form uses — the
+ * cap comes from the server's storage config, so the counter and the 400 can
+ * never disagree.
+ */
+function SubmissionFiles({ files, onChange, max }: { files: File[]; onChange: (f: File[]) => void; max: number }) {
+  return (
+    <AttachmentPicker
+      files={files}
+      onChange={onChange}
+      max={max}
+      label="Evidence"
+      emptyLabel="Attach the build, the diff, the recording"
+      hint="The client opens these while reviewing. The delivery notes say what to look at."
+    />
+  );
 }
 
 /* ── dispute panel (multi-arbiter commit-reveal) ──────────────────────── */
