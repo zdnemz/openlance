@@ -1,15 +1,20 @@
 "use client";
 
 /**
- * Arbiter picker dialog — every registered arbiter in one modal, with up to 3
- * eligible seats selectable. Rows link out to the arbiter's public profile so a
+ * Arbiter picker dialog — every registered arbiter in one modal, with the full
+ * eligible panel selectable. Rows link out to the arbiter's public profile so a
  * poster/freelancer can vet the record before proposing. Anchored off the
  * /arbiters roster (useArbiters) so the modal can never drift from the registry.
+ *
+ * Exactly MAX_ARBITERS must be picked: a locked panel is the dispute panel
+ * (the contract never tops it up), so a partial panel is not proposable — it
+ * would decide a live dispute on one voice, or on two that must both reveal.
  */
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useArbiters } from "@/lib/queries";
 import { useRuntime } from "@/lib/runtime";
+import { MAX_ARBITERS } from "@/lib/contracts";
 import { AddressAvatar, ArbiterRegistrySkeleton, EmptyState } from "@/components/design";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,8 +26,6 @@ import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
 import { formatEth, shortAddress } from "@/lib/format";
 import { TIER_NAMES } from "@/lib/roles";
 import type { ArbiterView } from "@/lib/types";
-
-const MAX_ARBITERS = 3;
 
 export function ArbiterPickerDialog({
   open,
@@ -68,6 +71,10 @@ function ArbiterPickerBody({
     () => [...registered].sort((a, b) => b.trustScore - a.trustScore || b.resolutionsWithinSla - a.resolutionsWithinSla),
     [registered],
   );
+  // The panel is all-or-nothing, so a roster that cannot staff one is a dead
+  // end unless we say so — otherwise the button just stays disabled.
+  const selectable = ranked.filter((a) => pickable(a, minStakeWei)).length;
+  const full = selected.length === MAX_ARBITERS;
 
   function toggle(address: string) {
     setSelected((prev) =>
@@ -84,8 +91,8 @@ function ArbiterPickerBody({
           <Scales className="h-5 w-5 text-dim" /> Pick arbiters
         </DialogTitle>
         <DialogDescription className="text-[13px] leading-relaxed text-dim">
-          Up to {MAX_ARBITERS} eligible arbiters seat first if a milestone disputes. Click a row to read their public
-          record before you pick.
+          Pick {MAX_ARBITERS} eligible arbiters — they are the panel that decides any dispute on this project, and
+          nobody outside it is ever asked. Click a row to read their public record first.
         </DialogDescription>
       </DialogHeader>
 
@@ -115,6 +122,12 @@ function ArbiterPickerBody({
       </div>
 
       <DialogFooter className="flex-col items-stretch gap-3 px-7 py-5 sm:flex-col sm:items-stretch">
+        {selectable < MAX_ARBITERS && (
+          <p className="text-[12.5px] leading-relaxed text-amber-300">
+            Only {selectable} eligible {selectable === 1 ? "arbiter is" : "arbiters are"} available — a panel needs{" "}
+            {MAX_ARBITERS}. Until the roster fills, any dispute on this project draws its panel at random.
+          </p>
+        )}
         <div className="flex items-center justify-between">
           <span className="num text-[11px] uppercase tracking-wider text-faint">selected {selected.length}/{MAX_ARBITERS}</span>
           {selected.length > 0 && (
@@ -133,16 +146,24 @@ function ArbiterPickerBody({
           </Button>
           <Button
             type="button"
-            disabled={busy || selected.length === 0}
+            disabled={busy || !full}
             onClick={() => onConfirm(selected)}
             className="flex-1 rounded-full bg-rose-accent py-3 text-[13px] font-medium hover:bg-rose-bright"
           >
-            {busy ? "Proposing…" : `Propose ${selected.length || ""}`}
+            {busy ? "Proposing…" : full ? "Propose panel" : `Pick ${MAX_ARBITERS - selected.length} more`}
           </Button>
         </div>
       </DialogFooter>
     </>
   );
+}
+
+/** Whether a roster row can be ticked: registered AND past the eligibility +
+ *  min-stake bar the contract's `_isEligible` enforces. Shared so the row's
+ *  disabled state and the "can we staff a full panel?" count never disagree. */
+function pickable(a: ArbiterView, minStakeWei: string): boolean {
+  const belowMinStake = (() => { try { return BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0"); } catch { return false; } })();
+  return !!a.eligible && !belowMinStake;
 }
 
 function ArbiterRow({
@@ -158,7 +179,7 @@ function ArbiterRow({
 }) {
   const tierName = (TIER_NAMES[a.tier ?? 0] ?? "unstaked").toLowerCase();
   const belowMinStake = (() => { try { return BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0"); } catch { return false; } })();
-  const disabled = !a.eligible || belowMinStake;
+  const disabled = !pickable(a, minStakeWei);
 
   return (
     <li className={picked ? "bg-rose-soft/40" : undefined}>

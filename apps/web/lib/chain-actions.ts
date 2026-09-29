@@ -299,9 +299,10 @@ export function cancelMilestoneAction(run: ReturnType<typeof useChainAction>["ru
 /* ── Multi-arbiter dispute lifecycle ────────────────────────────────────── */
 
 /** Open a dispute: payable — the caller must send at least the dispute fee.
- * Pass the project's locked seats (zero-padded to 3) to seat them first via
- * `openDisputeWith`; omit for a fully random draw. Ineligible nominees are
- * skipped on-chain with random fill, so a stale pick can never brick opening. */
+ * Pass the project's locked seats (zero-padded to 3) to seat exactly that panel
+ * via `openDisputeWith`; omit for a fully random draw. The panel is binding —
+ * an arbiter outside it is never seated — and a panel with no eligible member
+ * left falls back to random on-chain, so a stale pick can never brick opening. */
 export function openDisputeAction(run: ReturnType<typeof useChainAction>["run"]) {
   return (
     onchainId: number, feeWei: bigint, projectId: string, expect: (p: ProjectView) => boolean,
@@ -316,7 +317,7 @@ export function openDisputeAction(run: ReturnType<typeof useChainAction>["run"])
       projectId,
       expect,
       successMessage: preferred
-        ? "Dispute opened — locked arbiters seated first"
+        ? "Dispute opened — your locked arbiters are the panel"
         : "Dispute opened — arbiters selected on-chain",
     });
 }

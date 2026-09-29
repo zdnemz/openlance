@@ -11,6 +11,7 @@
  */
 import { useArbiters, useProjects, useJob, useInvalidate, post } from "@/lib/queries";
 import { useSession } from "@/lib/session";
+import { MAX_ARBITERS } from "@/lib/contracts";
 import { AddressAvatar, EmptyState, ArbiterRegistrySkeleton, press } from "@/components/design";
 import { PageHeader } from "@/components/page-header";
 import { RoleGate } from "@/components/role-gate";
@@ -42,7 +43,7 @@ export default function ArbitersPage() {
   const ranked = [...registered].sort((a, b) => b.trustScore - a.trustScore || b.resolutionsWithinSla - a.resolutionsWithinSla);
   const eligibleCount = registered.filter((a) => a.eligible).length;
 
-  // Arbiter seating: pick a project you're a party to, choose up to 3 arbiters
+  // Arbiter seating: pick a project you're a party to, choose the full panel
   // from this roster, propose; the counterparty approves to lock them in.
   const [projectId, setProjectId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
@@ -50,7 +51,7 @@ export default function ArbitersPage() {
   function togglePick(address: string) {
     setSelected((prev) =>
       prev.includes(address) ? prev.filter((a) => a !== address)
-        : prev.length >= 3 ? prev
+        : prev.length >= MAX_ARBITERS ? prev
           : [...prev, address],
     );
   }
@@ -260,8 +261,10 @@ function ArbiterPicker({
 
   async function propose() {
     if (!project) return;
-    if (picked.length < 1) {
-      toast.error("Pick at least one arbiter", { description: "Select up to 3 eligible arbiters from the roster." });
+    if (picked.length !== MAX_ARBITERS) {
+      toast.error(`Pick ${MAX_ARBITERS} arbiters`, {
+        description: "The locked panel is the dispute panel — it is never topped up, so it has to be a full one.",
+      });
       return;
     }
     setBusy(true);
@@ -284,7 +287,7 @@ function ArbiterPicker({
       await post(`/projects/${project.id}/arbiters/approve`, {});
       invalidate.projects();
       onChooseProject(null);
-      toast.success("Arbiters locked", { description: "They seat first if a milestone ever disputes." });
+      toast.success("Arbiters locked", { description: "They are the panel — nobody outside it is ever asked." });
     } catch (err) {
       toast.error("Could not lock", { description: err instanceof Error ? err.message : "Unknown error" });
     } finally {
@@ -348,7 +351,7 @@ function ArbiterPicker({
             <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
               <div className="flex items-center justify-between">
                 <span className="num text-[11px] uppercase tracking-wider text-faint">
-                  selected {picked.length}/3
+                  selected {picked.length}/{MAX_ARBITERS}
                 </span>
                 {picked.length > 0 && (
                   <button type="button" onClick={() => picked.forEach(onToggle)} className="text-[12px] text-faint hover:text-foreground">
@@ -357,7 +360,10 @@ function ArbiterPicker({
                 )}
               </div>
               {picked.length === 0 ? (
-                <p className="mt-2 text-[12.5px] text-faint">Tick arbiters in the roster below — eligible (green) rows only.</p>
+                <p className="mt-2 text-[12.5px] text-faint">
+                  Tick {MAX_ARBITERS} arbiters in the roster below — eligible rows only. A partial panel cannot be
+                  locked: it is never topped up at dispute time.
+                </p>
               ) : (
                 <div className="mt-2 space-y-1.5">
                   {picked.map((a) => (
@@ -371,11 +377,17 @@ function ArbiterPicker({
                 <p className="mt-3 text-[12px] text-amber-300">You proposed these — waiting on the counterparty to approve.</p>
               )}
               <Button
-                disabled={busy || picked.length === 0 || mine}
+                disabled={busy || picked.length !== MAX_ARBITERS || mine}
                 onClick={propose}
                 className="mt-3 rounded-full bg-rose-accent px-5 py-2 text-[12.5px] font-medium hover:bg-rose-bright"
               >
-                {mine ? "Proposed" : busy ? "Proposing…" : `Propose ${picked.length || ""} arbiter${picked.length === 1 ? "" : "s"}`}
+                {mine
+                  ? "Proposed"
+                  : busy
+                    ? "Proposing…"
+                    : picked.length < MAX_ARBITERS
+                      ? `Pick ${MAX_ARBITERS - picked.length} more`
+                      : "Propose panel"}
               </Button>
             </div>
           )}

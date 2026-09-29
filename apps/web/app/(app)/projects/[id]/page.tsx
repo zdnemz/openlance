@@ -26,7 +26,7 @@ import {
 import {
   useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt, saveCommit, loadCommit, clearCommit,
 } from "@/lib/dispute-round";
-import { DISPUTE_OUTCOME, QUORUM, requiredReveals } from "@/lib/contracts";
+import { DISPUTE_OUTCOME, MAX_ARBITERS, QUORUM, requiredReveals } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import {
   AddressAvatar, AddressText, EthAmount, HashText, ListHead, Skeleton, EmptyState, press,
@@ -225,8 +225,10 @@ function ArbiterPanel({ id }: { id: string }) {
   const mine = !!proposal && proposal.proposerId === session.user?.id;
 
   async function propose(addresses: string[]) {
-    if (addresses.length < 1 || addresses.length > 3) {
-      toast.error("Propose 1–3 arbiters", { description: "Pick up to three from the roster." });
+    if (addresses.length !== MAX_ARBITERS) {
+      toast.error(`Pick ${MAX_ARBITERS} arbiters`, {
+        description: "The locked panel is the dispute panel — it is never topped up, so it has to be a full one.",
+      });
       return;
     }
     setBusy(true);
@@ -247,7 +249,7 @@ function ArbiterPanel({ id }: { id: string }) {
     try {
       await post(`/projects/${id}/arbiters/approve`, {});
       invalidate.project(id);
-      toast.success("Arbiters locked", { description: "They seat first if a milestone ever disputes." });
+      toast.success("Arbiters locked", { description: "They are the panel — nobody outside it is ever asked." });
     } catch (err) {
       toast.error("Could not lock", { description: err instanceof Error ? err.message : "Unknown error" });
     } finally {
@@ -277,7 +279,7 @@ function ArbiterPanel({ id }: { id: string }) {
       {locked.length > 0 ? (
         <div className="mt-3 space-y-3">
           <ArbiterBubbles addresses={locked} tone="locked" />
-          <p className="text-[12px] text-faint">They seat first if a milestone disputes; ineligible entries fall back to random draw.</p>
+          <p className="text-[12px] text-faint">They are the panel: a locked 1–2 seats a degraded round, and nobody outside this list is ever asked.</p>
         </div>
       ) : (
         <div className="mt-3 space-y-3">
@@ -302,10 +304,12 @@ function ArbiterPanel({ id }: { id: string }) {
               onClick={() => setPickerOpen(true)}
               className="rounded-full bg-white/10 px-5 py-2.5 text-[12.5px] font-medium hover:bg-white/20"
             >
-              {proposal ? "Replace proposal" : "Add arbiters"}
+              {proposal ? "Replace proposal" : `Pick ${MAX_ARBITERS} arbiters`}
             </Button>
           )}
-          {!isParty && !proposal && <p className="text-[12px] text-faint">No arbiters picked yet — the parties agree up to 3 after award.</p>}
+          {!isParty && !proposal && (
+            <p className="text-[12px] text-faint">No arbiters picked yet — the parties agree a {MAX_ARBITERS}-arbiter panel after award.</p>
+          )}
         </div>
       )}
 
@@ -452,10 +456,11 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   // branch on it, so a fee retune is picked up without a code change.
   const feeWei = toWei(disputeFeeWei);
   const active = chain.phase !== "idle" && chain.phase !== "done";
-  // Locked mutual arbiters seat first on-chain; otherwise the draw is random.
-  const lockedPreferred = ((project.chosenArbiters ?? []) as string[]).filter(Boolean).slice(0, 3);
+  // The locked panel IS the dispute panel on-chain (no top-up); without a lock
+  // the contract draws all 3 at random. Zero-padded to the fixed-size arg.
+  const lockedPreferred = ((project.chosenArbiters ?? []) as string[]).filter(Boolean).slice(0, MAX_ARBITERS);
   const preferredArg = lockedPreferred.length > 0
-    ? [...lockedPreferred, ZERO_ADDR, ZERO_ADDR, ZERO_ADDR].slice(0, 3)
+    ? [...lockedPreferred, ZERO_ADDR, ZERO_ADDR, ZERO_ADDR].slice(0, MAX_ARBITERS)
     : null;
   // ponytail: warn-only pre-flight — never hard-block (registry can change
   // pre-mine; the mock roster lives outside useArbiters, so only real mode warns).

@@ -6,11 +6,12 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { deployWithEoaOwner, connection, DISPUTE_FEE, DISPUTE_REWARD, getRound, getDispute, getMilestone, commitHash, MIN_STAKE, MIN_STAKE_DURATION } from "./fixtures.ts";
+import { deployWithEoaOwner, connection, DISPUTE_FEE, DISPUTE_REWARD, getRound, getDispute, getMilestone, commitHash, MIN_STAKE, MIN_STAKE_DURATION, UNSTAKE_COOLDOWN } from "./fixtures.ts";
 import { commitRevealAll, walletsFor, passCommitWindow, passRevealWindow, passAppealWindow, tallyAndFinalize } from "./disputeFlow.ts";
 import { parseEther } from "viem";
 
 const REF = `0x${"ab".repeat(32)}` as `0x${string}`;
+const ZERO = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 const { viem } = connection;
 
 const RELEASE = 0;
@@ -53,22 +54,65 @@ describe("Escrow — multi-arbiter disputes", () => {
     void arbiters;
   });
 
-  it("honours mutually-agreed arbiters via openDisputeWith, random-fills the rest", async function () {
+  it("seats the mutually-agreed panel via openDisputeWith and never tops it up", async function () {
     const { escrow, arbiters, client } = await setupFunded(4);
-    const ZERO = "0x0000000000000000000000000000000000000000" as `0x${string}`;
     const nom0 = arbiters[0]!.account.address;
     const nom1 = arbiters[1]!.account.address;
     await escrow.write.openDisputeWith([1n, [nom0, nom1, ZERO]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
-    assert.equal(r.arbiterCount, 3);
-    const selected = r.arbiters.map((a) => a.toLowerCase());
+    assert.equal(r.arbiterCount, 2, "panel decides the round — no random third seat");
+    const selected = r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
     assert.ok(selected.includes(nom0.toLowerCase()), "first nominee must be selected");
     assert.ok(selected.includes(nom1.toLowerCase()), "second nominee must be selected");
   });
 
-  it("skips ineligible nominees (party, duplicate) and fills at random", async function () {
+  it("never re-seats an arbiter the parties dropped (2 proposed, 1 vetoed)", async function () {
+    // The reported bug: a partial panel seats exactly itself, never topped up.
+    // The other registered arbiters stay in the roster, so a random fill would
+    // happily draw the dropped nominee back in.
     const { escrow, arbiters, client } = await setupFunded(4);
-    const ZERO = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+    const kept = arbiters[0]!.account.address;
+    await escrow.write.openDisputeWith([1n, [kept, ZERO, ZERO]], { value: DISPUTE_FEE, account: client.account });
+    const r = await getRound(escrow, 1n, 0);
+    assert.equal(r.arbiterCount, 1, "a 1-arbiter panel seats one arbiter, not three");
+    assert.equal(r.arbiters[0]!.toLowerCase(), kept.toLowerCase(), "the locked arbiter must be seated");
+  });
+
+  it("seats the full 3-arbiter panel and keeps the 2-of-3 quorum", async function () {
+    // The shape the API locks (exactly 3): nobody outside it is ever seated,
+    // and the round still decides on 2 reveals.
+    const { escrow, arbiters, client } = await setupFunded(5);
+    const nom = arbiters.slice(0, 3).map((a) => a.account.address);
+    await escrow.write.openDisputeWith([1n, [nom[0]!, nom[1]!, nom[2]!]], { value: DISPUTE_FEE, account: client.account });
+    const r = await getRound(escrow, 1n, 0);
+    assert.equal(r.arbiterCount, 3, "a full panel seats all three");
+    const selected = r.arbiters.slice(0, 3).map((a) => a.toLowerCase());
+    for (const n of nom) assert.ok(selected.includes(n.toLowerCase()), "every panel member must be seated");
+    for (const outsider of arbiters.slice(3)) {
+      assert.ok(!selected.includes(outsider.account.address.toLowerCase()), "a non-nominee must never be seated");
+    }
+  });
+
+  it("falls back to a random draw when the whole locked panel is ineligible", async function () {
+    // Availability over the agreement: every nominee benched since the lock
+    // (requested unstake), so the round still has to be staffable.
+    const { registry, escrow, arbiters, client } = await setupFunded(4);
+    const nom0 = arbiters[0]!.account.address;
+    const nom1 = arbiters[1]!.account.address;
+    await connection.networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) + 1);
+    await registry.write.requestUnstake({ account: arbiters[0]!.account });
+    await registry.write.requestUnstake({ account: arbiters[1]!.account });
+    await escrow.write.openDisputeWith([1n, [nom0, nom1, ZERO]], { value: DISPUTE_FEE, account: client.account });
+    const r = await getRound(escrow, 1n, 0);
+    assert.ok(r.arbiterCount >= 1, "a fully-ineligible panel must still be staffable");
+    const selected = r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
+    for (const benched of [nom0, nom1]) {
+      assert.ok(!selected.includes(benched.toLowerCase()), "benched nominee must not be seated");
+    }
+  });
+
+  it("skips ineligible nominees (party, duplicate) and degrades to the remainder", async function () {
+    const { escrow, arbiters, client } = await setupFunded(4);
     const nom = arbiters[0]!.account.address;
     // client is a party (skipped), nom appears twice (second copy skipped).
     await escrow.write.openDisputeWith(
@@ -76,12 +120,11 @@ describe("Escrow — multi-arbiter disputes", () => {
       { value: DISPUTE_FEE, account: client.account },
     );
     const r = await getRound(escrow, 1n, 0);
-    assert.ok(r.arbiterCount >= 2, `quorum must still fill, got ${r.arbiterCount}`);
+    assert.equal(r.arbiterCount, 1, "the panel decides the round; only 1 nominee is eligible");
     const selected = r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
     assert.ok(!selected.includes(client.account.address.toLowerCase()), "party must never be selected");
     assert.ok(selected.includes(nom.toLowerCase()), "eligible nominee must be selected");
     assert.equal(new Set(selected).size, selected.length, "no duplicate selection");
-    void ZERO;
   });
 
   it("opens a degraded 1-arbiter round when only one is eligible", async function () {

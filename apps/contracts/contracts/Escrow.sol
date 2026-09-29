@@ -28,6 +28,10 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
  *
  *   openDispute{value: fee}            — either party; picks up to 3 eligible,
  *                                        non-party arbiters at random.
+ *   openDisputeWith(id, preferred)     — same, but seats the mutually-agreed
+ *                                        panel ONLY: eligible nominees, no
+ *                                        random top-up (an arbiter the parties
+ *                                        dropped is never re-seated).
  *        │
  *        ├─ commitVote(id, hash)       — COMMIT phase: each arbiter hides
  *        │                               keccak256(abi.encode(outcome, salt)).
@@ -551,11 +555,14 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     }
 
     /**
-     * @notice Same as `openDispute`, but the opener may nominate up to 3
-     *         mutually-agreed arbiters (e.g. locked at project start). Each
-     *         nominee must still be eligible and not a party — anything else is
-     *         skipped and the round is filled at random (fallback), so a stale
-     *         pick can never brick dispute opening.
+     * @notice Same as `openDispute`, but the opener nominates the mutually-agreed
+     *         arbiters locked on the project (up to 3, zero-padded). The panel is
+     *         BINDING: the round seats exactly the eligible nominees and is never
+     *         topped up from the registry, so an arbiter the parties dropped
+     *         cannot be re-seated by the draw. Ineligible nominees are skipped
+     *         (the round degrades to the remainder and decides on
+     *         `_requiredReveals`); a panel with no eligible member left falls back
+     *         to a random draw, so a stale lock can never brick dispute opening.
      */
     function openDisputeWith(uint256 milestoneId, address[3] calldata preferred) external payable nonReentrant {
         _openDispute(milestoneId, [preferred[0], preferred[1], preferred[2]]);
@@ -580,11 +587,12 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     }
 
     /**
-     * @notice Select up to MAX_ARBITERS arbiters for a new round: preferred
-     *         nominees first (when eligible), then random fill. Reverts only
-     *         when the roster cannot staff the round at all (zero arbiters);
-     *         a 1- or 2-arbiter panel is a degraded round that decides on
-     *         `_requiredReveals` instead of the 2-of-3 QUORUM.
+     * @notice Select up to MAX_ARBITERS arbiters for a new round. With a
+     *         mutually-agreed panel (`preferred` non-empty) the panel decides the
+     *         round and is never topped up; without one the draw is fully random.
+     *         Reverts only when the round cannot be staffed at all (zero
+     *         arbiters); a 1- or 2-arbiter panel is a degraded round that decides
+     *         on `_requiredReveals` instead of the 2-of-3 QUORUM.
      * @dev    Randomness caveat: see the contract-level note. Draws are without
      *         replacement from the eligible set.
      */
@@ -596,10 +604,12 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
         address[3] memory picked;
         uint8 count;
+        bool panelLocked;
         for (uint8 i = 0; i < MAX_ARBITERS; i++) {
             address nominee = preferred[i];
+            if (nominee == address(0)) continue;
+            panelLocked = true;
             if (
-                nominee != address(0) &&
                 nominee != m.client &&
                 nominee != m.freelancer &&
                 !_alreadyPicked(picked, count, nominee) &&
@@ -609,7 +619,14 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
                 count++;
             }
         }
-        count = _selectArbiters(milestoneId, m.client, m.freelancer, round, picked, count);
+        // A mutually-agreed panel is BINDING — no top-up. An arbiter the parties
+        // dropped (e.g. 2 proposed, 1 vetoed, 1 locked) must never be re-seated
+        // by the draw, or the lock is not an agreement at all. Only a panel that
+        // cannot staff the round — every nominee deregistered since the lock —
+        // falls back to random, so a stale lock still can never brick opening.
+        if (!panelLocked || count == 0) {
+            count = _selectArbiters(milestoneId, m.client, m.freelancer, round, picked, count);
+        }
 
         // Availability over panel size: a thin roster opens a degraded round
         // rather than trapping the milestone (see DEGRADED ROUNDS). Zero
@@ -637,7 +654,10 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
     /**
      * @dev Random selection without replacement from the registry's live roster,
-     *      excluding the two parties and any arbiter already picked.
+     *      excluding the two parties and any arbiter already picked. This is the
+     *      FALLBACK path only — reached when no panel was agreed, or when an
+     *      agreed panel has no eligible member left to staff the round. It is
+     *      never used to top up a partially-eligible panel.
      *
      *      Randomness: `prevrandao` (post-merge RANDAO beacon) mixed with block
      *      metadata. This is a pseudo-random, miner-influenceable source — see the
