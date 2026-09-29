@@ -38,24 +38,6 @@ function chainParams(chainId: number, rpcUrl?: string) {
   };
 }
 
-/** Ensure the injected wallet sits on the expected chain; switch/add if needed. */
-export async function ensureChain(expectedChainId: number, rpcUrl?: string): Promise<void> {
-  if (typeof window === "undefined" || !window.ethereum) throw new Error("No injected wallet detected");
-  const current = (await window.ethereum.request({ method: "eth_chainId" })) as string;
-  if (Number(current) === expectedChainId) return;
-  try {
-    await window.ethereum.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: `0x${expectedChainId.toString(16)}` }],
-    });
-  } catch (err) {
-    const e = err as { code?: number };
-    if (e?.code === 4902) {
-      await window.ethereum.request({ method: "wallet_addEthereumChain", params: [chainParams(expectedChainId, rpcUrl)] });
-    } else throw err;
-  }
-}
-
 /** Minimal EIP-1193 injected-provider typing. */
 declare global {
   interface Window {
@@ -64,6 +46,62 @@ declare global {
       on?: (event: string, listener: (...args: unknown[]) => void) => void;
       removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
     };
+  }
+}
+
+/* ── the provider boundary ───────────────────────────────────────────────── */
+
+/**
+ * An EIP-1193 provider rejection is NOT an `Error` — it is a plain object with
+ * `code` and `message` (4001 user denied, 4902 unknown chain), and some wallets
+ * reject with a bare string. Every `catch` in this app reads failures with
+ * `err instanceof Error ? err.message : "…"`, so an unwrapped rejection reached
+ * the user as "Unknown error" at exactly the moment it mattered most: refusing
+ * a signature. The same blindness also broke the logic that DEPENDS on those
+ * strings — `chain-actions.ts` matches /reject|denied/ to stay quiet about a
+ * decline, and `ensureChain` matches 4902 to add the chain.
+ *
+ * Normalising here, where the non-Error enters, is what lets every caller
+ * downstream trust `instanceof Error` — instead of repeating a guard in each of
+ * the twenty-odd toasts that render one.
+ */
+function providerError(method: string, err: unknown): Error {
+  if (err instanceof Error) return err;
+  // Some providers reject with a bare string rather than a ProviderRpcError.
+  if (typeof err === "string" && err) return new Error(err);
+  const { code, message, reason } = (err ?? {}) as { code?: number; message?: string; reason?: string };
+  const error = new Error(message || reason || `${method} failed`) as Error & { code?: number };
+  // The code is load-bearing: 4902 is how `ensureChain` knows to offer to add
+  // the chain, and 4001 is how a decline is told from a failure. Dropping it
+  // here would strand a user on a chain their wallet has never heard of.
+  if (code !== undefined) error.code = code;
+  return error;
+}
+
+/** The ONLY way this module talks to the wallet, so no call can forget the wrap. */
+async function providerRequest<T>(args: { method: string; params?: unknown[] }): Promise<T> {
+  try {
+    return (await window.ethereum!.request(args)) as T;
+  } catch (err) {
+    throw providerError(args.method, err);
+  }
+}
+
+/** Ensure the injected wallet sits on the expected chain; switch/add if needed. */
+export async function ensureChain(expectedChainId: number, rpcUrl?: string): Promise<void> {
+  if (typeof window === "undefined" || !window.ethereum) throw new Error("No injected wallet detected");
+  const current = await providerRequest<string>({ method: "eth_chainId" });
+  if (Number(current) === expectedChainId) return;
+  try {
+    await providerRequest({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: `0x${expectedChainId.toString(16)}` }],
+    });
+  } catch (err) {
+    const e = err as { code?: number };
+    if (e?.code === 4902) {
+      await providerRequest({ method: "wallet_addEthereumChain", params: [chainParams(expectedChainId, rpcUrl)] });
+    } else throw err;
   }
 }
 
@@ -144,14 +182,14 @@ export const useWallet = create<WalletState>()(
         // returning users never get a choice. Requesting permissions first
         // forces the wallet's account picker every single connect.
         try {
-          await window.ethereum.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
+          await providerRequest({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
         } catch (err) {
           const code = (err as { code?: number })?.code;
           if (code === 4001) throw new Error("Connection request rejected");
           // No permission API (-32601 etc.) → fall through; the accounts call
           // below still connects, just without forcing the picker.
         }
-        const accounts = (await window.ethereum.request({ method: "eth_requestAccounts" })) as string[];
+        const accounts = await providerRequest<string[]>({ method: "eth_requestAccounts" });
         if (!accounts?.length) throw new Error("No accounts returned");
         if (expectedChainId) await ensureChain(expectedChainId, rpcUrl);
         set({ kind: "injected", address: accounts[0]!.toLowerCase() });
@@ -205,7 +243,7 @@ export async function signMessage(message: string): Promise<string> {
   const hex = `0x${Array.from(new TextEncoder().encode(message))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")}`;
-  return (await window.ethereum!.request({ method: "personal_sign", params: [hex, state.address] })) as string;
+  return providerRequest<string>({ method: "personal_sign", params: [hex, state.address] });
 }
 
 /**
@@ -263,10 +301,10 @@ export async function signTypedData(args: {
     primaryType: args.primaryType,
     message: args.message,
   } as never);
-  return (await window.ethereum.request({
+  return providerRequest<string>({
     method: "eth_signTypedData_v4",
     params: [state.address, payload],
-  })) as string;
+  });
 }
 
 /** Sign + send a contract call. Returns the tx hash. */
@@ -284,10 +322,10 @@ export async function sendContractCall(opts: {
   if (opts.expectedChainId) await ensureChain(opts.expectedChainId);
   const data = encodeFunctionData({ abi: opts.abi, functionName: opts.functionName, args: opts.args ?? [] });
 
-  return (await window.ethereum!.request({
+  return providerRequest<string>({
     method: "eth_sendTransaction",
     params: [{ from: state.address, to: opts.to, data, ...(opts.value ? { value: `0x${opts.value.toString(16)}` } : {}) }],
-  })) as string;
+  });
 }
 
 /** Wait for a receipt via the relay. */
@@ -306,7 +344,7 @@ export async function waitForReceipt(hash: string, timeoutMs = 30_000): Promise<
 /** Read the active chainId from the injected provider (null when disconnected). */
 export async function activeChainId(): Promise<number | null> {
   try {
-    const id = (await window.ethereum!.request({ method: "eth_chainId" })) as string;
+    const id = await providerRequest<string>({ method: "eth_chainId" });
     return Number(id);
   } catch {
     return null;
