@@ -153,8 +153,8 @@ interface ArbiterInfo {
   stakedAt: bigint
 }
 
-/** Project a live `arbiterInfo` read into the API view shape. */
-function onchainView(
+/** Project live registry reads into the API view shape (exported for the eligibility check). */
+export function onchainView(
   address: string,
   info: ArbiterInfo,
   profile: typeof users.$inferSelect | undefined,
