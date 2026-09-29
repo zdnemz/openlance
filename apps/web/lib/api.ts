@@ -85,14 +85,21 @@ export async function putBytes(url: string, body: Blob, contentType: string): Pr
  * Resolve a file URL to something the browser can fetch.
  *
  * The API builds absolute URLs from API_URI (e.g. http://localhost:4000/api/
- * files/…). Rewriting them to API_BASE + path keeps the request on the API
- * origin — which is where the signed-URL signature is checked — and avoids a
- * cross-origin redirect through the web app.
+ * files/…). Rewriting those to API_BASE + path keeps the request on the public
+ * API origin — which is where the signed-URL signature is checked — and avoids
+ * a cross-origin redirect through the web app.
+ *
+ * Only `/api/*` is rewritten. The supabase driver hands back a signed URL on
+ * the Supabase origin (`https://<ref>.supabase.co/storage/v1/object/sign/…`)
+ * whose token is the credential; re-pointing it at this API produced a
+ * `/storage/…` request the API never mounts, i.e. a bare 404 on a file that
+ * exists. Foreign origins pass through untouched.
  */
 export function fileUrl(u: string): string {
   if (!u) return u;
   try {
     const parsed = new URL(u);
+    if (!parsed.pathname.startsWith("/api/")) return u;
     return `${API_BASE}${parsed.pathname}${parsed.search}`;
   } catch {
     return u;

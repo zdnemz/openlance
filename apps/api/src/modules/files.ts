@@ -23,7 +23,7 @@
 import { createHmac, randomUUID } from 'node:crypto'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { env } from '../config.ts'
 import { getDb } from '../db/index.ts'
@@ -86,10 +86,20 @@ export async function initAttachment(request: Request, projectId: string) {
 /** A bid's supporting file. Only the bidding freelancer may add one. */
 export async function initProposalAttachment(request: Request, proposalId: string) {
   const user = await requireKyc(request)
-  const [row] = await getDb().select({ id: proposals.id, freelancerId: proposals.freelancerId }).from(proposals)
+  const db = getDb()
+  const [row] = await db.select({ id: proposals.id, freelancerId: proposals.freelancerId }).from(proposals)
     .where(eq(proposals.id, proposalId)).limit(1)
   if (!row) throw Errors.notFound('Proposal')
   if (row.freelancerId !== user.id) throw Errors.forbidden('Only the bidding freelancer may attach to this proposal')
+  // The evidence ceiling, counted here rather than trusted from the client. This
+  // endpoint is one append per file, so the guard is "what is already there"
+  // plus this one — without it a bid could accumulate files without limit, each
+  // costing a full upload round-trip before anyone reviews it.
+  const existing = await db.select({ n: sql<number>`count(*)::int` }).from(attachments)
+    .where(eq(attachments.proposalId, row.id))
+  if (existing[0]!.n >= storageConfig().maxAttachments) {
+    throw Errors.badRequest('too_many_attachments', `A proposal can carry at most ${storageConfig().maxAttachments} files`)
+  }
   return createAttachment(request, user.id, { proposalId: row.id }, row.id)
 }
 

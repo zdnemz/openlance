@@ -31,6 +31,17 @@ export const DEFAULT_MIME_ALLOWLIST: readonly string[] = [
   'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]
 
+/**
+ * Evidence ceiling for ONE owner — a proposal (a bid's supporting material) or
+ * a submission (a delivery record). Three is the number a reviewer actually
+ * opens; more is a filemanager, not a bid.
+ *
+ * This is the ONE place the number lives: `createSubmission` validates against
+ * it, `initProposalAttachment` counts against it, and `storageConfig()` ships it
+ * to the client so the picker counter cannot drift from the server invariant.
+ */
+export const MAX_OWNER_ATTACHMENTS = 3
+
 /** Resolved, non-secret storage configuration for consumers + introspection. */
 export interface ResolvedStorageConfig {
   driver: StorageDriver
@@ -43,6 +54,7 @@ export interface ResolvedStorageConfig {
   localDir: string
   maxUploadBytes: number
   signedUrlTtlSeconds: number
+  maxAttachments: number
   allowedMime: readonly string[]
 }
 
@@ -60,6 +72,7 @@ export function storageConfig(): ResolvedStorageConfig {
     localDir: c.localDir,
     maxUploadBytes: c.maxUploadBytes,
     signedUrlTtlSeconds: c.signedUrlTtlSeconds,
+    maxAttachments: MAX_OWNER_ATTACHMENTS,
     allowedMime: c.allowedMime.length ? c.allowedMime : DEFAULT_MIME_ALLOWLIST,
   }
 }

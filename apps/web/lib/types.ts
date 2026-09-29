@@ -156,7 +156,7 @@ export interface SubmissionView {
   authorId: string;
   notes: string;
   createdAt: string;
-  attachments?: { id: string; filename: string; sizeBytes: number; contentType: string }[];
+  attachments: AttachmentView[];
 }
 
 export interface ReviewView {
@@ -265,6 +265,8 @@ export interface StorageRuntimeConfig {
   localDir: string;
   maxUploadBytes: number;
   signedUrlTtlSeconds: number;
+  /** Evidence ceiling for one proposal / one submission (server-enforced). */
+  maxAttachments: number;
   allowedMime: string[];
 }
 
