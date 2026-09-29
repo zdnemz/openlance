@@ -15,6 +15,10 @@ import { Errors } from '../lib/errors.ts'
 import { emitNotification } from './notify.ts'
 import { attachments, projectMilestones, submissionAttachments, submissions } from '../db/schema.ts'
 import { loadMilestone, requireParticipant, ensureMilestoneOnchain } from './helpers.ts'
+import { MAX_OWNER_ATTACHMENTS } from '../storage/index.ts'
+
+/** Re-exported for the check script; the invariant lives with the storage policy. */
+export const MAX_SUBMISSION_ATTACHMENTS = MAX_OWNER_ATTACHMENTS
 
 export async function createSubmission(request: Request, projectId: string, milestoneId: string) {
   const user = await requireKyc(request)
@@ -26,13 +30,20 @@ export async function createSubmission(request: Request, projectId: string, mile
   // pending_funding with no onchainId) while the chain is already funded —
   // repair from chain truth before gating, so landed work is never bricked.
   const { milestone: current } = await ensureMilestoneOnchain(milestone)
-  if (current.chainStatus !== 'funded') {
+  // A revision re-records the delivery against a milestone the chain already
+  // holds as `submitted`. Escrow.submit() reverts on anything but Funded, so a
+  // revision is deliberately OFF-CHAIN ONLY — the on-chain state is already the
+  // one the client is deciding on. Gating on `funded` alone left the freelancer
+  // stranded after a request-changes: the API refused the re-submission and the
+  // room showed no control, so the milestone could only be approved or disputed.
+  const isRevision = current.softStatus === 'changes_requested' && current.chainStatus === 'submitted'
+  if (!isRevision && current.chainStatus !== 'funded') {
     throw Errors.conflict('milestone_not_fundable', `Milestone is ${current.chainStatus}; expected funded`)
   }
 
   const body = await validate(request, z.object({
     notes: z.string().min(1).max(20000),
-    attachmentIds: z.array(z.string().uuid()).max(10).default([]),
+    attachmentIds: z.array(z.string().uuid()).max(MAX_SUBMISSION_ATTACHMENTS).default([]),
   }).strict())
 
   const db = getDb()
@@ -62,9 +73,13 @@ export async function createSubmission(request: Request, projectId: string, mile
     actorAddress: user.walletAddress,
     projectId: project.id,
     milestoneId: milestone.id,
-    payload: { milestoneTitle: milestone.title, position: milestone.position, submissionId: created.id },
+    payload: { milestoneTitle: milestone.title, position: milestone.position, submissionId: created.id, revision: isRevision },
   })
-  return { ...created, onchainActionRequired: 'markSubmitted', onchainId: current.onchainId }
+  // A first submission still owes the chain its `submit()`; a revision does not,
+  // and re-sending that tx would revert against the Submitted milestone.
+  return isRevision
+    ? { ...created, onchainActionRequired: null, onchainId: current.onchainId }
+    : { ...created, onchainActionRequired: 'markSubmitted', onchainId: current.onchainId }
 }
 
 /** Client-side soft "request changes" — chain stays `Submitted`. */
@@ -110,6 +125,11 @@ export async function listSubmissions(request: Request, projectId: string, miles
   const atts = attIds.length ? await db.select().from(attachments).where(inArray(attachments.id, attIds)) : []
   return rows.map((s) => ({
     ...s,
-    attachments: links.filter((l) => l.submissionId === s.id).map((l) => atts.find((a) => a.id === l.attachmentId)),
+    // Filter the dangling-link case: the FK cascades, but the read model should
+    // never hand the UI an `undefined` hole inside `attachments`.
+    attachments: links
+      .filter((l) => l.submissionId === s.id)
+      .map((l) => atts.find((a) => a.id === l.attachmentId))
+      .filter((a): a is NonNullable<typeof a> => !!a),
   }))
 }

@@ -22,6 +22,10 @@ function milestoneView(m: typeof projectMilestones.$inferSelect, withTxHints: bo
     onchainId: m.onchainId,
     chainStatus: m.chainStatus,
     softStatus: m.softStatus,
+    // The client's "what needs to change" note. Request-changes is off-chain
+    // only, so this note IS the whole hand-off — without it in the read model
+    // the freelancer is told to revise without being told what to revise.
+    softStatusNote: m.softStatusNote,
     fundedAt: m.fundedAt,
     submittedAt: m.submittedAt,
     settledAt: m.settledAt,

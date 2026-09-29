@@ -221,6 +221,8 @@ export function useInvalidate() {
       void qc.invalidateQueries({ queryKey: qk.jobs() });
     },
     proposals: (jobId: string) => void qc.invalidateQueries({ queryKey: qk.proposals(jobId) }),
+    /** Prefix match — every milestone's submission list is stale after a write. */
+    submissions: () => void qc.invalidateQueries({ queryKey: ["submissions"] }),
     messages: (id: string) => void qc.invalidateQueries({ queryKey: qk.messages(id) }),
     reviews: (milestoneId: string, projectId: string) => {
       void qc.invalidateQueries({ queryKey: qk.reviews(milestoneId) });

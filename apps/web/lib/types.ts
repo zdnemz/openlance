@@ -107,6 +107,8 @@ export interface ProjectMilestone {
   onchainId: number | null;
   chainStatus: MilestoneChainStatus;
   softStatus: string | null;
+  /** The client's "what needs to change" note, set by request-changes. */
+  softStatusNote: string | null;
   fundedAt: string | null;
   submittedAt: string | null;
   settledAt: string | null;
