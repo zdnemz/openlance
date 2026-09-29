@@ -67,6 +67,17 @@ const schema = z.object({
   CHAIN_MODE: z.enum(['mock', 'real']).default('mock'),
   CHAIN_ID: z.coerce.number().int().positive().default(84_532), // Base Sepolia
   CHAIN_RPC_URL: z.string().default('https://sepolia.base.org'),
+  /**
+   * Keyless, browser-facing RPC URL, published to clients on /overview so the
+   * injected wallet can be pointed at the node itself.
+   *
+   * Deliberately NOT `CHAIN_RPC_URL`: that is the server's own endpoint and is
+   * routinely a keyed provider (`…/v2/<API_KEY>`), while /overview is public
+   * and unauthenticated. Publishing it verbatim would hand the key to every
+   * visitor, so a deployment must supply a separate keyless URL here or leave
+   * it unset — in which case the wallet keeps using the API relay.
+   */
+  CHAIN_RPC_PUBLIC_URL: z.string().url().optional(),
   ESCROW_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   ARBITER_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   /** TimelockController that owns the UUPS proxies (informational). */

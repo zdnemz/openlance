@@ -69,6 +69,10 @@ export function runtimeConfig() {
   return {
     chainMode: adapter.mode,
     chainId: env.CHAIN_ID,
+    // Keyless by construction — see CHAIN_RPC_PUBLIC_URL in config.ts. Null
+    // means "no public endpoint", and the client then leaves the wallet on
+    // whatever it already has rather than reconfiguring it.
+    chainRpcUrl: env.CHAIN_RPC_PUBLIC_URL ?? null,
     feeBps: env.PLATFORM_FEE_BPS,
     disputeFeeWei: env.DISPUTE_FEE_WEI,
     minStakeWei,

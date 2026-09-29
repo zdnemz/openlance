@@ -8,6 +8,8 @@ import type { Overview, StorageRuntimeConfig } from "@/lib/types";
 interface RuntimeState {
   loaded: boolean;
   chainId: number;
+  /** Keyless node URL for the wallet; null when the deployment publishes none. */
+  chainRpcUrl: string | null;
   feeBps: number;
   disputeFeeWei: string;
   minStakeWei: string;
@@ -31,6 +33,7 @@ interface RuntimeState {
 export const useRuntime = create<RuntimeState>((set) => ({
   loaded: false,
   chainId: 31337,
+  chainRpcUrl: null,
   feeBps: 250,
   disputeFeeWei: "0",
   minStakeWei: "100000000000000000",
@@ -56,6 +59,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
       set({
         loaded: true,
         chainId: cfg.chainId ?? 31337,
+        chainRpcUrl: cfg.chainRpcUrl ?? null,
         feeBps: cfg.feeBps ?? 250,
         disputeFeeWei: cfg.disputeFeeWei ?? "0",
         minStakeWei: cfg.minStakeWei ?? "100000000000000000",

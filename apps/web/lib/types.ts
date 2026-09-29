@@ -275,6 +275,12 @@ export interface StorageRuntimeConfig {
 export interface RuntimeConfig {
   chainMode: string;
   chainId: number;
+  /**
+   * Keyless node URL for the injected wallet, or null when the deployment
+   * publishes none. Null is NOT a reason to reconfigure the wallet — it means
+   * "leave whatever endpoint it already has alone".
+   */
+  chainRpcUrl: string | null;
   feeBps: number;
   /** Minimum ETH (wei) to open a dispute — from the contract. */
   disputeFeeWei: string;

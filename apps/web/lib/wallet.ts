@@ -13,11 +13,30 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { encodeFunctionData, decodeFunctionResult, serializeTypedData, type Abi } from "viem";
+import { useRuntime } from "@/lib/runtime";
 
 /** Public origin of the API service (apps/api). */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
 
 export const FALLBACK_CHAIN_ID = 31337;
+
+/**
+ * The node the WALLET should talk to, as opposed to the one the page relays to.
+ *
+ * These are deliberately different. The page's own `fetch` cannot reach anvil
+ * (cross-origin), so it rides the API relay — which costs the wallet nothing,
+ * because a wallet extension can reach a local node directly. Handing the
+ * wallet `relayRpcUrl()` instead made the API the wallet's chain endpoint:
+ * every `--watch` restart was an endpoint outage, and outside dev the relay
+ * fails closed with a 502, so a deployment was baking a dead endpoint into
+ * every wallet that accepted the chain prompt.
+ *
+ * The relay stays the fallback for a deployment that publishes no public node
+ * URL, which is the status quo it was before — never worse than that.
+ */
+export function walletChainRpcUrl(): string | null {
+  return useRuntime.getState().chainRpcUrl;
+}
 
 /** Chain metadata for wallet_addEthereumChain (anvil + Base Sepolia). */
 function chainParams(chainId: number, rpcUrl?: string) {
@@ -191,7 +210,7 @@ export const useWallet = create<WalletState>()(
         }
         const accounts = await providerRequest<string[]>({ method: "eth_requestAccounts" });
         if (!accounts?.length) throw new Error("No accounts returned");
-        if (expectedChainId) await ensureChain(expectedChainId, rpcUrl);
+        if (expectedChainId) await ensureChain(expectedChainId, rpcUrl ?? walletChainRpcUrl() ?? undefined);
         set({ kind: "injected", address: accounts[0]!.toLowerCase() });
         void window.ethereum.on?.("accountsChanged", (...args: unknown[]) => {
           const accs = args[0] as string[] | undefined;
@@ -319,7 +338,7 @@ export async function sendContractCall(opts: {
 }): Promise<string> {
   const state = useWallet.getState();
   if (!state.address) throw new Error("No wallet connected");
-  if (opts.expectedChainId) await ensureChain(opts.expectedChainId);
+  if (opts.expectedChainId) await ensureChain(opts.expectedChainId, walletChainRpcUrl() ?? undefined);
   const data = encodeFunctionData({ abi: opts.abi, functionName: opts.functionName, args: opts.args ?? [] });
 
   return providerRequest<string>({
