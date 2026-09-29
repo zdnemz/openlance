@@ -114,7 +114,8 @@ export async function discardDispute(request: Request, projectId: string, milest
 export async function listDisputes(request: Request) {
   const user = await requireAuth(request)
   const db = getDb()
-  const rows = await db.select().from(disputes).orderBy(desc(disputes.createdAt)).limit(200)
+  const rows: DisputeRow[] = (await db.select().from(disputes).orderBy(desc(disputes.createdAt)).limit(200))
+    .map((d) => ({ ...d, onchainId: null }))
   // Live first: a newly-selected arbiter must see the dispute even when the
   // indexer mirror hasn't caught up — filter on the overlaid selection, not
   // the stale cache. Costs one getRound per open dispute; failures keep the
@@ -172,8 +173,9 @@ function selectedIncludes(d: { selectedArbiters: unknown }, address: string): bo
 export async function getDispute(request: Request, disputeId: string) {
   const user = await requireAuth(request)
   const db = getDb()
-  const [dispute] = await db.select().from(disputes).where(eq(disputes.id, disputeId)).limit(1)
-  if (!dispute) throw Errors.notFound('Dispute')
+  const [row] = await db.select().from(disputes).where(eq(disputes.id, disputeId)).limit(1)
+  if (!row) throw Errors.notFound('Dispute')
+  const dispute: DisputeRow = { ...row, onchainId: null }
   await overlayRounds([dispute])
   // Parties always; selected arbiters too (mirrors listDisputes — they vote via commit/reveal).
   if (selectedIncludes(dispute, user.walletAddress)) return (await withProjectNames([dispute]))[0]!
@@ -190,6 +192,18 @@ export async function getDispute(request: Request, disputeId: string) {
 }
 
 /**
+ * A dispute row plus the milestone's on-chain id.
+ *
+ * The id rides on the view because it is the ONLY handle a caller needs to
+ * reach the round: `Escrow` addresses every dispute call by `milestoneId` and
+ * nothing else. Without it the client had to find the milestone through
+ * `GET /projects`, which is scoped to the viewer's OWN projects — so an arbiter
+ * (who is in none) got `undefined` and every round-gated control on the arbiter
+ * queue silently vanished. See `overlayRounds`.
+ */
+export type DisputeRow = typeof disputes.$inferSelect & { onchainId: number | null }
+
+/**
  * On-chain round overlay: resolved rows are final, so only live-read open
  * disputes; failures keep the mirror. The round index itself is chain truth
  * (appeals bump it, and the mirror can lag), so it is read live first and the
@@ -197,19 +211,29 @@ export async function getDispute(request: Request, disputeId: string) {
  * phase, deadlines and tally come from `getRound`, never from the cache.
  * Committed/revealed address lists have no contract view (only counts exist
  * on-chain), so those two columns stay indexer-derived by design.
+ *
+ * The milestone lookup is one batched query for the whole page, and it runs in
+ * mock mode too: `onchainId` is a fact about the row, not about the chain, and
+ * every client control is gated on it.
  */
-async function overlayRounds(rows: (typeof disputes.$inferSelect)[]) {
+async function overlayRounds(rows: DisputeRow[]) {
+  if (rows.length === 0) return
+  const db = getDb()
+  const mids = [...new Set(rows.map((d) => d.milestoneId))]
+  const byMilestone = new Map((await db.select({ id: projectMilestones.id, onchainId: projectMilestones.onchainId })
+    .from(projectMilestones).where(inArray(projectMilestones.id, mids)))
+    .map((m) => [m.id, m.onchainId]))
+  for (const d of rows) d.onchainId = byMilestone.get(d.milestoneId) ?? null
+
   const open = rows.filter((d) => d.status !== 'resolved')
   if (open.length === 0) return
   const adapter = getChainAdapter()
   if (adapter.mode !== 'real') return
-  const db = getDb()
   await Promise.all(open.map(async (d) => {
-    const [m] = await db.select({ onchainId: projectMilestones.onchainId }).from(projectMilestones)
-      .where(eq(projectMilestones.id, d.milestoneId)).limit(1)
-    if (!m?.onchainId) return
+    const onchainId = d.onchainId
+    if (onchainId === null) return
     const mirrorRound = d.round
-    const meta = await adapter.getDisputeMeta(m.onchainId).catch(() => null)
+    const meta = await adapter.getDisputeMeta(onchainId).catch(() => null)
     if (meta) {
       d.round = meta.round
       d.appealCount = meta.appealCount
@@ -218,15 +242,15 @@ async function overlayRounds(rows: (typeof disputes.$inferSelect)[]) {
     // the mirror index may be the fresh one (or vice versa). Either live hit
     // wins over the cache; a total miss keeps the mirror and logs, so the
     // seated fallback in listDisputes still surfaces the dispute to voters.
-    let live = await adapter.getDisputeRound(m.onchainId, d.round).catch(() => null)
+    let live = await adapter.getDisputeRound(onchainId, d.round).catch(() => null)
     if (!live && d.round !== mirrorRound) {
-      live = await adapter.getDisputeRound(m.onchainId, mirrorRound).catch(() => null)
+      live = await adapter.getDisputeRound(onchainId, mirrorRound).catch(() => null)
       if (live) d.round = mirrorRound
     }
     if (!live) {
       if (asStrings(d.selectedArbiters).length === 0) {
         logger.warn('dispute overlay miss — arbiter visibility degraded to mirror', {
-          disputeId: d.id, onchainId: m.onchainId, round: d.round,
+          disputeId: d.id, onchainId, round: d.round,
         })
       }
       return

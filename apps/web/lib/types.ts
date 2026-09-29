@@ -176,6 +176,13 @@ export interface DisputeView {
   id: string;
   milestoneId: string;
   projectId: string;
+  /**
+   * The milestone's on-chain id — the only handle `Escrow` addresses a dispute
+   * by. Attached by the API so the arbiter queue does not have to find the
+   * milestone through `GET /projects`, which is scoped to the viewer's own
+   * projects and holds nothing for an arbiter.
+   */
+  onchainId: number | null;
   openedById: string;
   reason: string;
   status: DisputeStatus;
