@@ -32,8 +32,11 @@ const REGISTRY_READ_ABI = [
   // to an object. Flat outputs decode positionally and `info.stake` etc. come
   // back undefined → TypeError → 500 on every non-empty roster.
   'function arbiterInfo(address) view returns ((bool registered, bool unstakeRequested, uint256 tokenId, uint256 trustScore, uint256 stake, uint256 resolutions, uint256 stakedAt, uint256 unstakeRequestedAt))',
-  'function minStake() view returns (uint256)',
-  'function minScoreToWithdraw() view returns (uint256)',
+  // Eligibility + lock are asked, not re-derived: the floors behind them
+  // (minStake / minScoreToWithdraw) and the clock (block.timestamp) are live
+  // chain state, so an off-chain copy of the predicate goes stale.
+  'function isEligible(address) view returns (bool)',
+  'function isLocked(address) view returns (bool)',
   'function minStakeDuration() view returns (uint256)',
   'function unstakeCooldown() view returns (uint256)',
   'function tierSilver() view returns (uint256)',
@@ -158,14 +161,12 @@ function onchainView(
   tier: number,
   minStakeDuration: number,
   earnedWei: bigint,
+  eligible: boolean,
+  locked: boolean,
 ) {
   const stakeWei = info.stake.toString()
   const trustScore = Number(info.trustScore)
-  const locked = trustScore < env.MIN_SCORE_TO_WITHDRAW
-  let stakeOk = false
-  try { stakeOk = info.stake >= BigInt(env.MIN_STAKE_WEI) } catch { stakeOk = false }
   const stakedAtMs = Number(info.stakedAt) * 1000
-  const durationOk = stakedAtMs > 0 && Date.now() >= stakedAtMs + minStakeDuration * 1000
   const registeredAt = stakedAtMs > 0 ? new Date(stakedAtMs) : null
   return {
     address,
@@ -174,12 +175,13 @@ function onchainView(
     trustScore,
     stakeWei,
     tier,
-    /** Below MIN_SCORE_TO_WITHDRAW: stake locked + benched from selection. */
+    /** Chain read of isLocked: below the floor → stake locked + benched. */
     locked,
     unstakeRequested: info.unstakeRequested,
-    /** Whether the arbiter may be drawn for new disputes (mirrors isEligible). */
-    eligible: info.registered && !locked && !info.unstakeRequested && stakeOk && durationOk,
-    selectableAfter: info.registered && durationOk ? null : (registeredAt ? new Date(registeredAt.getTime() + minStakeDuration * 1000).toISOString() : null),
+    /** Chain read of isEligible — the same predicate Escrow._selectArbiters uses. */
+    eligible,
+    /** Chain read of eligibleAt; null once the arbiter is already selectable. */
+    selectableAfter: eligible || !registeredAt ? null : new Date(registeredAt.getTime() + minStakeDuration * 1000).toISOString(),
     /** Off-chain KYC state for this address (product needs verified + tier≥bronze). */
     kycStatus: profile?.kycStatus ?? null,
     resolutions: Number(info.resolutions),
@@ -251,10 +253,21 @@ export async function listArbiters() {
       // One bad row must not sink the roster — skip it (logged) and serve the rest.
       const rows = await Promise.all(addresses.map(async (lc) => {
         try {
-          const info = (await oc.client.readContract({
-            address: oc.registry, abi: oc.abi, functionName: 'arbiterInfo', args: [lc as `0x${string}`],
-          })) as unknown as ArbiterInfo
-          return onchainView(lc, info, profiles.get(lc), tierFor(info.stake.toString(), info.registered, silver, gold), minStakeDuration, earned.get(lc) ?? 0n)
+          // Eligibility + lock ride the same burst: three reads, not three round trips.
+          const [info, eligible, locked] = await Promise.all([
+            oc.client.readContract({
+              address: oc.registry, abi: oc.abi, functionName: 'arbiterInfo', args: [lc as `0x${string}`],
+            }) as Promise<ArbiterInfo>,
+            // A failed predicate read reports "not eligible" — the conservative
+            // answer, since Escrow would refuse the seat anyway.
+            oc.client.readContract({
+              address: oc.registry, abi: oc.abi, functionName: 'isEligible', args: [lc as `0x${string}`],
+            }) as Promise<boolean>,
+            oc.client.readContract({
+              address: oc.registry, abi: oc.abi, functionName: 'isLocked', args: [lc as `0x${string}`],
+            }) as Promise<boolean>,
+          ])
+          return onchainView(lc, info, profiles.get(lc), tierFor(info.stake.toString(), info.registered, silver, gold), minStakeDuration, earned.get(lc) ?? 0n, eligible, locked)
         } catch (err) {
           log.warn('arbiterInfo read failed — skipping row', { address: lc, err: String(err) })
           return null
@@ -277,13 +290,23 @@ export async function getArbiter(address: string) {
     const [{ silver, gold }, { minStakeDuration }] = await Promise.all([
       tierThresholds(oc), durationThresholds(oc),
     ])
-    const info = (await oc.client.readContract({
-      address: oc.registry, abi: oc.abi, functionName: 'arbiterInfo', args: [addr as `0x${string}`],
-    })) as unknown as ArbiterInfo
+    const [info, eligible, locked] = await Promise.all([
+      oc.client.readContract({
+        address: oc.registry, abi: oc.abi, functionName: 'arbiterInfo', args: [addr as `0x${string}`],
+      }) as Promise<ArbiterInfo>,
+      // Predicate reads are soft: a blip downgrades this one view, it does not
+      // 404 an arbiter that is plainly on the roster.
+      oc.client.readContract({
+        address: oc.registry, abi: oc.abi, functionName: 'isEligible', args: [addr as `0x${string}`],
+      }).catch(() => false) as Promise<boolean>,
+      oc.client.readContract({
+        address: oc.registry, abi: oc.abi, functionName: 'isLocked', args: [addr as `0x${string}`],
+      }).catch(() => false) as Promise<boolean>,
+    ])
     if (info.tokenId === 0n && !info.registered) throw Errors.notFound('Arbiter')
     const profiles = await profilesFor([addr])
     const earned = await earnedFor([addr])
-    return onchainView(addr, info, profiles.get(addr), tierFor(info.stake.toString(), info.registered, silver, gold), minStakeDuration, earned.get(addr) ?? 0n)
+    return onchainView(addr, info, profiles.get(addr), tierFor(info.stake.toString(), info.registered, silver, gold), minStakeDuration, earned.get(addr) ?? 0n, eligible, locked)
   } catch (err) {
     if (err instanceof AppError) throw err
     log.warn('getArbiter on-chain read failed', { address: addr, err: String(err) })
