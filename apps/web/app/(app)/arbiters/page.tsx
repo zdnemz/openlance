@@ -16,7 +16,7 @@ import { PageHeader } from "@/components/page-header";
 import { RoleGate } from "@/components/role-gate";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
 import { shortAddress, dateLabel, formatEth, timeUntil } from "@/lib/format";
-import { TIER_NAMES } from "@/lib/roles";
+import { TIER_NAMES, arbiterStanding } from "@/lib/roles";
 import { useRuntime } from "@/lib/runtime";
 import { Button } from "@/components/ui/button";
 import { AddressText, ListHead } from "@/components/design";
@@ -29,22 +29,9 @@ import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
 import type { ArbiterView, ProjectView } from "@/lib/types";
 
 /**
- * The arbiter's standing, mirroring the registry:
- *   locked   → score below the withdrawal floor: benched + stake locked
- *   unstaking→ requestUnstake called: benched from selection
- *   eligible → drawable for new disputes now (stake ≥ min + duration met)
- *   understake → stake below min: top up before the duration clock matters
- *   staked   → registered but the min-stake-duration clock is still running
+ * The arbiter's standing, mirroring the registry. Shared with the profile card
+ * via `arbiterStanding` in @/lib/roles — one vocabulary for one registry state.
  */
-function standing(a: ArbiterView, minStakeWei: string): { label: string; color: string } {
-  if (a.locked) return { label: "locked", color: "var(--color-state-disputed)" };
-  if (a.unstakeRequested) return { label: "unstaking", color: "var(--color-state-pending)" };
-  if (a.eligible) return { label: "eligible", color: "var(--color-state-released)" };
-  try {
-    if (BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0")) return { label: "understake", color: "var(--color-state-disputed)" };
-  } catch { /* malformed wei → fall through to staked */ }
-  return { label: "staked", color: "var(--color-state-submitted)" };
-}
 
 export default function ArbitersPage() {
   const { data: arbiters, isLoading } = useArbiters();
@@ -114,7 +101,7 @@ export default function ArbitersPage() {
       ) : (
         <ol className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
           {ranked.map((a, i) => {
-            const st = standing(a, minStakeWei);
+            const st = arbiterStanding(a, minStakeWei);
             const tierName = (TIER_NAMES[a.tier ?? 0] ?? "Unstaked").toLowerCase();
             const belowMinStake = (() => { try { return BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0"); } catch { return false; } })();
             const pickable = !!projectId && a.eligible;

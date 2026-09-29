@@ -1,6 +1,6 @@
 "use client";
 
-import type { PublicUser, UserRole } from "@/lib/types";
+import type { ArbiterView, PublicUser, UserRole } from "@/lib/types";
 import { requiredRolesForPathStrict } from "@/lib/role-routes";
 
 export const ROLES: { id: UserRole; title: string; blurb: string; kyc: string }[] = [
@@ -10,6 +10,32 @@ export const ROLES: { id: UserRole; title: string; blurb: string; kyc: string }[
 ];
 
 export const TIER_NAMES = ["Unstaked", "Bronze", "Silver", "Gold"] as const;
+
+/** Human label for a seat — reuses ROLES so copy lives in exactly one place. */
+export function roleLabel(role: UserRole): string {
+  return ROLES.find((r) => r.id === role)?.title ?? role;
+}
+
+/**
+ * An arbiter's current availability, mirroring the registry:
+ *   locked    → score below the withdrawal floor: benched + stake locked
+ *   unstaking → requestUnstake called: benched from selection
+ *   eligible  → drawable for new disputes now (stake ≥ min + duration met)
+ *   understake→ stake below min: top up before the duration clock matters
+ *   staked    → registered but the min-stake-duration clock is still running
+ *
+ * Single source of truth: the roster and the profile card must never invent two
+ * vocabularies for the same on-chain state.
+ */
+export function arbiterStanding(a: ArbiterView, minStakeWei: string): { label: string; color: string } {
+  if (a.locked) return { label: "locked", color: "var(--color-state-disputed)" };
+  if (a.unstakeRequested) return { label: "unstaking", color: "var(--color-state-pending)" };
+  if (a.eligible) return { label: "eligible", color: "var(--color-state-released)" };
+  try {
+    if (BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0")) return { label: "understake", color: "var(--color-state-disputed)" };
+  } catch { /* malformed wei → fall through to staked */ }
+  return { label: "staked", color: "var(--color-state-submitted)" };
+}
 
 /** Route → roles allowed (strict separation, proxy-enforced). Reads gated too. */
 export function requiredRolesForPath(pathname: string): UserRole[] | null {

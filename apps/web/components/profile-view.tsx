@@ -5,13 +5,24 @@
  * Rendered read-only at /profile/[address]; editable ONLY at /profile/me
  * (`allowEdit`), which is also proxy-gated to verified users — so unfinished
  * users have no edit path, page or API.
+ *
+ * The card is shaped by the OWNER's seat, not the viewer's. Role is locked for
+ * good after onboarding (users.ts switchRole), so the two "wrong-side" derived
+ * stats per seat are not "not yet" — they are permanently zero. Rendering them
+ * anyway is what this component used to do for all three seats.
+ *
+ * Invariant: every field the card renders is editable, and every field the form
+ * edits is rendered. `avatarUrl` is in the DB and the API contract but is
+ * rendered and edited by neither — deliberately, see EditProfile.
  */
 import { useState } from "react";
 import Link from "next/link";
-import { useUser, useUserReviews, useArbiters, useProjects, useInvalidate, patch, post } from "@/lib/queries";
+import { useUser, useUserReviews, useArbiters, useInvalidate, patch } from "@/lib/queries";
 import { useSession } from "@/lib/session";
+import { useRuntime } from "@/lib/runtime";
+import { TIER_NAMES, arbiterStanding, roleLabel } from "@/lib/roles";
 import {
-  AddressAvatar, Chip, EthAmount, ListHead, Skeleton, EmptyState, StatusBadge, press, Copyable, InlineLoading,
+  AddressAvatar, Chip, EthAmount, ListHead, Skeleton, EmptyState, Copyable, InlineLoading,
 } from "@/components/design";
 import { shortAddress, timeAgo, dateLabel } from "@/lib/format";
 import { Star } from "@phosphor-icons/react/dist/csr/Star";
@@ -23,9 +34,47 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import type { ArbiterView, PublicUser } from "@/lib/types";
+
+type Stat = { label: string; value: React.ReactNode; tone?: string };
+
+/**
+ * The stats a seat can actually move.
+ *
+ *  · client     — pays out, hires. `totalEarnedWei`/`completedAsFreelancer` are
+ *                 unreachable for this seat, so they are not shown as 0.
+ *  · freelancer — earns, ships. `totalPaidWei`/`completedAsClient` likewise.
+ *  · arbiter    — neither. Their track record is registry standing, read live
+ *                 from ArbiterRegistry (see ArbiterView). NOTE: an arbiter's
+ *                 real income is ArbiterView.totalEarnedWei (lifetime fees from
+ *                 the ledger) — user.stats.totalEarnedWei is marketplace money
+ *                 and is permanently 0 for this seat. Do not swap them.
+ */
+function statsFor(user: PublicUser, arbiter: ArbiterView | undefined): Stat[] {
+  if (user.role === "client") {
+    return [
+      { label: "paid via escrow", value: <EthAmount wei={user.stats.totalPaidWei} />, tone: "text-state-submitted" },
+      { label: "projects completed", value: <span className="num">{user.stats.completedProjectsAsClient}</span> },
+    ];
+  }
+  if (user.role === "freelancer") {
+    return [
+      { label: "earned", value: <EthAmount wei={user.stats.totalEarnedWei} />, tone: "text-state-released" },
+      { label: "projects completed", value: <span className="num">{user.stats.completedProjectsAsFreelancer}</span> },
+    ];
+  }
+  if (!arbiter) return [];
+  return [
+    { label: "trust score", value: <span className="num">{arbiter.trustScore}</span>, tone: arbiter.trustScore > 0 ? "text-state-released" : undefined },
+    { label: "tier", value: <span>{TIER_NAMES[arbiter.tier] ?? "Unstaked"}</span> },
+    { label: "stake", value: <EthAmount wei={arbiter.stakeWei} />, tone: "text-dim" },
+    { label: "cases resolved", value: <span className="num">{arbiter.resolutions}</span> },
+  ];
+}
 
 export function ProfileView({ address, allowEdit }: { address: string; allowEdit: boolean }) {
   const session = useSession();
+  const minStakeWei = useRuntime((s) => s.minStakeWei);
   const { data: user, isLoading } = useUser(address);
   const { data: reviews } = useUserReviews(address);
   const { data: arbiters, isLoading: arbitersLoading } = useArbiters();
@@ -45,6 +94,13 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
     return <EmptyState title="No profile at that address" body="Profiles are created on first sign-in — the wallet IS the identity." />;
   }
 
+  const isArbiterSeat = user.role === "arbiter";
+  // A review is always client ↔ freelancer (reviews.ts pins revieweeId to the
+  // other side of the project). Arbiters are drawn in as voters, never as a
+  // project side — so this seat can never receive one. Don't promise a section
+  // that is empty for the same reason the old zero stats were.
+  const showReviews = !isArbiterSeat;
+  const stats = statsFor(user, arbiter);
   const avgRating = reviews?.length ? reviews.reduce((a, r) => a + r.rating, 0) / reviews.length : null;
 
   return (
@@ -55,11 +111,12 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
           <div className="flex items-center gap-5">
             <AddressAvatar address={address} size={72} />
             <div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <h1 className="text-2xl font-semibold tracking-tight">{user.displayName ?? shortAddress(address)}</h1>
+                <Chip>{roleLabel(user.role)}</Chip>
                 {user.kycStatus === "verified" && <span className="num flex items-center gap-1 rounded-full bg-state-released/10 px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-state-released"><SealCheck weight="fill" className="h-3 w-3" /> verified</span>}
                 {arbitersLoading && <InlineLoading label="arbiter…" />}
-                {arbiter?.registered && (
+                {!isArbiterSeat && arbiter?.registered && (
                   <span className="flex items-center gap-1.5 rounded-full bg-state-split/10 px-2.5 py-0.5 text-[10.5px] text-state-split">
                     <SealCheck weight="fill" className="h-3.5 w-3.5" /> arbiter · trust {arbiter.trustScore}
                   </span>
@@ -70,8 +127,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
               </Copyable>
               <div className="num mt-2 flex items-center gap-3 text-[11px] text-faint">
                 <span>joined {dateLabel(user.createdAt)}</span>
-                <span>role {user.role}</span>
-                <span>kyc {user.kycStatus}</span>
+                {user.kycStatus !== "verified" && <span>kyc {user.kycStatus}</span>}
               </div>
             </div>
           </div>
@@ -97,45 +153,88 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
         {editing && <EditProfile onDone={() => setEditing(false)} user={user} />}
 
         {/* chain-derived stats — derived, never writable */}
-        <div className="mt-7 grid grid-cols-2 gap-x-8 gap-y-6 border-t border-line pt-6 sm:grid-cols-4">
-          <Stat label="earned" value={<EthAmount wei={user.stats.totalEarnedWei} />} tone="text-state-released" />
-          <Stat label="paid via escrow" value={<EthAmount wei={user.stats.totalPaidWei} />} tone="text-state-submitted" />
-          <Stat label="completed as freelancer" value={<span className="num">{user.stats.completedProjectsAsFreelancer}</span>} />
-          <Stat label="completed as client" value={<span className="num">{user.stats.completedProjectsAsClient}</span>} />
-        </div>
+        {isArbiterSeat ? (
+          <ArbiterStanding
+            arbiter={arbiter}
+            loading={arbitersLoading}
+            minStakeWei={minStakeWei}
+            stats={stats}
+          />
+        ) : stats.length > 0 && (
+          <div className={`mt-7 grid grid-cols-2 gap-x-8 gap-y-6 border-t border-line pt-6 ${stats.length > 2 ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
+            {stats.map((s) => <Stat key={s.label} {...s} />)}
+          </div>
+        )}
       </div>
 
       {/* reviews */}
-      <section>
-        <div className="flex items-baseline justify-between">
-          <ListHead>Reviews received</ListHead>
-          {avgRating !== null && (
-            <span className="num flex items-center gap-1.5 text-[12px] text-dim">
-              <Star weight="fill" className="h-3.5 w-3.5 text-amber-300" />
-              {avgRating.toFixed(1)} · {reviews?.length} reviews
-            </span>
-          )}
-        </div>
-        {!reviews?.length ? (
-          <EmptyState className="mt-4" title="No reviews yet" body="Reviews unlock after on-chain settlement — one per side per milestone, bound to the settlement tx." />
-        ) : (
-          <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
-            {reviews.map((r) => (
-              <div key={r.id} className="bg-white/[0.012] px-6 py-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star key={n} weight={n <= r.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= r.rating ? "text-amber-300" : "text-faint"}`} />
-                    ))}
-                  </div>
-                  <span className="num text-[10.5px] text-faint">{timeAgo(r.createdAt)} · tx {r.txHash?.slice(0, 8)}…</span>
-                </div>
-                {r.body && <p className="mt-2.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{r.body}</p>}
-              </div>
-            ))}
+      {showReviews && (
+        <section>
+          <div className="flex items-baseline justify-between">
+            <ListHead>Reviews received</ListHead>
+            {avgRating !== null && (
+              <span className="num flex items-center gap-1.5 text-[12px] text-dim">
+                <Star weight="fill" className="h-3.5 w-3.5 text-amber-300" />
+                {avgRating.toFixed(1)} · {reviews?.length} reviews
+              </span>
+            )}
           </div>
-        )}
-      </section>
+          {!reviews?.length ? (
+            <EmptyState className="mt-4" title="No reviews yet" body="Reviews unlock after on-chain settlement — one per side per milestone, bound to the settlement tx." />
+          ) : (
+            <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+              {reviews.map((r) => (
+                <div key={r.id} className="bg-white/[0.012] px-6 py-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <Star key={n} weight={n <= r.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= r.rating ? "text-amber-300" : "text-faint"}`} />
+                      ))}
+                    </div>
+                    <span className="num text-[10.5px] text-faint">{timeAgo(r.createdAt)} · tx {r.txHash?.slice(0, 8)}…</span>
+                  </div>
+                  {r.body && <p className="mt-2.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{r.body}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Arbiter seat — the standing IS the profile. The roster is built from
+ * `rosterSnapshot()`, so an address that has never staked (or any RPC/mock-mode
+ * failure) has no row at all. That is a "not yet", not a zero: say so, and
+ * point at the one action that creates the row.
+ */
+function ArbiterStanding({ arbiter, loading, minStakeWei, stats }: { arbiter: ArbiterView | undefined; loading: boolean; minStakeWei: string; stats: Stat[] }) {
+  if (loading) return <Skeleton className="mt-7 h-24 w-full rounded-2xl" />;
+  if (!arbiter?.registered) {
+    return (
+      <div className="mt-7 border-t border-line pt-6">
+        <EmptyState
+          title="No registry standing yet"
+          body="Arbiters earn trust by staking collateral and ruling on disputes. Until then there is nothing on-chain to show — and nothing to show as a zero."
+          action={<Link href="/stake" className="text-sm text-rose-bright hover:underline">Stake to join the registry →</Link>}
+        />
+      </div>
+    );
+  }
+  const st = arbiterStanding(arbiter, minStakeWei);
+  return (
+    <div className="mt-7 border-t border-line pt-6">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <span className="text-[11px] uppercase tracking-[0.14em] text-faint">registry standing</span>
+        <span className="rounded-full px-2.5 py-0.5 text-[11px]" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 9%, transparent)` }}>{st.label}</span>
+        {arbiter.registeredAt && <span className="num text-[11px] text-faint">registered {dateLabel(arbiter.registeredAt)}</span>}
+        <Link href="/arbiters" className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">roster →</Link>
+      </div>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+        {stats.map((s) => <Stat key={s.label} {...s} />)}
+      </div>
     </div>
   );
 }
@@ -149,7 +248,7 @@ function Stat({ label, value, tone = "text-foreground" }: { label: string; value
   );
 }
 
-function EditProfile({ onDone, user }: { onDone: () => void; user: import("@/lib/types").PublicUser }) {
+function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser }) {
   const [displayName, setDisplayName] = useState(user.displayName ?? "");
   const [bio, setBio] = useState(user.bio ?? "");
   const [skills, setSkills] = useState(user.skills.join(", "));
