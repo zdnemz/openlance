@@ -624,7 +624,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                       ? "What changed since the last delivery, and what the client should look at now."
                       : "Delivery notes: what shipped, where to look, what to check before approving."
                   }
-                  className="resize-none border-line bg-white/[0.03] text-[13px]"
+                  className="text-[13px]"
                 />
                 <SubmissionFiles files={files} onChange={setFiles} max={maxAttachments} />
                 {submitError && (
@@ -688,7 +688,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                       <Textarea
                         value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={3}
                         placeholder="What needs to change. This is the note the freelancer revises against — say it precisely."
-                        className="resize-none border-line bg-white/[0.03] text-[13px]"
+                        className="text-[13px]"
                       />
                       <Button
                         variant="ghost"
@@ -770,7 +770,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
               <Textarea
                 value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
                 placeholder="What exactly is disputed: scope, quality, timeline. This becomes evidence."
-                className="resize-none border-line bg-white/[0.03] text-[13px]"
+                className="text-[13px]"
               />
               <p className="num text-[11px] text-faint">
                 {feeWei > 0n
@@ -1259,7 +1259,7 @@ function ReviewForm({ projectId, milestoneId }: { projectId: string; milestoneId
       <Textarea
         value={body} onChange={(e) => setBody(e.target.value)} rows={2}
         placeholder="How did this milestone actually go?"
-        className="resize-none border-line bg-white/[0.03] text-[13px]"
+        className="text-[13px]"
       />
       <Button
         disabled={submitting}

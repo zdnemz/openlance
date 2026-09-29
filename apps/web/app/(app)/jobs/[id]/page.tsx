@@ -575,7 +575,6 @@ function ProposeForm({ jobId }: { jobId: string }) {
             onChange={(e) => setCoverNote(e.target.value)}
             rows={5}
             placeholder="How you'd approach it, what you've shipped before, and why the milestones should look the way you've shaped them."
-            className="resize-none border-line bg-white/[0.03] text-sm focus-visible:ring-rose-accent/40"
           />
           <p className="text-[11px] text-faint">Minimum 20 characters. One proposal per freelancer per job — make it count.</p>
         </div>
@@ -631,7 +630,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
                 value={m.description} rows={2}
                 onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
                 placeholder="What gets delivered, and what the reviewer checks"
-                className="resize-none border-line bg-white/[0.03] text-[13px]"
+                className="text-[13px]"
               />
             </div>
           ))}

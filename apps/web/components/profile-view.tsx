@@ -314,7 +314,7 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
       return (
         <div className="space-y-2">
           <label className="text-[13px] font-medium">{copy.bio}</label>
-          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="resize-none border-line bg-white/[0.03] text-sm" />
+          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
         </div>
       );
     }

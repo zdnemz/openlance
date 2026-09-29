@@ -109,7 +109,6 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
           value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })}
           rows={7}
           placeholder="Context, scope, acceptance criteria, what the reviewer checks when a milestone lands. Markdown-ish paragraphs work well."
-          className="resize-none border-line bg-white/[0.03] text-sm"
         />
         <p className="text-[12px] text-faint">Minimum 20 characters. This is what proposals will be written against.</p>
       </div>
