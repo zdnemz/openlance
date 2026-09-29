@@ -138,30 +138,46 @@ export default function DashboardPage() {
       <section>
         <div className="flex items-baseline justify-between">
           <ListHead>{role === "arbiter" ? "Projects under dispute" : "Active projects"}</ListHead>
-          <span className="num text-[11px] text-faint">{projects?.length ?? 0} total</span>
+          {/* Counts the list it renders, not every project: a finished project
+              is history, and "N total" over an active-only list read as a lie. */}
+          <span className="num text-[11px] text-faint">
+            {active.length}{done.length > 0 ? ` · ${done.length} completed` : ""}
+          </span>
         </div>
         {isLoading ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <Skeleton className="h-48 rounded-3xl" />
             <Skeleton className="h-48 rounded-3xl" />
           </div>
-        ) : !projects?.length ? (
+        ) : !active.length ? (
+          // A user whose only projects are finished is not the same as a user
+          // with none — say which, instead of nudging them to post more work.
           <EmptyState
             className="mt-5"
             icon={<Briefcase className="h-5 w-5" />}
-            title={role === "client" ? "No projects yet" : role === "freelancer" ? "No work in flight" : "Nothing serving"}
-            body={
-              role === "client"
-                ? "Post a job and award a proposal — the project room is where escrow happens."
-                : role === "freelancer"
-                  ? "Propose on open work — awarded proposals become project rooms with funded milestones."
-                  : "When a dispute selects you, its project appears here. Keep your stake eligible meanwhile."
+            title={
+              done.length > 0
+                ? `${done.length} project${done.length === 1 ? "" : "s"} completed`
+                : role === "client" ? "No projects yet" : role === "freelancer" ? "No work in flight" : "Nothing serving"
             }
-            action={<Link href={role === "freelancer" ? "/jobs" : role === "client" ? "/jobs/new" : "/disputes"} className="text-sm text-rose-bright hover:underline">{role === "arbiter" ? "Open the dispute queue" : role === "client" ? "Post your first job" : "Explore open jobs"}</Link>}
+            body={
+              done.length > 0
+                ? "Finished work moves off this list. Open a project room from your profile to settle up, leave a review, or check the payout."
+                : role === "client"
+                  ? "Post a job and award a proposal — the project room is where escrow happens."
+                  : role === "freelancer"
+                    ? "Propose on open work — awarded proposals become project rooms with funded milestones."
+                    : "When a dispute selects you, its project appears here. Keep your stake eligible meanwhile."
+            }
+            action={
+              done.length > 0
+                ? <Link href="/profile/me" className="text-sm text-rose-bright hover:underline">See completed projects</Link>
+                : <Link href={role === "freelancer" ? "/jobs" : role === "client" ? "/jobs/new" : "/disputes"} className="text-sm text-rose-bright hover:underline">{role === "arbiter" ? "Open the dispute queue" : role === "client" ? "Post your first job" : "Explore open jobs"}</Link>
+            }
           />
         ) : (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {projects.map((p) => <ProjectCard key={p.id} id={p.id} jobId={p.jobId} />)}
+            {active.map((p) => <ProjectCard key={p.id} id={p.id} jobId={p.jobId} />)}
           </div>
         )}
       </section>
