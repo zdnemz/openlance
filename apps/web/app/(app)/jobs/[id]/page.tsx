@@ -17,7 +17,7 @@ import { JobForm, CATEGORIES, CUSTOM_CATEGORY, type JobDraft } from "@/component
 import type { JobView } from "@/lib/types";
 import { formatEth, timeAgo, toWei, ethToWei } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
-import { sendContractCall, waitForReceipt } from "@/lib/wallet";
+import { sendContractCall, waitForReceipt, readRevertReason } from "@/lib/wallet";
 import { describeFundingRevert, readJobBudget, returnBudgetSurplus } from "@/lib/chain-actions";
 import { SurplusPanel } from "@/components/surplus-panel";
 import { ESCROW_ABI } from "@/lib/contracts";
@@ -197,7 +197,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
 
       {isPoster && !job.projectId && job.status !== "in_progress" && (
         <div className="flex justify-end">
-          <DeleteJob jobId={id} jobRef={job.jobRef} funded={job.status === "open"} />
+          <DeleteJob jobId={id} jobRef={job.jobRef} />
         </div>
       )}
 
@@ -309,12 +309,15 @@ function jobToDraft(job: JobView): JobDraft {
   };
 }
 
-/* ── delete (poster view, draft or open) ─────────────────────────────────────
+/* ── delete (poster view, any un-awarded job) ────────────────────────────────
    A published job's escrow key is derived from its id, so deleting the row
    while ETH is locked under it would strand that ETH forever. The server
-   refuses in that case; here we withdraw first, then delete. */
+   refuses in that case; here we withdraw first, then delete. That is attempted
+   unconditionally — `returnBudgetSurplus` reads the free balance and returns 0
+   without sending anything when there is nothing to take, and a draft can still
+   be holding a lock (a withdrawal unpublishes the job, and it may be partial). */
 
-function DeleteJob({ jobId, jobRef, funded }: { jobId: string; jobRef: string; funded: boolean }) {
+function DeleteJob({ jobId, jobRef }: { jobId: string; jobRef: string }) {
   const escrow = useRuntime((s) => s.escrow);
   const chainId = useRuntime((s) => s.chainId);
   const invalidate = useInvalidate();
@@ -327,13 +330,12 @@ function DeleteJob({ jobId, jobRef, funded }: { jobId: string; jobRef: string; f
     setBusy(true);
     setError(null);
     try {
-      // Withdraw the free balance first when the job is funded and one is left.
       // The server re-checks on-chain, so this is convenience, not the gate.
-      if (funded && escrow) await returnBudgetSurplus(escrow, jobRef, chainId);
+      const back = escrow ? await returnBudgetSurplus(escrow, jobRef, chainId) : 0n;
       await del(`/jobs/${jobId}`);
       invalidate.job(jobId);
       toast.success("Job deleted", {
-        description: funded ? "The locked budget is back in your wallet." : "The draft is gone.",
+        description: back > 0n ? "The locked budget is back in your wallet." : "The job is gone.",
       });
       router.push("/jobs");
     } catch (e) {
@@ -358,9 +360,7 @@ function DeleteJob({ jobId, jobRef, funded }: { jobId: string; jobRef: string; f
   return (
     <div className="glass flex flex-wrap items-center gap-3 rounded-2xl border-destructive/30 px-5 py-4 text-[13px]">
       <span className="text-dim">
-        {funded
-          ? "This job is live and its budget is locked. Deleting it withdraws the remainder to your wallet first."
-          : "This draft is deleted immediately. Nothing was ever escrowed."}
+        Any budget still locked in escrow goes back to your wallet before the job is deleted.
       </span>
       <div className="ml-auto flex items-center gap-2">
         <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy} className="rounded-full px-4 py-2 text-[12.5px]">
@@ -371,7 +371,7 @@ function DeleteJob({ jobId, jobRef, funded }: { jobId: string; jobRef: string; f
           disabled={busy}
           className="rounded-full bg-destructive px-4 py-2 text-[12.5px] font-medium text-white hover:bg-destructive/90"
         >
-          {busy ? "Working…" : funded ? "Withdraw & delete" : "Delete"}
+          {busy ? "Working…" : "Delete"}
         </Button>
       </div>
       {error && <p className="w-full text-[12px] text-destructive">{error}</p>}
@@ -404,7 +404,14 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
           expectedChainId: chainId,
         });
         const receipt = await waitForReceipt(hash);
-        if (receipt.status !== "success") throw new Error("Deposit transaction reverted on-chain");
+        if (receipt.status !== "success") {
+          // The bare "reverted on-chain" hid the one reason that matters here:
+          // a re-publish after a withdrawal is legal only once the old lock is
+          // fully spent, and a partial withdrawal means the rest is still
+          // escrowed and has to come back first.
+          const reason = await readRevertReason(escrow, hash);
+          throw new Error(describeFundingRevert(reason ?? "Deposit transaction reverted on-chain", toWei(budgetWei), null));
+        }
         depositTxHash = hash;
       } else {
         // Dev mode (no escrow configured): the server accepts the hash shape

@@ -79,6 +79,74 @@ describe("Escrow drawdown model", function () {
     );
   });
 
+  it("re-locks a fully withdrawn job, but not a partially withdrawn or foreign one", async function () {
+    const { escrow, client, freelancer, outsider } = await deployWithEoaOwner();
+
+    // A client who withdraws a published job's budget unpublishes it off-chain,
+    // and the job has to be publishable again — `bytes32(jobRef)` can never be
+    // rotated, so re-locking the spent key is the only way back.
+    await escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account });
+    await escrow.write.unlockBudget([JOB_REF, BUDGET], { account: client.account });
+    assert.equal(await escrow.read.lockedBudget([JOB_REF]), BUDGET);
+    assert.equal(await escrow.read.paidOutBudget([JOB_REF]), BUDGET);
+
+    await escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account });
+    // A fresh balance sheet: the old lock's spend does not eat the new one.
+    assert.equal(await escrow.read.paidOutBudget([JOB_REF]), 0n);
+    assert.equal(await escrow.read.reservedBudget([JOB_REF]), 0n);
+    // And it is a working lock, not just a number.
+    await escrow.write.fundFromCredit([JOB_REF, MILESTONE_A, freelancer.account.address, parseEther("0.4")], {
+      account: client.account,
+    });
+    assert.equal(await escrow.read.reservedBudget([JOB_REF]), parseEther("0.4"));
+  });
+
+  it("refuses a re-lock while anything is still escrowed", async function () {
+    const { escrow, client, freelancer } = await deployWithEoaOwner();
+
+    // Partially withdrawn: 0.4 still escrowed, so the key is not spent.
+    await escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account });
+    await escrow.write.unlockBudget([JOB_REF, parseEther("0.6")], { account: client.account });
+    await assert.rejects(
+      () => escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account }),
+      /BudgetAlreadyLocked/,
+    );
+
+    // Now every wei sits in a live milestone rather than with the client. That
+    // money is backing work and a second lock must not be able to overwrite it.
+    await escrow.write.fundFromCredit([JOB_REF, MILESTONE_A, freelancer.account.address, parseEther("0.4")], {
+      account: client.account,
+    });
+    assert.equal(await escrow.read.paidOutBudget([JOB_REF]), parseEther("0.6"));
+    await assert.rejects(
+      () => escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account }),
+      /BudgetAlreadyLocked/,
+    );
+
+    // Settle it and the whole lock has left the contract, so the key frees up.
+    await escrow.write.submit([1n], { account: freelancer.account });
+    await escrow.write.approve([1n], { account: client.account });
+    assert.equal(await escrow.read.reservedBudget([JOB_REF]), 0n);
+    assert.equal(await escrow.read.paidOutBudget([JOB_REF]), BUDGET);
+    await escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account });
+    assert.equal(await escrow.read.paidOutBudget([JOB_REF]), 0n);
+  });
+
+  it("only the original locker may re-lock a spent key", async function () {
+    const { escrow, client, outsider } = await deployWithEoaOwner();
+
+    await escrow.write.lockBudget([JOB_REF], { value: BUDGET, account: client.account });
+    await escrow.write.unlockBudget([JOB_REF, BUDGET], { account: client.account });
+
+    // Otherwise anyone could attach a wei to a spent key and permanently block
+    // the real client from re-publishing the job.
+    await assert.rejects(
+      () => escrow.write.lockBudget([JOB_REF], { value: 1n, account: outsider.account }),
+      /NotClient/,
+    );
+    assert.equal(getAddress(await escrow.read.budgetLocker([JOB_REF])), getAddress(client.account.address));
+  });
+
   it("releases a cancelled milestone's reservation and pays the refund", async function () {
     const { escrow, client, freelancer } = await deployWithEoaOwner();
 
@@ -146,11 +214,24 @@ describe("Escrow drawdown model", function () {
     assert.equal((await escrow.read.getMilestone([1n])).amount, parseEther("0.6"));
     assert.equal((await escrow.read.getMilestone([2n])).amount, parseEther("0.4"));
 
-    // All-or-nothing: a batch that overdraws the free balance reverts entirely.
+    // A job with no lock yet takes the first-touch path, where the attached
+    // value BECOMES the lock. Sending none is therefore a value mismatch, not a
+    // missing lock: `ValueMismatch` is what tells the caller to attach the
+    // batch total. (The overdraw case is the "rejects a batch that exceeds the
+    // free balance" test below — this one is about an unfunded jobRef.)
     await assert.rejects(
       () => escrow.write.fundAllFromCredit([OTHER_JOB, refs, frees, amounts], { account: client.account }),
-      /NoBudgetLocked/,
+      /ValueMismatch/,
     );
+    assert.equal(await escrow.read.lockedBudget([OTHER_JOB]), 0n);
+
+    // ...and attaching exactly that total is what funds it, with no prior lock.
+    await escrow.write.fundAllFromCredit([OTHER_JOB, refs, frees, amounts], {
+      value: BUDGET, account: client.account,
+    });
+    assert.equal(await escrow.read.lockedBudget([OTHER_JOB]), BUDGET);
+    assert.equal(await escrow.read.reservedBudget([OTHER_JOB]), BUDGET);
+    assert.equal(getAddress(await escrow.read.budgetLocker([OTHER_JOB])), getAddress(client.account.address));
 
     // Only the locker may batch-fund.
     await assert.rejects(

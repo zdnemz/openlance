@@ -383,6 +383,39 @@ export interface TxReceipt {
   pending?: boolean;
 }
 
+/**
+ * Why a mined transaction reverted, replayed as an `eth_call`.
+ *
+ * A receipt carries status and nothing else, so a revert reached the user as
+ * "reverted on-chain" — which for a custom-error contract like Escrow names
+ * nothing. Replaying the exact call at the parent block runs the same code
+ * without the state change, and viem decodes the custom error into its name
+ * (`BudgetAlreadyLocked`), which is the difference between a user knowing they
+ * must withdraw the remainder and them retrying the same doomed tx.
+ *
+ * Never throws and returns null when the reason can't be recovered; the caller
+ * keeps its own fallback message.
+ */
+export async function readRevertReason(to: string, hash: string): Promise<string | null> {
+  try {
+    const tx = await rpc<{ to?: string; from?: string; input?: string; value?: string } | null>(
+      "eth_getTransactionByHash", [hash],
+    );
+    if (!tx?.input || !tx.to) return null;
+    // The block the tx landed in would have the post-state; the parent is the
+    // state the contract actually reverted against.
+    const receipt = await rpc<{ blockNumber?: string } | null>("eth_getTransactionReceipt", [hash]);
+    const parent = receipt?.blockNumber ? `0x${(BigInt(receipt.blockNumber) - 1n).toString(16)}` : "latest";
+    await rpc("eth_call", [{
+      from: tx.from, to: tx.to, data: tx.input,
+      ...(tx.value && tx.value !== "0x0" ? { value: tx.value } : {}),
+    }, parent]);
+    return null; // it did not revert when replayed
+  } catch (err) {
+    return err instanceof Error ? err.message : null;
+  }
+}
+
 /** Wait for a receipt via the relay. */
 export async function waitForReceipt(hash: string, timeoutMs = 30_000): Promise<TxReceipt> {
   const started = Date.now();

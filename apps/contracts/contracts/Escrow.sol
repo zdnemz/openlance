@@ -365,15 +365,31 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      * @notice Lock the full job budget at publish. The drawdown model: the client
      *         pays once here, and every milestone of this job is then funded from
      *         the locked balance via `fundFromCredit` — no second wallet round.
+     *         A key whose previous lock has been fully spent and has nothing live
+     *         may lock again (see below).
      * @param  jobRef bytes32 of the off-chain job uuid (the same key the indexer
      *         uses to map milestone refs back to rows).
      */
     function lockBudget(bytes32 jobRef) external payable {
         if (msg.value == 0) revert ZeroAmount();
-        if (lockedBudget[jobRef] != 0) revert BudgetAlreadyLocked(jobRef);
+        // A published job is escrow-backed; if the client withdraws that budget the
+        // job leaves the marketplace and comes back as a draft, which must be able
+        // to publish again. `bytes32(jobRef)` is derived from the job row and can
+        // never be rotated, so re-locking is the only way back. It is legal only
+        // once the old lock is spent: `paidOutBudget == lockedBudget` means the
+        // whole lock has left the contract, and by invariant 6 (paidOut + reserved
+        // <= locked) that also means nothing is reserved for a live milestone. While
+        // any of it is left, a second lock would double-count the key and strand it.
+        // The original locker only: otherwise anyone could attach a wei to a spent
+        // key and permanently block the real client from re-publishing.
+        if (lockedBudget[jobRef] != 0) {
+            if (paidOutBudget[jobRef] != lockedBudget[jobRef]) revert BudgetAlreadyLocked(jobRef);
+            if (budgetLocker[jobRef] != _msgSender()) revert NotClient();
+        }
         address client = _msgSender();
         budgetLocker[jobRef] = client;
         lockedBudget[jobRef] = msg.value;
+        paidOutBudget[jobRef] = 0; // the previous lock is spent; this is a fresh balance sheet
         emit BudgetLocked(jobRef, client, msg.value);
     }
 

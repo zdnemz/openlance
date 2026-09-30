@@ -12,9 +12,11 @@ import { logger } from '../lib/logger.ts'
 import { getChainAdapter, type ChainAdapter } from './adapter.ts'
 import { isTerminal, type MilestoneStatus } from '../domain/state-machine.ts'
 import { ensureMilestoneOnchain } from '../modules/helpers.ts'
+import { fundedForCeiling, UNPUBLISHED } from '../modules/jobs.ts'
 import { AppError } from '../lib/errors.ts'
-import { ledgerEvents, projectMilestones, projects, reconciliationRuns, users } from '../db/schema.ts'
+import { ledgerEvents, jobs, projectMilestones, projects, reconciliationRuns, users } from '../db/schema.ts'
 import type { ProjectMilestone } from '../db/schema.ts'
+import { uuidToBytes32 } from './events.ts'
 
 const log = logger.child({ component: 'reconcile' })
 
@@ -33,6 +35,14 @@ export interface DriftEntry {
   action: 'repaired' | 'unreachable' | 'conflicted'
 }
 
+/** A job whose escrowed backing no longer covers its published ceiling. */
+export interface JobDriftEntry {
+  jobId: string
+  /** What the chain reports free under bytes32(job.id); null when unreadable. */
+  freeWei: string | null
+  action: 'repaired' | 'unreachable'
+}
+
 export async function runReconciliation(): Promise<{ checked: number; drifts: number; report: DriftEntry[] }> {
   const db = getDb()
   const adapter = getChainAdapter()
@@ -45,6 +55,14 @@ export async function runReconciliation(): Promise<{ checked: number; drifts: nu
   // invisible to the drift check above (it needs an id to read). One getLogs
   // per stuck row finds the funding, if it ever landed.
   drifts.push(...(await backfillMissingOnchainIds(adapter)))
+
+  // The same story one level up: an `open` job claims its whole ceiling is
+  // escrowed, and the client can pull that back with `unlockBudget` straight from
+  // the wallet. The indexer unpublishes the job when it sees the log, but a
+  // checkpoint already past it (or an indexer that was down) leaves the job
+  // listed on a promise the chain no longer backs.
+  const jobDrifts = await repairUnfundedJobs(adapter)
+  if (jobDrifts.length) log.warn('reconciliation drift — open jobs whose budget was withdrawn', { jobDrifts })
 
   for (const m of rows) {
     const chainStatus = await adapter.getMilestoneStatus(m.onchainId!).catch(() => null)
@@ -75,11 +93,11 @@ export async function runReconciliation(): Promise<{ checked: number; drifts: nu
     log.error('SOLVENCY DRIFT: escrow balance below liabilities', solvency)
   }
 
-  const driftCount = drifts.length + stats.corrected + (solvency && !solvency.ok ? 1 : 0)
+  const driftCount = drifts.length + jobDrifts.length + stats.corrected + (solvency && !solvency.ok ? 1 : 0)
 
   await db.update(reconciliationRuns).set({
     finishedAt: new Date(), checked: rows.length, drifts: driftCount,
-    report: { milestones: drifts, stats, solvency },
+    report: { milestones: drifts, jobs: jobDrifts, stats, solvency },
   }).where(eq(reconciliationRuns.id, run!.id))
 
   log.info('reconciliation complete', { checked: rows.length, drifts: driftCount })
@@ -133,6 +151,31 @@ async function backfillMissingOnchainIds(adapter: ChainAdapter): Promise<DriftEn
     repaired.push({ milestoneId: m.id, onchainId: current.onchainId!, mirrorStatus: 'pending_funding', chainStatus: current.chainStatus, action: 'repaired' })
   }
   return repaired
+}
+
+/**
+ * Republish rule, chain-truth: an `open` job is only honest while the escrow
+ * still covers its ceiling. Anything less — a full or partial `unlockBudget` —
+ * and the listing is advertising money that is not there, so it goes back to
+ * draft, exactly as the indexer does when it sees the log.
+ *
+ * Unreadable chain means unknown, not unfunded, so it is reported and left
+ * alone: a flaky RPC must never unpublish a funded job.
+ */
+export async function repairUnfundedJobs(adapter: ChainAdapter): Promise<JobDriftEntry[]> {
+  if (adapter.mode !== 'real') return [] // the mock moves no ETH, so nothing is escrowed
+  const db = getDb()
+  const open = await db.select({ id: jobs.id, ceiling: jobs.budgetMaxWei }).from(jobs).where(eq(jobs.status, 'open'))
+  const found: JobDriftEntry[] = []
+  for (const j of open) {
+    const budget = await adapter.getJobBudget(uuidToBytes32(j.id)).catch(() => null)
+    if (budget === null) { found.push({ jobId: j.id, freeWei: null, action: 'unreachable' }); continue }
+    const free = BigInt(budget.freeWei)
+    if (fundedForCeiling(free, BigInt(j.ceiling))) continue
+    await db.update(jobs).set({ ...UNPUBLISHED, updatedAt: new Date() }).where(eq(jobs.id, j.id))
+    found.push({ jobId: j.id, freeWei: free.toString(), action: 'repaired' })
+  }
+  return found
 }
 
 /** balance ≥ Σ unsettled milestones + accrued (unwithdrawn) fees. */

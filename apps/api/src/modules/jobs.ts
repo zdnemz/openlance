@@ -199,19 +199,49 @@ export async function updateJob(request: Request, jobId: string) {
   return jobView(updated!)
 }
 
-// ── Delete (poster only: draft, or open with the lock already withdrawn) ─────
+// ── Delete (poster only: never awarded, and nothing left locked) ─────────────
 //
 // A published job's escrow key is bytes32(job.id). Once the row is gone nobody
 // can derive that ref again, so any ETH still locked under it becomes
 // permanently unwithdrawable. The server therefore re-derives the free balance
 // from the chain and refuses while it is non-zero — the client withdraws with
 // unlockBudget (the job page's free-budget panel) and deletes after.
+//
+// The guard is the CHAIN, not the status. A draft can still hold a lock (a
+// withdrawal sends an open job back to draft, and one of those may have been
+// partial), and a cancelled job keeps its lock until the surplus is taken back,
+// so keying this on `status === 'open'` was a way to strand ETH permanently.
 
 /** null = the chain could not be read (mock mode); only real mode has a balance. */
 export function deletableByFunding(freeWei: bigint | null): { ok: true } | { ok: false; reason: string; freeWei: string } {
   if (freeWei === null || freeWei === 0n) return { ok: true }
   return { ok: false, reason: 'funding_locked', freeWei: freeWei.toString() }
 }
+
+/**
+ * An `open` job is a claim that its whole ceiling is escrowed: `publish` locks
+ * it, and every bid is capped against it. The client can pull that lock back
+ * with `unlockBudget` straight from the wallet, so the free balance — never the
+ * status — is what says whether the claim still holds, and a partial withdrawal
+ * counts because the ceiling is then uncovered too.
+ *
+ * null = the chain could not be read; unknown is not unfunded, so a flaky RPC
+ * never unpublishes a funded job.
+ */
+export function fundedForCeiling(freeWei: bigint | null, ceilingWei: bigint): boolean {
+  return freeWei === null || freeWei >= ceilingWei
+}
+
+/**
+ * The publish record a withdrawal invalidates: the lock, and when it landed.
+ * One shape, so the streaming applier (the indexer, reacting to the log) and
+ * the nightly repair (reconcile, re-reading the chain) can never disagree about
+ * what an unfunded job looks like.
+ */
+export const UNPUBLISHED = {
+  status: 'draft', depositAmountWei: null, depositTxHash: null,
+  depositedAt: null, publishedAt: null,
+} as const
 
 export async function deleteJob(request: Request, jobId: string) {
   const user = await requireKyc(request)
@@ -224,15 +254,13 @@ export async function deleteJob(request: Request, jobId: string) {
     throw Errors.conflict('job_awarded', 'An awarded job cannot be deleted — cancel or let it complete')
   }
 
-  if (job.status === 'open' && job.depositAmountWei) {
-    const budget = await getChainAdapter().getJobBudget(uuidToBytes32(job.id))
-    if (budget === null && env.chainMode === 'real') {
-      throw Errors.precondition('chain_unavailable', 'Could not read the locked budget — try again')
-    }
-    const verdict = deletableByFunding(budget === null ? null : BigInt(budget.freeWei))
-    if (!verdict.ok) {
-      throw Errors.conflict(verdict.reason, `Withdraw the locked ${toEth(verdict.freeWei)} ETH first, then delete this job`)
-    }
+  const budget = await getChainAdapter().getJobBudget(uuidToBytes32(job.id))
+  if (budget === null && env.chainMode === 'real') {
+    throw Errors.precondition('chain_unavailable', 'Could not read the locked budget — try again')
+  }
+  const verdict = deletableByFunding(budget === null ? null : BigInt(budget.freeWei))
+  if (!verdict.ok) {
+    throw Errors.conflict(verdict.reason, `Withdraw the locked ${toEth(verdict.freeWei)} ETH first, then delete this job`)
   }
 
   // Proposals (and their attachments) cascade with the job.

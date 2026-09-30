@@ -60,8 +60,32 @@ export function useJobs(filters?: Record<string, string>, enabled = true) {
   });
 }
 
+/**
+ * A job's row is a mirror of the chain, and the poster can change it from OUTSIDE
+ * this page: `unlockBudget` is a direct wallet call, and the indexer only learns
+ * about it on its next pass (up to INDEXER_POLL_MS + confirmations). The panel
+ * that withdrew could invalidate immediately, but the row had not moved yet — so
+ * it refetched the same `open` row and then nothing ever refetched again, and
+ * "refresh the page" was the only way to see the job had gone back to draft.
+ *
+ * So the job row polls while it is still escrow-backed. Past that point nothing
+ * off-page can move it: `in_progress`/completed`/cancelled` are driven by the
+ * award, which happens on this page and already invalidates, so the poll stops
+ * rather than running forever.
+ *
+ * Exported so the rule is pinned where it is declared, not copied into a check.
+ */
+export function jobPollMs(data: JobView | undefined): number | false {
+  return data?.status === "open" ? 3000 : false;
+}
+
 export function useJob(id: string) {
-  return useQuery({ queryKey: qk.job(id), queryFn: () => get<JobView>(`/jobs/${id}`), enabled: !!id });
+  return useQuery({
+    queryKey: qk.job(id),
+    queryFn: () => get<JobView>(`/jobs/${id}`),
+    enabled: !!id,
+    refetchInterval: (query) => jobPollMs(query.state.data as JobView | undefined),
+  });
 }
 
 export function useProposals(jobId: string) {

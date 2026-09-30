@@ -92,6 +92,9 @@ export function describeFundingRevert(message: string, totalWei: bigint, freeWei
     if (freeWei <= 0n) return "Already fully funded on-chain — nothing left to draw from the job budget.";
     return `Job budget too small: needs ${formatEth(totalWei)} ETH but only ${formatEth(freeWei)} ETH is free.`;
   }
+  // A key re-locks only once the previous lock is fully spent, so this is a
+  // partial withdrawal: the rest is still escrowed and has to come back first.
+  if (/BudgetAlreadyLocked/i.test(message)) return "This job still has a balance locked in escrow — withdraw the remainder above, then publish again.";
   // fundAllFromCredit takes two shapes: the first call for a job carries the
   // value that becomes the lock (and must equal the batch), later calls must
   // send nothing. A mismatch between the two is the usual funding failure.

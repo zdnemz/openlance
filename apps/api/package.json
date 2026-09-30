@@ -18,6 +18,7 @@
     "check:profile-clear": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-profile-clear.ts",
     "gen:routes": "node scripts/gen-routes.mjs",
     "check:job-bid": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-job-bid.ts",
+    "check:job-unpublish": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-job-unpublish.ts",
     "check:submission-revision": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-submission-revision.ts",
     "check:relay-reverts": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-relay-reverts.ts",
     "check:arbiter-eligibility": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-arbiter-eligibility.ts",

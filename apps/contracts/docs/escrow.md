@@ -44,7 +44,7 @@ funded from the locked balance, so no per-milestone funding signature is needed 
 work starts. This is what the backend's award flow calls.
 
 ```
-lockBudget{value: totalBudget}(jobRef)          ← client, once per job
+lockBudget{value: totalBudget}(jobRef)          ← client, once per live lock
         │
         ├─ fundAllFromCredit(jobRef, refs[], freelancers[], amounts[])   ← batch, all-or-nothing
         │   or fundFromCredit(jobRef, ref, freelancer, amount)          ← one at a time
@@ -62,6 +62,14 @@ lockBudget{value: totalBudget}(jobRef)          ← client, once per job
 - No ETH is attached to `fundFromCredit` / `fundAllFromCredit` — value is already locked.
 - `unlockBudget` pays the client the free balance. `paidOutBudget` is incremented
   **before** the transfer (CEI).
+- A client who withdraws a published job's budget unpublishes it off-chain (back to
+  draft), so the key has to be able to lock again. `lockBudget` accepts a re-lock
+  only once `paidOutBudget == lockedBudget` — the whole old lock has left the
+  contract, and by invariant 6 nothing is reserved — and only from the original
+  `budgetLocker`. `jobRef` is derived from the job row and can never be rotated,
+  so re-locking is the only way back. A partial withdrawal leaves `paidOut <
+  locked` and the re-lock reverts with `BudgetAlreadyLocked` until the remainder is
+  withdrawn too.
 
 Per-job balance sheet:
 
@@ -269,7 +277,7 @@ when the outcome changed.
 | Function | Payable | Guarded | Notes |
 |---|---|---|---|
 | `fund(bytes32 ref, address freelancer)` | yes | — | legacy wallet path; `client = _msgSender()` |
-| `lockBudget(bytes32 jobRef)` | yes | — | once per job; `BudgetAlreadyLocked` |
+| `lockBudget(bytes32 jobRef)` | yes | — | once per live lock; re-locks a fully spent key, locker only; `BudgetAlreadyLocked` |
 | `fundFromCredit(bytes32 jobRef, bytes32 ref, address freelancer, uint256 amount)` | no | `nonReentrant` | locker only; no ETH attached |
 | `fundAllFromCredit(bytes32 jobRef, bytes32[] refs, address[] freelancers, uint256[] amounts)` | no | `nonReentrant` | all-or-nothing batch |
 | `unlockBudget(bytes32 jobRef, uint256 amount)` | no | `nonReentrant` | clamped to the free balance |

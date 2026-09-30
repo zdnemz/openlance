@@ -26,10 +26,11 @@ import { bytes32ToUuid } from './events.ts'
 import type { RawChainLog, EvMilestoneFunded } from './events.ts'
 import { outcomeFromUint8 } from './abi.ts'
 import {
-  disputes, ledgerEvents, projectMilestones, projects,
+  disputes, jobs, ledgerEvents, projectMilestones, projects,
   users,
 } from '../db/schema.ts'
 import { writeOutbox } from '../modules/notify.ts'
+import { UNPUBLISHED } from '../modules/jobs.ts'
 
 const log = logger.child({ component: 'indexer' })
 
@@ -133,8 +134,8 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'ArbiterRewarded':
     case 'ArbiterPenalized': return null // ledger-only; scores live on-chain
     case 'FeeWithdrawn': return null // ledger-only
-    case 'BudgetLocked':
-    case 'BudgetUnlocked': return null // drawdown: ledger-only (publish verifies the lock tx directly)
+    case 'BudgetLocked': return null // publish verifies the lock tx directly
+    case 'BudgetUnlocked': return applyBudgetUnlocked(tx, evt)
     case 'FundsWithdrawn': return applyWithdrawn(tx, evt)
     // ── Registry events: NO off-chain arbiter table to mirror. Scores, stakes
     //    and the roster are read live from the contract. Only the registry's
@@ -375,6 +376,35 @@ async function applyWithdrawn(tx: Tx, evt: RawChainLog): Promise<PlannedNotifica
   return null // the withdrawer's own receipt is the confirmation
 }
 
+/**
+ * The client pulled the job budget back out of escrow.
+ *
+ * `publish` is the reason an `open` job is trustworthy: it locks the ceiling, so
+ * every job in the marketplace is funded and a bid is never a promise the poster
+ * cannot keep. A withdrawal removes that backing, so the job leaves the
+ * marketplace and goes back to being a draft — a partial withdrawal counts, since
+ * the ceiling is no longer covered either. It comes back as a draft and not a
+ * `cancelled`, because the poster may well re-publish it (`lockBudget` accepts a
+ * fully spent key again, Escrow.lockBudget).
+ *
+ * Only `open` moves. `in_progress` means the budget was drawn into milestones
+ * and this is the ordinary surplus return after an award, and `cancelled` means
+ * the poster already closed it out — neither is a listing the withdrawal
+ * invalidates.
+ */
+async function applyBudgetUnlocked(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
+  const jobId = bytes32ToUuid(str(evt.args.jobRef))
+  if (!jobId) return drift('BudgetUnlocked (unmappable jobRef)', str(evt.args.jobRef), evt.txHash)
+  const [job] = await tx.select().from(jobs).where(eq(jobs.id, jobId)).limit(1)
+  if (!job) return drift('BudgetUnlocked (unknown job)', jobId, evt.txHash)
+  if (job.status !== 'open') return null
+  // The funding ledger describes the lock that just went away: leaving it set
+  // would advertise a deposit this job no longer has, and `publishJob` is the
+  // only thing that should ever write those columns.
+  await tx.update(jobs).set({ ...UNPUBLISHED, updatedAt: evt.blockTime }).where(eq(jobs.id, job.id))
+  return null // the poster withdrew their own money; their wallet is the receipt
+}
+
 async function applyDisputeOpened(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
   const id = numOrNull(evt.args.milestoneId)!
   const m = await loadMilestoneByOnchainId(tx, id)
@@ -601,8 +631,9 @@ async function applyUnstakeCooldown(_tx: Tx, evt: RawChainLog): Promise<PlannedN
   return null
 }
 
-function drift(what: string, onchainId: number, txHash: string): null {
-  log.warn(`DRIFT: ${what}`, { onchainId, txHash })
+/** A chain event the mirror has no row for. `ref` is an onchain id, or a uuid for job-level events. */
+function drift(what: string, ref: number | string, txHash: string): null {
+  log.warn(`DRIFT: ${what}`, { ref, txHash })
   return null
 }
 
