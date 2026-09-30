@@ -454,6 +454,23 @@ export const ledgerEvents = pgTable('ledger_events', {
 export const indexerState = pgTable('indexer_state', {
   id: text('id').primaryKey(), // 'escrow' | 'arbiter-registry'
   lastBlock: bigint('last_block', { mode: 'number' }).notNull().default(0),
+  /**
+   * The contract address this checkpoint was last advanced against — the mirror's
+   * generation marker.
+   *
+   * `CHAIN_ID` cannot do this job: every anvil boot is chain 31337, so a fresh
+   * chain is indistinguishable from the old one by id alone. The escrow *address*
+   * does change on a redeploy, which makes it the one durable fact that separates
+   * "still mirroring the same chain" from "mirroring a chain that no longer
+   * exists". Without it the checkpoint outlives its chain (anvil restarts at block
+   * 0), `last_block` sits forever above the real tip, and the indexer returns an
+   * empty pass every poll while silently indexing nothing.
+   *
+   * NULL means "indexed before generation tracking existed" — adopted as-is, never
+   * treated as a change, so shipping this column cannot retroactively wipe a live
+   * production mirror.
+   */
+  contractAddress: text('contract_address'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

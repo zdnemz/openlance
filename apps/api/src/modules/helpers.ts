@@ -4,6 +4,7 @@ import { getDb } from '../db/index.ts'
 import { Errors } from '../lib/errors.ts'
 import { getChainAdapter } from '../chain/adapter.ts'
 import { uuidToBytes32 } from '../chain/events.ts'
+import { logger } from '../lib/logger.ts'
 import { disputes, jobs, projectMilestones, projects, proposals } from '../db/schema.ts'
 import type { Job, Project, ProjectMilestone, User } from '../db/schema.ts'
 
@@ -97,13 +98,63 @@ export async function ensureMilestoneOnchain(milestone: ProjectMilestone): Promi
   if (adapter.mode !== 'real') return { milestone, backfilled: false }
   const found = await adapter.findFundingByRef(uuidToBytes32(milestone.id)).catch(() => null)
   if (!found) return { milestone, backfilled: false }
+
+  // `onchain_id` is UNIQUE, and the id is only unique WITHIN a chain: a redeploy
+  // restarts milestone ids at 1, so a mirror row from the previous chain can still
+  // own the id this funding actually used. That made this write throw, and the
+  // throw escaped as an unhandled 500 — the exact opposite of what resolve-on-write
+  // promises ("landed work is never bricked"), and the message a freelancer got was
+  // a raw SQL dump naming a constraint they have no way to act on.
+  //
+  // So the conflict is detected here and named. It is not repairable from this
+  // request: two rows cannot both be milestone 1, and guessing which one is right
+  // would be worse than refusing. `chain/generation.ts` clears the stale claim when
+  // the whole mirror belongs to a dead chain, which is the usual cause.
+  const db = getDb()
+  const [holder] = await db
+    .select({ id: projectMilestones.id, chainStatus: projectMilestones.chainStatus })
+    .from(projectMilestones)
+    .where(eq(projectMilestones.onchainId, found.milestoneId))
+    .limit(1)
+  if (holder && holder.id !== milestone.id) {
+    logger.warn('chain mirror conflict — onchain id already claimed', {
+      milestoneId: milestone.id,
+      onchainId: found.milestoneId,
+      claimedBy: holder.id,
+      claimedByStatus: holder.chainStatus,
+      fundingTxHash: found.txHash,
+    })
+    throw Errors.conflict(
+      'chain_mirror_conflict',
+      'This milestone is funded on-chain, but its on-chain id is already claimed by another milestone — the chain was redeployed while the database kept the previous mirror. Rebuild the chain mirror (pnpm db:flush) and retry.',
+    )
+  }
+
   const live = await adapter.getMilestoneStatus(found.milestoneId).catch(() => null)
-  const [updated] = await getDb().update(projectMilestones).set({
-    onchainId: found.milestoneId,
-    chainStatus: live ?? 'funded',
-    fundedTxHash: found.txHash,
-    fundedAt: found.blockTime,
-    updatedAt: new Date(),
-  }).where(eq(projectMilestones.id, milestone.id)).returning()
+  // Backstop for the race the pre-check cannot close: two concurrent requests can
+  // both pass it, and only the database is authoritative. 23505 is
+  // unique_violation; re-read so the caller sees the winner's row rather than an
+  // exception.
+  let updated: typeof projectMilestones.$inferSelect | undefined
+  try {
+    ;[updated] = await db.update(projectMilestones).set({
+      onchainId: found.milestoneId,
+      chainStatus: live ?? 'funded',
+      fundedTxHash: found.txHash,
+      fundedAt: found.blockTime,
+      updatedAt: new Date(),
+    }).where(eq(projectMilestones.id, milestone.id)).returning()
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err
+    throw Errors.conflict(
+      'chain_mirror_conflict',
+      'Another request claimed this milestone\'s on-chain id first. Retry.',
+    )
+  }
   return { milestone: updated!, backfilled: true }
+}
+
+/** Postgres 23505 — true unique constraint violation, not any driver-shaped error. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505'
 }

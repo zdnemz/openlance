@@ -139,7 +139,13 @@ export async function listDisputes(request: Request) {
       .filter((p) => asStrings(p.chosenArbiters).some((a) => a.toLowerCase() === me))
       .map((p) => p.id))
   }
-  const visible = rows.filter((d) => ids.has(d.projectId) || seated.has(d.projectId) || selectedIncludes(d, user.walletAddress))
+  const visible = rows
+    .filter((d) => ids.has(d.projectId) || seated.has(d.projectId) || selectedIncludes(d, user.walletAddress))
+    // Who may appeal or discard is a fact about the caller, not something the
+    // client can infer: it was reading `useProjects()`, which is scoped to the
+    // viewer's own projects AND capped at 50 (200 max), so past that page a
+    // party looked like an arbiter and lost both buttons.
+    .map((d) => ({ ...d, isParty: ids.has(d.projectId) }))
   return withProjectNames(visible)
 }
 
@@ -177,18 +183,23 @@ export async function getDispute(request: Request, disputeId: string) {
   if (!row) throw Errors.notFound('Dispute')
   const dispute: DisputeRow = { ...row, onchainId: null }
   await overlayRounds([dispute])
+  // One row read answers both questions this endpoint has to ask: is the caller
+  // a party (may appeal / discard) and are they on the project's locked panel
+  // (may read the room before the round mirror exists).
+  const [p] = await db.select({ clientId: projects.clientId, freelancerId: projects.freelancerId, chosenArbiters: projects.chosenArbiters })
+    .from(projects).where(eq(projects.id, dispute.projectId)).limit(1)
+  const isParty = !!p && (p.clientId === user.id || p.freelancerId === user.id)
+  const named = await withProjectNames([{ ...dispute, isParty }])
   // Parties always; selected arbiters too (mirrors listDisputes — they vote via commit/reveal).
-  if (selectedIncludes(dispute, user.walletAddress)) return (await withProjectNames([dispute]))[0]!
+  if (selectedIncludes(dispute, user.walletAddress)) return named[0]!
   // Seated fallback (same as listDisputes): a locked project arbiter may fetch
   // while the round mirror is empty; voting stays chain-gated.
   if (dispute.status !== 'resolved') {
-    const [p] = await db.select({ chosenArbiters: projects.chosenArbiters })
-      .from(projects).where(eq(projects.id, dispute.projectId)).limit(1)
     const me = user.walletAddress.toLowerCase()
-    if (p && asStrings(p.chosenArbiters).some((a) => a.toLowerCase() === me)) return (await withProjectNames([dispute]))[0]!
+    if (p && asStrings(p.chosenArbiters).some((a) => a.toLowerCase() === me)) return named[0]!
   }
   await requireParticipant(dispute.projectId, user)
-  return (await withProjectNames([dispute]))[0]!
+  return named[0]!
 }
 
 /**

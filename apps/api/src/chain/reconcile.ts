@@ -12,7 +12,9 @@ import { logger } from '../lib/logger.ts'
 import { getChainAdapter, type ChainAdapter } from './adapter.ts'
 import { isTerminal, type MilestoneStatus } from '../domain/state-machine.ts'
 import { ensureMilestoneOnchain } from '../modules/helpers.ts'
+import { AppError } from '../lib/errors.ts'
 import { ledgerEvents, projectMilestones, projects, reconciliationRuns, users } from '../db/schema.ts'
+import type { ProjectMilestone } from '../db/schema.ts'
 
 const log = logger.child({ component: 'reconcile' })
 
@@ -21,7 +23,14 @@ export interface DriftEntry {
   onchainId: number
   mirrorStatus: string
   chainStatus: string | null
-  action: 'repaired' | 'unreachable'
+  /**
+   * `unreachable` = RPC could not be read (mirror may be fine).
+   * `conflicted`  = the onchain id is claimed by another row, so nothing can be
+   * repaired until a human or a chain-generation rebuild resolves it. Reported
+   * rather than thrown: an unresolvable row must not abort the solvency check and
+   * the stats rebuild that follow it.
+   */
+  action: 'repaired' | 'unreachable' | 'conflicted'
 }
 
 export async function runReconciliation(): Promise<{ checked: number; drifts: number; report: DriftEntry[] }> {
@@ -94,7 +103,29 @@ async function backfillMissingOnchainIds(adapter: ChainAdapter): Promise<DriftEn
     .where(and(isNull(projectMilestones.onchainId), eq(projectMilestones.chainStatus, 'pending_funding')))
   const repaired: DriftEntry[] = []
   for (const m of stuck) {
-    const { milestone: current, backfilled } = await ensureMilestoneOnchain(m)
+    // A conflict here is a chain-mirror fact, not a transient error: another row
+    // already owns this onchain id. Letting it propagate aborted the whole
+    // reconcile run, so solvency and the stats rebuild below never executed — one
+    // unresolvable row silently disabled every other check in the job. Record it
+    // as drift and keep going.
+    let current: ProjectMilestone
+    let backfilled: boolean
+    try {
+      ;({ milestone: current, backfilled } = await ensureMilestoneOnchain(m))
+    } catch (err) {
+      if (!(err instanceof AppError) || err.code !== 'chain_mirror_conflict') throw err
+      log.error('reconciliation conflict — onchain id already claimed by another milestone', {
+        milestoneId: m.id, detail: err.message,
+      })
+      repaired.push({
+        milestoneId: m.id,
+        onchainId: -1,
+        mirrorStatus: m.chainStatus,
+        chainStatus: null,
+        action: 'conflicted',
+      })
+      continue
+    }
     if (!backfilled) continue
     log.warn('reconciliation backfill — indexer missed the funding, repairing from chain', {
       milestoneId: m.id, onchainId: current.onchainId, chainStatus: current.chainStatus,

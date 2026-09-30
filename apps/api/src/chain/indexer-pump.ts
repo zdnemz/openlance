@@ -16,6 +16,14 @@
  * shallow reorg cannot leave the mirror ahead of the chain. On anvil
  * (INDEXER_CONFIRMATIONS=1) this is a single block.
  *
+ * Chain generation: a checkpoint that outlives its chain is the failure mode this
+ * pump used to have silently. `if (safeTip < from) return empty` cannot tell
+ * "chain is idle" from "checkpoint belongs to a chain that no longer exists", so
+ * it returned an empty pass every poll and logged nothing — the indexer was dead
+ * for three hours before a UNIQUE violation on `onchain_id` surfaced it as an
+ * unrelated-looking 500. `ensureCurrentGeneration` now settles that question
+ * before the early return, and the early return itself is no longer silent.
+ *
  * Safe to run concurrently / repeatedly: ingests are idempotent, and the
  * checkpoint only ever moves forward. A thrown tick logs and returns 0 so the
  * scheduler keeps running.
@@ -26,6 +34,7 @@ import { getDb } from '../db/index.ts'
 import { logger } from '../lib/logger.ts'
 import { getChainAdapter } from './adapter.ts'
 import { ingestEvents } from './indexer.ts'
+import { ensureCurrentGeneration } from './generation.ts'
 import { indexerState } from '../db/schema.ts'
 
 const log = logger.child({ component: 'indexer-pump' })
@@ -39,6 +48,16 @@ export interface PumpResult {
   duplicates: number
   drifts: number
 }
+
+/**
+ * Dedupe key for the "checkpoint is above the tip" error.
+ *
+ * The condition persists until someone intervenes, and the pump polls every
+ * INDEXER_POLL_MS — without this, a wedge becomes a wall of identical lines that
+ * buries everything else in the log. Keyed on the numbers so a genuinely NEW wedge
+ * (different heights) still reports.
+ */
+let lastHeightWedge: string | null = null
 
 /** Read the last indexed block (0 when the checkpoint row is absent). */
 async function readCheckpoint(): Promise<number> {
@@ -75,7 +94,36 @@ export async function runIndexerTick(): Promise<PumpResult> {
     const latest = await adapter.getLatestBlock()
     // Hold back confirmations so a reorg cannot race the mirror ahead.
     const safeTip = latest - env.INDEXER_CONFIRMATIONS
-    const from = (await readCheckpoint()) + 1
+
+    // Before anything else: is this mirror even pointed at a chain that exists?
+    // A redeploy (`pnpm chain`) replaces the chain underneath a checkpoint that is
+    // still in the database, and the guard below would then read as "nothing new"
+    // on every poll forever. Dev rebuilds the mirror; production refuses to index
+    // rather than delete money-adjacent state over an env change.
+    if (!(await ensureCurrentGeneration(adapter, latest))) return empty
+    lastHeightWedge = null
+
+    const checkpoint = await readCheckpoint()
+    const from = checkpoint + 1
+
+    // A real chain only grows, so a checkpoint above the tip means the chain was
+    // replaced and `ensureCurrentGeneration` declined to act (production). Name it
+    // instead of returning a silent empty pass.
+    if (checkpoint > latest) {
+      const key = `${checkpoint}>${latest}`
+      if (lastHeightWedge !== key) {
+        lastHeightWedge = key
+        log.error('indexer checkpoint is above the chain tip — indexing nothing', {
+          checkpoint,
+          latest,
+          escrowAddress: adapter.escrowAddress,
+          detail: 'the checkpoint belongs to a chain that no longer exists; every poll will skip until this is resolved',
+          action: 'point ESCROW_ADDRESS at the live contract and rebuild the mirror, or restore the chain this checkpoint came from',
+        })
+      }
+      return empty
+    }
+
     if (safeTip < from) return empty // nothing new, or chain not yet deep enough
 
     let cursor = from

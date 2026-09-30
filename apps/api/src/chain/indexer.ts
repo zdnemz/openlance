@@ -224,6 +224,28 @@ async function applyFunded(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<
   if (m.amountWei !== str(args.amount)) {
     log.warn('DRIFT: funded amount differs from mirror', { ref, mirror: m.amountWei, chain: str(args.amount) })
   }
+  // Two rows must never claim one onchain id: `onchain_id` is UNIQUE, and the id
+  // is only unique WITHIN a chain — after a redeploy both ids restart at 1. The
+  // colliding write used to throw, which rolled back this whole transaction
+  // including the ledger row, while the pump advanced the chunk checkpoint
+  // anyway (indexer-pump.ts writes it outside the failed transaction). The funding
+  // event was then lost permanently and unrecoverable, with the checkpoint
+  // claiming it had been indexed.
+  //
+  // Refusing to write — like the three guards above — keeps the ledger row, which
+  // is the recoverable half: the event stays on the record for reconciliation, and
+  // resolve-on-write can still find it by ref.
+  const onchainId = numOrNull(args.milestoneId)
+  if (onchainId !== null) {
+    const holder = await loadMilestoneByOnchainId(tx, onchainId)
+    if (holder && holder.id !== m.id) {
+      log.warn('DRIFT: onchain id already claimed by another milestone', {
+        onchainId, ref, claimedBy: holder.id, refRow: m.id, txHash: evt.txHash,
+        detail: 'the claiming row belongs to a different chain generation, or two milestones genuinely collided',
+      })
+      return null
+    }
+  }
   await tx.update(projectMilestones).set({
     onchainId: numOrNull(args.milestoneId),
     chainStatus: 'funded',

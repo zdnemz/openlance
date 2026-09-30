@@ -1,0 +1,1 @@
+ALTER TABLE "indexer_state" ADD COLUMN "contract_address" text;
