@@ -25,6 +25,16 @@ export type RoundState = {
   revealDeadline: number;
   resolved: boolean;
   winningOutcome: number;
+  /**
+   * Live `milestoneStatus(milestoneId)`, or null when the read failed.
+   *
+   * This is the fact every payout control actually hangs off: the contract gates
+   * `finalizeDispute` and `appeal` on `status == Disputed`, so a round that is
+   * `resolved` is NOT enough to know money can still move. null is treated as
+   * "still disputed" — a read that failed must not hide the button that releases
+   * the escrow, and the chain has the final say either way.
+   */
+  milestoneStatus: number | null;
   /** Derived phase from deadlines + resolved flag. */
   phase: DisputePhase;
 };
@@ -114,23 +124,42 @@ export function canReveal(v: { hasSalt: boolean; isSelected: boolean; myRevealed
  * complements and a single deadline drives both. A surface that gates them
  * separately will eventually offer a party an appeal on a payout that already
  * moved.
+ *
+ * `live` is the milestone's on-chain status, and it is not optional: a round
+ * that reached a decision is NOT on its own enough. `Escrow.finalizeDispute`
+ * and `Escrow.appeal` both require `Disputed`, and a no-quorum tally settles
+ * the milestone while marking the round `resolved` — so a gate that reads only
+ * the round offers a "Finalize payout" that reverts `NotDisputed`, and an
+ * "Appeal" that reverts the same way. Fail open (default `true`): a missed read
+ * must never strand a payout the chain would happily accept.
  */
-export function canFinalize(v: { resolved: boolean; appealEndsAt: number | null }, now: number): boolean {
-  return v.resolved && v.appealEndsAt !== null && now > v.appealEndsAt;
+export function canFinalize(v: { resolved: boolean; appealEndsAt: number | null; live?: boolean }, now: number): boolean {
+  return v.resolved && v.live !== false && v.appealEndsAt !== null && now > v.appealEndsAt;
+}
+
+/** `MilestoneStatus.Disputed` — the one state in which the money has not moved. */
+export const DISPUTED_STATUS = 3;
+
+/** Whether the milestone is still awaiting an arbitral payout (null read = assume yes). */
+export function disputeLive(status: number | null | undefined): boolean {
+  return status === null || status === undefined || status === DISPUTED_STATUS;
 }
 
 /** Everything a dispute surface may offer, derived from the live round. */
 export function roundGates(round: RoundState, now: number, appealWindow = 0) {
   // The appeal window runs from the reveal deadline, which is chain truth
-  // (`getRound`). The only non-chain input is the window's LENGTH.
+  // (`getRound`). The only non-chain inputs are the window's LENGTH and whether
+  // the dispute is still open on the milestone.
+  const live = disputeLive(round.milestoneStatus);
   const appealEndsAt = round.resolved ? round.revealDeadline + appealWindow : null;
   return {
+    live,
     canCommit: !round.resolved && commitWindowOpen(now, round.commitDeadline),
     canReveal: !round.resolved && revealWindowOpen(now, round.commitDeadline, round.revealDeadline),
-    canTally: tallyOpen(round, now),
-    canFinalize: canFinalize({ resolved: round.resolved, appealEndsAt }, now),
+    canTally: live && tallyOpen(round, now),
+    canFinalize: canFinalize({ resolved: round.resolved, appealEndsAt, live }, now),
     appealEndsAt,
-    appealOpen: appealEndsAt !== null && now <= appealEndsAt,
+    appealOpen: live && appealEndsAt !== null && now <= appealEndsAt,
   };
 }
 
@@ -151,6 +180,20 @@ export async function fetchRound(escrow: string, milestoneId: bigint, round: num
   if (arbiterCount === 0 && commitDeadline === 0 && revealDeadline === 0) return null;
   const arbiters = (raw[0] as string[]).slice(0, arbiterCount).filter((a) => a.toLowerCase() !== ZERO);
   const resolved = Boolean(raw[7]);
+  // The milestone's own liveness, and only once the round is tallied: every gate
+  // that consults it (`canFinalize`, `appealOpen`) requires a decision, and a round
+  // that has not been decided is by definition still `Disputed`. One extra RPC on
+  // the payout path instead of on every 4s poll of a live round — and a no-quorum
+  // tally marks the round `resolved` while settling the milestone, which is the
+  // exact case a round-only gate got wrong.
+  const status = resolved
+    ? await readContract<number>({
+      to: escrow,
+      abi: ESCROW_ABI,
+      functionName: "milestoneStatus",
+      args: [milestoneId],
+    })
+    : DISPUTED_STATUS;
   return {
     arbiters,
     arbiterCount,
@@ -161,6 +204,7 @@ export async function fetchRound(escrow: string, milestoneId: bigint, round: num
     revealDeadline,
     resolved,
     winningOutcome: Number(raw[8]),
+    milestoneStatus: status === null ? null : Number(status),
     phase: derivePhase(resolved, Math.floor(Date.now() / 1000), commitDeadline, revealDeadline),
   };
 }

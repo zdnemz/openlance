@@ -82,8 +82,10 @@ from that locked balance via `fundAllFromCredit` / `fundFromCredit` — one wall
 round, not one per milestone. A milestone then runs `submit` → `approve` →
 `withdrawMilestone`, where `approve` accrues the fee and makes the principal *claimable*
 and the freelancer pulls it. Or either party opens a dispute, up to three eligible
-non-party arbiters are drawn, and a commit–reveal vote decides; 2-of-3 quorum, with a
-no-quorum fallback and an appeal window before `finalizeDispute` moves the money.
+non-party arbiters are drawn, and a commit–reveal vote decides; 2-of-3 quorum, with an
+appeal window before `finalizeDispute` moves the money. A round that cannot reach its
+threshold settles in the tally itself — the client's money comes back and the milestone
+is terminal, so a disputed milestone is never left to the client's `approve`.
 
 ### `ArbiterRegistry` in one paragraph
 
@@ -145,10 +147,14 @@ See [`SECURITY.md`](./SECURITY.md). Summary:
 
 Writing the docs turned up four real defects, all **fixed** with regression tests:
 
-- A dispute re-opened after a no-quorum fallback reused a `resolved` round and was
-  permanently stuck. Round slots are now reset on reuse.
+- A no-quorum tally left the milestone in `Submitted` while the round was already
+  `resolved` — so the client could `approve` a payout no arbiter agreed to, and
+  `finalizeDispute`/`appeal` on that round reverted `NotDisputed` against a UI still
+  offering them. The fallback is now a settlement (`ResolvedRefund`, the money back to
+  the client inside the tally), so a disputed milestone only leaves dispute through
+  arbitration. It also removes the re-open path that reused a `resolved` round slot.
 - `appeal` accepted (and stranded the fee of) a milestone the no-quorum fallback had
-  already returned to `Submitted`. It now reverts `NotDisputed`.
+  already settled. It now reverts `NotDisputed`.
 - `rewardPool` accepted deposits but never paid out. It now subsidises each dispute's
   reward pot by `min(rewardPool, d.fee)` — the protocol matches the opener's fee, capped
   at 1× it.

@@ -78,8 +78,11 @@ attacker contract**, none in our production logic:
     must match (`keccak256(encode(outcome, salt, arbiter, milestoneId, round))`),
     so votes cannot be copied (`test/disputes.ts`).
 13. **Quorum + fallback.** 2-of-3 suffices; a missing third is a `−15` miss and
-    the other two decide. Fewer reveals than the round requires → refund
-    fallback to `Submitted` (`test/disputes.ts`).
+    the other two decide. A round that cannot reach its threshold settles in the
+    same call: the opener's fee and the whole milestone go back to the client
+    (`ResolvedRefund`, terminal), so a disputed milestone only ever leaves
+    dispute through arbitration and the client can never `approve` it
+    (`test/disputes.ts`).
 14. **Degraded panels decide on their own size.** When the roster cannot staff a
     full panel, the round still opens (down to one arbiter) and the threshold
     drops to the seated count — a 1-arbiter round is decided by that one vote

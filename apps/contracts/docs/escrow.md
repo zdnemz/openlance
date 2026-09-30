@@ -122,6 +122,7 @@ openDispute(id)   /* free while disputeFee == 0 */  (or openDisputeWith(id, pref
    ▼
    ├─ TALLY    resolveDispute(id)     round 0
    │           resolveAppeal(id)     round >= 1
+   │           └─ no quorum → Refund to the client, MONEY MOVES HERE, round over
    ▼
    ├─ (optional) appeal(id)                        re-draws a fresh round
    ▼
@@ -193,10 +194,14 @@ against the previous outcome and applies the overturn penalty.
 ### Quorum and payouts
 
 - 2 of 3 reveals decides. A third silent arbiter does not block it.
-- Fewer than 2 reveals → **no-quorum fallback**: the opener's fee is refunded inside
-  `resolveDispute`, the milestone returns to `Submitted`, and the round is done.
-  **Do not call `finalizeDispute` after a no-quorum fallback** — the status is no longer
-  `Disputed`, so it reverts `NotDisputed`.
+- Fewer than the round's threshold reveals → **no-quorum fallback**, settled by the
+  same `resolveDispute` call: the opener's dispute fee comes back, **and the
+  milestone is Refunded to the client** (`ResolvedRefund`, terminal). There is no
+  `finalizeDispute` to follow — the round is over and the money has already moved,
+  so `finalizeDispute` and `appeal` both revert `NotDisputed`.
+- The fallback does **not** return the milestone to `Submitted`. A disputed
+  milestone only ever leaves dispute through arbitration, so the client can never
+  `approve` a payment no panel agreed to (`WrongStatus` on a terminal status).
 - Ties resolve to `Split`.
 
 | Winner | Status | Client | Freelancer | Platform fee | Arbiters |
@@ -204,6 +209,7 @@ against the previous outcome and applies the overturn penalty.
 | Release | 5 | — | `claimable = amount - fee` (pull) | 0 (rounding dust only) | milestone fee, stake-weighted |
 | Refund | 6 | `amount` (push) | — | 0 — **no fee charged** | dispute fee only |
 | Split | 7 | `amount/2` (push) | `claimable = half - feeOn(half)` (pull) | 0 (rounding dust only) | dispute fee + fee on the freelancer half |
+| no quorum | 6 | `amount` (push, at tally) | — | 0 | nothing — `d.fee` goes back to the opener |
 
 **Consequence for revenue:** `accruedFees` only grows on the non-disputed `approve` path
 (and on rounding dust from a dispute). A disputed release pays the whole platform fee to
@@ -285,8 +291,8 @@ when the outcome changed.
 | `openDisputeWith(uint256 id, address[3] preferred)` | yes | `nonReentrant` | nominees first, random fill |
 | `commitVote(uint256 id, uint8 round, bytes32 hash)` | no | — | selected arbiters only |
 | `revealVote(uint256 id, uint8 round, uint8 outcome, bytes32 salt)` | no | — | after commit deadline |
-| `resolveDispute(uint256 id)` | no | `nonReentrant` | tally, round 0; **no money moves** |
-| `resolveAppeal(uint256 id)` | no | `nonReentrant` | tally + overturn penalty, round >= 1 |
+| `resolveDispute(uint256 id)` | no | `nonReentrant` | tally, round 0; **no money moves** — except a no-quorum round, which settles itself |
+| `resolveAppeal(uint256 id)` | no | `nonReentrant` | tally + overturn penalty, round >= 1; same no-quorum settlement |
 | `appeal(uint256 id)` | yes | `nonReentrant` | new round, fully random draw |
 | `finalizeDispute(uint256 id)` | no | `nonReentrant` | permissionless; **payout executes here** |
 
@@ -403,7 +409,7 @@ The last field of `MilestoneReleased` is `viaDisputeResolution`. `DisputeResolve
 | `DisputeFinalized(uint256,uint8,uint8,uint8,bool)` | every tally, quorum or not |
 | `ArbiterRewarded(uint256,address,uint256)` | a majority arbiter is paid (may be 2 per settlement: two pots) |
 | `ArbiterPenalized(uint256,address,uint8)` | reason 2 minority, 3 missed, 4 overturned |
-| `NoQuorumFallback(uint256,address,uint256)` | fewer than 2 revealed; fee refunded |
+| `NoQuorumFallback(uint256,address,uint256)` | the round's threshold was not met: the opener's fee is refunded, the milestone is Refunded to the client, and **this log is the settlement receipt** (no `Milestone*` event is emitted on this path) |
 | `AppealOpened(uint256,uint8,address,uint256)` | `appeal` |
 | `AppealResolved(uint256,uint8,bool)` | `resolveAppeal`; `overturned` flag |
 | `RewardsDeposited(address,uint256)` / `DisputeFeeUpdated(uint256,uint256)` | `depositRewards` / `setDisputeFee` |
@@ -453,26 +459,39 @@ The last field of `MilestoneReleased` is `viaDisputeResolution`. `DisputeResolve
 
 Verified against the code and by execution — documented so integrators are not surprised.
 
-### Fixed — kept because the guards are load-bearing
+### The no-quorum fallback is a settlement, not a reset
 
-Both were in the no-quorum path and are covered by regression tests in `test/disputes.ts`.
+Both no-quorum guards below are load-bearing and covered by regression tests in
+`test/disputes.ts`.
 
-**Round slots are reset on reuse (was: a no-quorum milestone was permanently stuck).**
-`_startRound` used to write the new selection into the round slot without clearing the
-old vote state, so a dispute re-opened after a no-quorum fallback reused a `resolved`
-round and every exit path reverted (`commitVote`, `resolveDispute`, `approve`, `cancel`
-all failed) — the milestone's ETH was stuck, and the only recovery was paying a second
-dispute fee to appeal into a clean round. `_resetRound`, now called at the top of
-`_startRound`, clears the per-arbiter `commits` / `revealed` / `votes` / `stakeWeights`
-mappings for the previous selection and each scalar member individually — Solidity
-rejects `delete` on a struct that has mapping members.
+**The fallback settles the milestone (`ResolvedRefund`), it does not return it to
+`Submitted`.** It used to. That half-state was the bug: with the round `resolved` but
+the milestone back in `Submitted`, the client could `approve` a payout no arbiter had
+agreed to, while `finalizeDispute` and `appeal` on that same round reverted
+`NotDisputed` — a UI offering both a payment and a "finalize" that could only revert.
+The money now moves inside `resolveDispute` (the opener's fee and the whole milestone
+back to the client), the status is terminal, and a disputed milestone can only be
+settled by arbitration. `NoQuorumFallback` is the settlement receipt for this path:
+there is no `finalizeDispute` tx to emit a `Milestone*` event from, so the backend
+mirrors the status and `settlementTxHash` off that one log.
 
-**`appeal` requires `Disputed` (was: a no-quorum appeal stranded the fee).** The no-quorum
-fallback returns the milestone to `Submitted` and never restores `Disputed`, so an appeal
-opened on top of that round could never be tallied or finalized — `resolveAppeal` and
-`finalizeDispute` both require `Disputed` — yet the appeal fee was accepted and stranded.
-`appeal` now reverts `NotDisputed`. The correct move after a fallback is to re-open the
-dispute: the new round is clean, and a subsequent appeal works normally.
+**Round slots are never reused, so they need no reset (was: a re-opened round was
+permanently stuck).** While the fallback returned the milestone to `Submitted`, a party
+could re-open the dispute and `_startRound` wrote the new selection into the round slot
+without clearing the old vote state, so the dispute reused a `resolved` round and every
+exit path reverted (`commitVote`, `resolveDispute`, `approve`, `cancel` all failed) — the
+milestone's ETH was stuck. `_resetRound` used to fix that by wiping the slot. The
+fallback now settles, so round 0 is written exactly once per dispute and an appeal always
+targets a fresh `round + 1` index; `_resetRound` is gone with the state it guarded.
+**If a future upgrade ever lets a settled milestone be disputed again, it must wipe the
+slot first** — Solidity rejects `delete` on a struct with mapping members, so the
+per-arbiter `commits` / `revealed` / `votes` / `stakeWeights` mappings need the explicit
+per-address `delete` loop that `_resetRound` used.
+
+**`appeal` requires `Disputed` (was: a no-quorum appeal stranded the fee).** The
+fallback never restores `Disputed`, so an appeal opened on top of that round could never
+be tallied or finalized — `resolveAppeal` and `finalizeDispute` both require `Disputed` —
+yet the appeal fee was accepted and stranded. `appeal` now reverts `NotDisputed`.
 
 ### Open
 

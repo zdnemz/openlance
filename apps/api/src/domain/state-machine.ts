@@ -4,7 +4,8 @@
  *   pending_funding → funded → submitted → released
  *        ↘ cancelled ↘ disputed → resolved_release | resolved_refund | resolved_split
  *   funded → cancelled (client cancel, refund)
- *   disputed → submitted (no-quorum fallback: tally with <2 reveals refunds the opener)
+ *   disputed → resolved_refund (no-quorum fallback: the round cannot decide, so the
+ *     whole milestone goes back to the client inside the tally — terminal)
  *
  * The CONTRACT enforces legality; the mirror only records what the chain did.
  * If we ever observe an illegal transition, that is drift — logged loudly and
@@ -44,7 +45,12 @@ const TRANSITIONS: Partial<Record<ChainEventName, Partial<Record<MilestoneStatus
   },
   MilestoneSplit: { disputed: 'resolved_split' },
   MilestoneCancelled: { pending_funding: 'cancelled', funded: 'cancelled' },
-  NoQuorumFallback: { disputed: 'submitted' },
+  // The no-quorum fallback is a SETTLEMENT, not a return to review: the contract
+  // refunds the whole milestone to the client inside `resolveDispute` and leaves
+  // the status terminal (6). It used to put the milestone back in `submitted`,
+  // which is what let the client `approve` a payment no arbiter agreed to while
+  // `finalizeDispute`/`appeal` on the same round reverted NotDisputed.
+  NoQuorumFallback: { disputed: 'resolved_refund' },
 }
 
 export function nextMilestoneStatus(from: MilestoneStatus, event: ChainEventName): { to: MilestoneStatus; legal: boolean } {

@@ -90,14 +90,24 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
   // tallied the Finalize button — the only thing that can move the escrowed ETH —
   // was deleted along with the appeal window, and the row left the open queue on
   // /disputes saying "Settled". Gate on the payout, not on the tally.
-  const settled = dispute.status === "resolved";
+  //
+  // The chain's own milestone status is the second half of that answer, and it is
+  // the one that cannot lag: `finalizeDispute` and `appeal` both require
+  // `Disputed`, so a milestone the chain has already moved out of `Disputed`
+  // (a no-quorum tally refunds the client inside `resolveDispute`) retires every
+  // control below even while the mirror row still says `open`.
+  const settled = dispute.status === "resolved" || (!!gates && !gates.live);
   const appealOpen = !settled && (gates?.appealOpen ?? false);
   const canFinalize = !settled && (gates?.canFinalize ?? false);
   const appealEndsAt = settled ? null : gates?.appealEndsAt ?? null;
   const finalizeInSecs = appealEndsAt !== null ? appealEndsAt - now : 0;
-  // Below quorum the tally is still valid — the contract refunds the opener and
-  // returns the milestone to Submitted (no-quorum fallback).
-  const belowQuorum = !!round && !round.resolved && round.revealCount < requiredReveals(round.arbiterCount);
+  // Below quorum the tally is still valid — the contract refunds the opener AND
+  // the whole milestone to the client, and the round is over.
+  const required = round ? requiredReveals(round.arbiterCount) : 0;
+  const belowQuorum = !!round && !round.resolved && round.revealCount < required;
+  // …and once that has happened, the row is closed rather than awaiting a payout.
+  const noQuorumSettled = !!round && round.resolved && !!gates && !gates.live
+    && round.revealCount < required;
   // A record with no round is a write that never reached the chain. Only a
   // party can retry or discard it; an arbiter can only wait. Gated on a
   // COMPLETED read: `useRoundState` returns null while the first read is in
@@ -286,7 +296,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
             </Button>
           </div>
           {canTally && belowQuorum && round && (
-            <p className="text-[11.5px] text-amber-300">Fewer than {requiredReveals(round.arbiterCount)} reveals — tallying refunds the opener and returns the milestone to Submitted (no-quorum fallback).</p>
+            <p className="text-[11.5px] text-amber-300">Fewer than {required} reveals — tallying refunds the opener's fee and the whole milestone to the client, and closes the round (no-quorum fallback).</p>
           )}
           {isParty && appealOpen && (
             <Button
@@ -323,10 +333,22 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
       )}
 
       {settled && (
-        <div className="flex items-center gap-2 border-t border-line pt-4 text-[12.5px] text-state-split">
-          <SealCheck weight="fill" className="h-4 w-4" />
-          Settled — {dispute.outcome ? outcomeLabel(DISPUTE_OUTCOME[dispute.outcome]) : "—"}
-          {dispute.resolvedArbiter && <> · majority {shortAddress(dispute.resolvedArbiter)}</>}
+        <div className="space-y-1.5 border-t border-line pt-4">
+          <div className="flex items-center gap-2 text-[12.5px] text-state-split">
+            <SealCheck weight="fill" className="h-4 w-4" />
+            Settled — {dispute.outcome ? outcomeLabel(DISPUTE_OUTCOME[dispute.outcome]) : "—"}
+            {dispute.resolvedArbiter && <> · majority {shortAddress(dispute.resolvedArbiter)}</>}
+          </div>
+          {/* The one settlement with no winning side: the panel never reached its
+              threshold, so the tally itself refunded the client and closed the
+              round. There is no payout left to finalize and no appeal left to
+              file — both revert `NotDisputed` on-chain. */}
+          {noQuorumSettled && (
+            <p className="text-[11.5px] leading-relaxed text-faint">
+              The panel never reached {required} reveals, so the milestone went back to the client in that same
+              transaction and the round is closed. There is nothing left to finalize or appeal.
+            </p>
+          )}
         </div>
       )}
 

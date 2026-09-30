@@ -127,6 +127,17 @@ try {
   const noQuorumTypes = [...new Set(noQuorum.map((r) => r.type))]
   check('a no-quorum tally emits one event', noQuorumTypes.length === 1, noQuorumTypes)
   check('that event is dispute.no_quorum', noQuorumTypes[0] === 'dispute.no_quorum', noQuorumTypes)
+  // The fallback is a SETTLEMENT (the contract refunded the client inside the tally
+  // and left the milestone terminal), and `NoQuorumFallback` is the only log that
+  // carries it — no `Milestone*` event is emitted on that path. The mirror has to
+  // land on the terminal status, stamp the settlement and close the dispute row, or
+  // the client keeps seeing a "review window" on a milestone the chain has settled.
+  const [settledMilestone] = await db.select().from(projectMilestones).where(eq(projectMilestones.id, disputed[1]!.id))
+  check('a no-quorum tally settles the milestone', settledMilestone!.chainStatus === 'resolved_refund', settledMilestone!.chainStatus)
+  check('the settlement hash is stamped on the milestone', settledMilestone!.settlementTxHash === h2, settledMilestone!.settlementTxHash)
+  const [closedDispute] = await db.select().from(disputes).where(eq(disputes.milestoneId, disputed[1]!.id))
+  check('the dispute row is closed, so no payout control survives', closedDispute!.status === 'resolved', closedDispute!.status)
+  check('a no quorum is not recorded as a quorum ruling', closedDispute!.finalized === false, closedDispute!.finalized)
 } finally {
   if (projectId) {
     await db.delete(notificationEvents).where(eq(notificationEvents.projectId, projectId))

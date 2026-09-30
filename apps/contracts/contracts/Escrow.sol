@@ -22,7 +22,9 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
  *                │      │                     │
  *                │      └──── dispute ──> Disputed ── resolve ──> ResolvedRelease
  *                │                                   │         ├─> ResolvedRefund
- *                └── cancel ──> Cancelled             │         └─> ResolvedSplit
+ *                └── cancel ──> Cancelled             │         ├─> ResolvedRefund
+ *                                                    │         │   (no-quorum fallback)
+ *                                                    │         └─> ResolvedSplit
  *
  *         ══════════════════ Multi-arbiter dispute ══════════════════
  *
@@ -47,8 +49,11 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
  *                                          payout executes. Majority arbiters
  *                                          split the reward; minority and
  *                                          non-revealers are penalised. If fewer
- *                                          than 2 revealed, a no-quorum fallback
- *                                          refunds the opener.
+ *                                          than 2 revealed, the SAME call
+ *                                          settles the no-quorum fallback: the
+ *                                          milestone is Refunded to the client
+ *                                          and the round is over — there is no
+ *                                          `finalizeDispute` to follow.
  *        │
  *        └─ appeal(id){value}           — a party may appeal within the window;
  *                                          a fresh round runs; if the result
@@ -76,6 +81,10 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
  *       6. Per job: reservedBudget + paidOutBudget <= lockedBudget — the free
  *          balance (locked - paidOut - reserved) is what may be drawn into a
  *          milestone or unlocked, so live milestones always stay backed.
+ *       7. Once a milestone is disputed it settles ONLY through arbitration
+ *          (`_settleMilestone`) or the no-quorum fallback: `openDispute` takes it
+ *          out of `Submitted`, and nothing puts it back. So the client can never
+ *          `approve` a payment on a milestone that has been to arbitration.
  *
  *      RANDOMNESS CAVEAT: arbiter selection uses `prevrandao` + block metadata.
  *      This is weak (a block producer can bias it) but adequate for the MVP and
@@ -97,7 +106,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         Disputed, // 3
         Released, // 4 — client approved
         ResolvedRelease, // 5 — arbitration ruled: release
-        ResolvedRefund, // 6 — arbitration ruled: refund
+        ResolvedRefund, // 6 — arbitration ruled: refund, or no-quorum fallback
         ResolvedSplit, // 7 — arbitration ruled: split
         Cancelled // 8 — client cancelled before submission (full refund)
     }
@@ -597,11 +606,6 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      *         replacement from the eligible set.
      */
     function _startRound(uint256 milestoneId, Milestone storage m, uint8 round, address[3] memory preferred) private {
-        // A round slot is not guaranteed virgin: a dispute re-opened after a
-        // no-quorum fallback reuses round 0, carrying the old `resolved` /
-        // tally / vote state. Clear it before the new selection is written.
-        _resetRound(rounds_[milestoneId][round]);
-
         address[3] memory picked;
         uint8 count;
         bool panelLocked;
@@ -710,38 +714,6 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
             scanned++;
         }
         return count;
-    }
-
-    /**
-     * @dev Wipe a round's vote state before the slot is (re)used.
-     *
-     *      Solidity rejects `delete` on a struct with mapping members, so the
-     *      per-arbiter mappings are cleared explicitly for the previous
-     *      selection — the only addresses that can hold keys — and the scalar
-     *      members are cleared individually. Bounded by MAX_ARBITERS.
-     */
-    function _resetRound(Round storage r) private {
-        address[3] memory prev = r.arbiters;
-        uint8 prevCount = r.arbiterCount;
-        for (uint8 i = 0; i < prevCount; i++) {
-            address a = prev[i];
-            if (a != address(0)) {
-                delete r.commits[a];
-                delete r.revealed[a];
-                delete r.votes[a];
-                delete r.stakeWeights[a];
-            }
-        }
-
-        delete r.arbiters;
-        delete r.arbiterCount;
-        delete r.commitCount;
-        delete r.revealCount;
-        delete r.tally;
-        delete r.commitDeadline;
-        delete r.revealDeadline;
-        delete r.resolved;
-        delete r.winningOutcome;
     }
 
     function _alreadyPicked(address[3] memory picked, uint8 count, address candidate) private pure returns (bool) {
@@ -862,22 +834,42 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
     /**
      * @dev Tally a round's reveals, record the winning outcome and the majority
-     *      arbiters, and either (quorum) await finalization or (no quorum) settle
-     *      the refund fallback immediately.
+     *      arbiters, and either (quorum) await finalization or (no quorum)
+     *      settle the refund fallback immediately.
      */
     function _tally(uint256 milestoneId, Milestone storage m, Dispute storage d, Round storage r, uint8 round) private {
         r.resolved = true;
         uint8 reveals = r.revealCount;
 
-        // ── No-quorum fallback: refund the opener, back to Submitted ──────────
+        // ── No-quorum fallback: the panel never decided, so the money goes back
+        //    to the client — HERE, in the tally, because nothing else will ────
+        //    With no quorum there is no winning outcome to execute, so
+        //    `finalizeDispute` has nothing left to do: the round is `resolved`
+        //    but the milestone would stay `Disputed` with its ETH locked behind a
+        //    tally that can never run again, and every later call on the dispute
+        //    (`finalizeDispute`, `appeal`) would revert `NotDisputed` against a UI
+        //    that still offers them. So the fallback is a full settlement:
+        //    `ResolvedRefund`, terminal, the reservation released.
+        //
+        //    It deliberately does NOT return the milestone to `Submitted`. That
+        //    half-state was the whole bug: the status said "the client may approve
+        //    this" while the round said "arbitration is over" — the client could
+        //    release a payment no panel ever agreed to, and every payout control
+        //    offered in the same breath was a guaranteed revert. A milestone that
+        //    has been in dispute now leaves it only through arbitration.
         if (reveals < _requiredReveals(r)) {
             r.winningOutcome = uint8(Outcome.Refund);
             _releaseActive(r.arbiters, r.arbiterCount);
             uint256 refund = d.fee;
+            m.status = Status.ResolvedRefund;
+            _settleBudget(milestoneId, m.amount); // the client's refund is earmarked
             if (refund > 0) _pay(d.openedBy, refund);
             emit DisputeFinalized(milestoneId, round, uint8(Outcome.Refund), reveals, false);
+            // The settlement receipt for this path. There is no `finalize` tx to
+            // emit a `Milestone*` event from, so the backend mirrors the status
+            // and the settlement hash off this log (same tx either way).
             emit NoQuorumFallback(milestoneId, d.openedBy, refund);
-            m.status = Status.Submitted; // parties may retry / approve directly
+            _pay(m.client, m.amount);
             return;
         }
 
@@ -1040,10 +1032,10 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         Milestone storage m = _m(milestoneId);
         address appellant = _msgSender();
         if (appellant != m.client && appellant != m.freelancer) revert NotParty();
-        // The no-quorum fallback already returned the milestone to `Submitted`,
-        // and that round is terminal — appealing it would charge a fee for a
-        // round that `resolveAppeal` / `finalizeDispute` can never reach (both
-        // require `Disputed`). Re-open the dispute instead.
+        // The no-quorum fallback already settled the milestone (`ResolvedRefund`)
+        // and that round is terminal — appealing it would charge a fee for a round
+        // that `resolveAppeal` / `finalizeDispute` can never reach (both require
+        // `Disputed`). There is nothing left to appeal.
         if (m.status != Status.Disputed) revert NotDisputed();
         if (msg.value < disputeFee) revert DisputeFeeTooLow(msg.value, disputeFee);
 

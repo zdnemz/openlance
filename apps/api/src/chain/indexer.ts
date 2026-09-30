@@ -498,25 +498,44 @@ async function applyDisputeFinalized(tx: Tx, evt: RawChainLog): Promise<PlannedN
   }
 }
 
+/**
+ * The round could not decide, so the contract settled it: the opener's dispute fee
+ * is refunded AND the whole milestone goes back to the client (`ResolvedRefund`),
+ * inside this same `resolveDispute` tx. There is no `finalizeDispute` to follow, so
+ * this log is the settlement receipt — the milestone status, its settlement hash and
+ * the project-completion check all ride here (the contract emits no `Milestone*`
+ * event on this path, and the parties get exactly one inbox row for the action).
+ */
 async function applyNoQuorumFallback(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
   const { milestone, dispute } = await loadDisputeByOnchainId(tx, numOrNull(evt.args.milestoneId)!)
   if (!milestone || !dispute) return drift('NoQuorumFallback', numOrNull(evt.args.milestoneId)!, evt.txHash)
-  // The contract returns the milestone to Submitted (parties may retry the
-  // dispute or approve directly) — without this the mirror stays `disputed`
-  // forever and the milestone is unusable.
   const { to, legal } = nextMilestoneStatus(milestone.chainStatus, 'NoQuorumFallback')
   if (!legal) return drift('NoQuorumFallback (illegal from ' + milestone.chainStatus + ')', numOrNull(evt.args.milestoneId)!, evt.txHash)
   await tx.update(projectMilestones).set({ chainStatus: to, updatedAt: evt.blockTime })
     .where(eq(projectMilestones.id, milestone.id))
+  await markSettled(tx, milestone.id, evt.txHash, evt.blockTime)
+  // No stats move: the client's money came back (no `totalPaidWei` outflow) and the
+  // freelancer was paid nothing. The project may now be complete.
+  const completed = await completeProjectIfDone(tx, milestone.projectId)
+  // `status: 'resolved'` is what takes the dispute out of the open queue and retires
+  // every payout control on it — there is nothing left to tally, finalize or appeal.
+  // `finalized` stays FALSE: that flag means "a quorum recorded a majority", and no
+  // quorum did. `applyDisputeFinalized` set it (and `finalizedAt`) from the same tx.
   await tx.update(disputes).set({
-    phase: 'resolved', finalized: false, updatedAt: evt.blockTime,
+    phase: 'resolved', finalized: false, status: 'resolved', outcome: 'refund',
+    resolvedAt: evt.blockTime, resolutionTxHash: evt.txHash, updatedAt: evt.blockTime,
   }).where(eq(disputes.id, dispute.id))
   return {
     type: 'dispute.no_quorum',
     actorAddress: str(evt.args.opener).toLowerCase(),
     projectId: milestone.projectId,
     milestoneId: milestone.id,
-    payload: { refunded: str(evt.args.refunded), txHash: evt.txHash },
+    payload: {
+      refunded: str(evt.args.refunded), // the opener's dispute fee
+      milestoneRefundedWei: milestone.amountWei, // and the milestone, to the client
+      projectCompleted: completed,
+      txHash: evt.txHash,
+    },
   }
 }
 

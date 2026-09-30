@@ -25,6 +25,9 @@ import { loadMilestone, requireParticipant } from './helpers.ts'
 const ADDRESS = z.string().regex(/^0x[0-9a-fA-F]{40}$/)
 void ADDRESS
 
+/** Milestone states a real arbitration round can end in — its mirror must survive. */
+const ROUND_COULD_EXIST: readonly string[] = ['disputed', 'resolved_release', 'resolved_refund', 'resolved_split']
+
 export async function openDispute(request: Request, projectId: string, milestoneId: string) {
   const user = await requireKyc(request)
   const project = await requireParticipant(projectId, user)
@@ -99,11 +102,20 @@ export async function discardDispute(request: Request, projectId: string, milest
   const [dispute] = await db.select().from(disputes).where(eq(disputes.milestoneId, milestone.id)).limit(1)
   if (!dispute || dispute.status !== 'open' || dispute.finalized) throw Errors.notFound('Dispute')
   if (!isDisputable(milestone.chainStatus)) {
-    throw Errors.conflict('dispute_on_chain', `Round exists on-chain (milestone is ${milestone.chainStatus}); discarding would orphan it`)
+    // A `disputed` or `resolved_*` milestone went through arbitration, so the round
+    // mirror is real and deleting the record would erase it. A `released` /
+    // `cancelled` milestone cannot have come out of a round: those are the client's
+    // own actions. That is the other zombie — the record exists, its opening tx
+    // never landed, and the milestone was approved/cancelled meanwhile. It used to
+    // 409 here forever, leaving a party with an undiscardable "dispute in progress"
+    // on a settled milestone.
+    if (ROUND_COULD_EXIST.includes(milestone.chainStatus)) {
+      throw Errors.conflict('dispute_on_chain', `Round exists on-chain (milestone is ${milestone.chainStatus}); discarding would orphan it`)
+    }
   }
   if (milestone.onchainId !== null && getChainAdapter().mode === 'real') {
     const live = await getChainAdapter().getMilestoneStatus(milestone.onchainId).catch(() => null)
-    if (live && !isDisputable(live)) {
+    if (live && !isDisputable(live) && ROUND_COULD_EXIST.includes(live)) {
       throw Errors.conflict('dispute_on_chain', `Chain says ${live}; discarding would orphan the round`)
     }
   }

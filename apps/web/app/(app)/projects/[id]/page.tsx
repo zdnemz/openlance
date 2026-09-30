@@ -811,7 +811,11 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         {dispute && (
           <ActionBlock
             icon={<Scales className="h-4 w-4" />}
-            title={dispute.finalized ? "Dispute settled" : "Dispute in progress"}
+            // `status` is the chain's own close of the dispute (DisputeResolved, or
+            // the no-quorum fallback) — `finalized` only means "a quorum tallied",
+            // which a no-quorum round never does, so keying the title on it called
+            // a settled refund "in progress".
+            title={dispute.status === "resolved" ? "Dispute settled" : "Dispute in progress"}
             body={dispute.reason}
           >
             <DisputePanel dispute={dispute} />

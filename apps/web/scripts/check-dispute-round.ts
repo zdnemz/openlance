@@ -27,7 +27,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { requiredReveals, QUORUM } from "../lib/contracts.ts";
-import { roundGates, revealWindowOpen, commitWindowOpen, canReveal, canFinalize } from "../lib/dispute-round.ts";
+import { roundGates, revealWindowOpen, commitWindowOpen, canReveal, canFinalize, disputeLive } from "../lib/dispute-round.ts";
 
 let failures = 0;
 function check(name: string, ok: boolean, extra = "") {
@@ -53,6 +53,8 @@ const base = {
   revealDeadline: 3000,
   resolved: false,
   winningOutcome: 0,
+  // The milestone is `Disputed` (3): the round is live and the money has not moved.
+  milestoneStatus: 3,
   phase: "commit" as const,
 };
 const g = roundGates(base, 1000);
@@ -70,7 +72,7 @@ check("the appeal countdown is null before a tally", g.appealEndsAt === null);
 // of the opener and returns the milestone to Submitted. Gating this off is how
 // a thin panel strands a milestone forever.
 check(
-  "a tally is still offered below quorum (the chain falls back)",
+  "a tally is still offered below quorum (the chain settles it as a refund)",
   roundGates({ ...base, phase: "reveal" as const, revealCount: 1 }, 4000).canTally,
   "hiding it below quorum leaves the milestone disputed with no way out",
 );
@@ -113,6 +115,31 @@ check(
   "a dispute with both a live appeal and a live finalize lets a party pay to appeal a payout that already moved",
 );
 
+console.log("\nno-quorum fallback (the reported revert: tally, then \"Finalize payout\")");
+
+// A no-quorum tally is BOTH a resolved round and a settled milestone: Escrow._tally
+// refunds the client and sets ResolvedRefund inside `resolveDispute`. `resolved` alone
+// therefore promised a payout that `finalizeDispute` refuses with `NotDisputed` — the
+// button was live, the call reverted. `milestoneStatus` is what the contract checks.
+const noQuorum = { ...base, resolved: true, revealCount: 1, phase: "resolved" as const, milestoneStatus: 6 };
+const nq = roundGates(noQuorum, 9999, 1000);
+
+check("a settled milestone is not live any more", !nq.live);
+check("no payout is offered after a no-quorum tally", !nq.canFinalize, "`finalizeDispute` reverts NotDisputed once the milestone is settled");
+check("no appeal is offered after a no-quorum tally", !nq.appealOpen, "`appeal` reverts NotDisputed for the same reason");
+check("no second tally is offered either", !nq.canTally);
+check("a committed/revealed round is still not votable", !roundGates({ ...noQuorum, milestoneStatus: 3 }, 1000).canCommit);
+
+check(
+  "a resolved round on a live milestone still finalizes",
+  roundGates({ ...tallied, milestoneStatus: 3 }, 4001, 1000).canFinalize,
+  "the liveness gate must not close a payout the chain would accept",
+);
+check("a failed status read never strands a payout", roundGates({ ...tallied, milestoneStatus: null }, 4001, 1000).canFinalize);
+check("a failed status read never closes an appeal", roundGates({ ...tallied, milestoneStatus: null }, 3500, 1000).appealOpen);
+check("the status read agrees with the contract's own gate", disputeLive(3) && disputeLive(null) && !disputeLive(6) && !disputeLive(2));
+check("a milestone already paid out is never live", !disputeLive(5) && !disputeLive(7));
+
 console.log("\ncommit / reveal windows (Escrow.commitVote, Escrow.revealVote)");
 
 // commitVote: `block.timestamp > commitDeadline` reverts, so the deadline
@@ -146,6 +173,7 @@ check("a live appeal window blocks finalize", !canFinalize({ resolved: true, app
 check("finalize opens one second after the window", canFinalize({ resolved: true, appealEndsAt: 4000 }, 4001));
 check("an unresolved round has nothing to finalize", !canFinalize({ resolved: false, appealEndsAt: 4000 }, 9999));
 check("a round with no appeal deadline cannot be finalized", !canFinalize({ resolved: true, appealEndsAt: null }, 9999));
+check("a settled milestone cannot be finalized even past the window", !canFinalize({ resolved: true, appealEndsAt: 4000, live: false }, 9999));
 
 console.log("\none surface, and it reads the id off the dispute");
 
@@ -187,6 +215,16 @@ check("the tally flag never gates the payout controls", !/!dispute\.finalized &&
 check("the finalize predicate cannot throw on a missing milestone", !/find\(m\) => m\.id === dispute\.milestoneId\)/.test(panelCode));
 check("every gate comes from roundGates, not from a local re-derivation", /roundGates\(round, now, windows\.appeal\)/.test(panelCode) && !/now > round\.revealDeadline \|\| allRevealed/.test(panelCode));
 check("a lost salt is stated, not silently rendered as a dead button", /salt is gone/.test(panelCode) && /canReveal/.test(panelCode));
+// The reported revert: a no-quorum tally marks the round `resolved` AND settles the
+// milestone, so a gate reading only the round kept offering "Finalize payout".
+check("the panel reads the milestone's liveness, not just the round", /gates\.live/.test(panelCode) && /!gates\.live/.test(panelCode));
+check("a settled milestone retires the payout controls even if the mirror lags", /dispute\.status === "resolved" \|\| \(!!gates && !gates\.live\)/.test(panelCode));
+check("the round read fetches the milestone status alongside the round", /functionName: "milestoneStatus"/.test(read("lib/dispute-round.ts")));
+// …and only once the round is decided, so a live round stays one RPC per poll.
+check(
+  "an undecided round does not pay for the status read",
+  /const status = resolved\s*\n?\s*\? await readContract<number>/.test(read("lib/dispute-round.ts")),
+);
 
 console.log(`\n${failures === 0 ? "PASS" : "FAIL"} — ${failures === 0 ? "all good" : `${failures} failed`}`);
 process.exit(failures === 0 ? 0 : 1);
