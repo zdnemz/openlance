@@ -4,6 +4,7 @@ import { getDb } from '../db/index.ts'
 import { pagination } from '../lib/http.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { toEth } from '../lib/money.ts'
+import { Errors } from '../lib/errors.ts'
 import { getChainAdapter } from '../chain/adapter.ts'
 import { uuidToBytes32 } from '../chain/events.ts'
 import { env } from '../config.ts'
@@ -89,6 +90,10 @@ export async function getProject(request: Request, projectId: string) {
   await overlayChainStatus(ms)
   const [client] = await db.select().from(users).where(eq(users.id, project.clientId)).limit(1)
   const [freelancer] = await db.select().from(users).where(eq(users.id, project.freelancerId)).limit(1)
+  // A project whose party row is gone used to throw `Cannot read properties of
+  // undefined (reading 'id')` → a 500, so the room's "not yours to see" wall
+  // never rendered and the user got an opaque server error instead.
+  if (!client || !freelancer) throw Errors.notFound('Project party')
   return {
     ...project,
     client: { id: client!.id, walletAddress: client!.walletAddress, displayName: client!.displayName },
