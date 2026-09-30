@@ -141,7 +141,12 @@ export async function rpc<T = unknown>(method: string, params: unknown[]): Promi
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
     cache: "no-store",
   });
-  const json = (await res.json()) as { result?: T; error?: { message: string } };
+  // A proxy 502 comes back as HTML, and `res.json()` on it threw a bare
+  // `SyntaxError: Unexpected token '<'` — which then surfaced to the user as
+  // the failure reason for their transaction.
+  if (!res.ok) throw new Error(`relay ${res.status} ${res.statusText || "error"} on ${method}`);
+  const json = (await res.json().catch(() => null)) as { result?: T; error?: { message: string } } | null;
+  if (!json) throw new Error(`relay returned a non-JSON body on ${method}`);
   if (json.error) throw new Error(json.error.message);
   return json.result as T;
 }
@@ -190,6 +195,27 @@ interface WalletState {
   disconnect: () => void;
 }
 
+/**
+ * Provider subscriptions, attached at most once per provider instance.
+ *
+ * They were registered inside `connectInjected` with no dedupe and no
+ * `removeListener`, so every reconnect stacked another `chainChanged` handler
+ * that each fired `location.reload()` — one stray network switch reloaded the
+ * page N times. Neither closure captures connect state, so binding them here
+ * keeps exactly one of each for the page's lifetime.
+ */
+let boundProvider: unknown;
+function bindInjectedListeners(provider: NonNullable<Window["ethereum"]>) {
+  if (boundProvider === provider) return;
+  boundProvider = provider;
+  provider.on?.("accountsChanged", (...args: unknown[]) => {
+    const accs = args[0] as string[] | undefined;
+    if (!accs?.length) useWallet.setState({ kind: null, address: null });
+    else useWallet.setState({ address: accs[0]!.toLowerCase() });
+  });
+  provider.on?.("chainChanged", () => window.location.reload());
+}
+
 export const useWallet = create<WalletState>()(
   persist(
     (set) => ({
@@ -212,12 +238,11 @@ export const useWallet = create<WalletState>()(
         if (!accounts?.length) throw new Error("No accounts returned");
         if (expectedChainId) await ensureChain(expectedChainId, rpcUrl ?? walletChainRpcUrl() ?? undefined);
         set({ kind: "injected", address: accounts[0]!.toLowerCase() });
-        void window.ethereum.on?.("accountsChanged", (...args: unknown[]) => {
-          const accs = args[0] as string[] | undefined;
-          if (!accs?.length) set({ kind: null, address: null });
-          else set({ address: accs[0]!.toLowerCase() });
-        });
-        void window.ethereum.on?.("chainChanged", () => window.location.reload());
+        // Registered ONCE per provider, not per connect. These lived inside
+        // `connectInjected`, so N connects left N `chainChanged` handlers all
+        // calling `location.reload()` and none of them ever removed. They close
+        // over nothing but the store, so module scope is the right home.
+        bindInjectedListeners(window.ethereum);
       },
       disconnect: () => set({ kind: null, address: null }),
     }),
@@ -347,15 +372,26 @@ export async function sendContractCall(opts: {
   });
 }
 
+export interface TxReceipt {
+  status: "success" | "reverted";
+  blockNumber: number;
+  /**
+   * True when the poll gave up before a receipt arrived. The transaction is
+   * still on-chain and will settle — this is NOT a failure, and callers must
+   * not re-enable a money button because of it.
+   */
+  pending?: boolean;
+}
+
 /** Wait for a receipt via the relay. */
-export async function waitForReceipt(hash: string, timeoutMs = 30_000): Promise<{ status: "success" | "reverted"; blockNumber: number }> {
+export async function waitForReceipt(hash: string, timeoutMs = 30_000): Promise<TxReceipt> {
   const started = Date.now();
   for (;;) {
     const receipt = await rpc<{ status: string; blockNumber: string } | null>("eth_getTransactionReceipt", [hash]);
     if (receipt) {
       return { status: receipt.status === "0x1" ? "success" : "reverted", blockNumber: Number(BigInt(receipt.blockNumber)) };
     }
-    if (Date.now() - started > timeoutMs) throw new Error("Transaction not mined within 30s");
+    if (Date.now() - started > timeoutMs) return { status: "success", blockNumber: 0, pending: true };
     await new Promise((r) => setTimeout(r, 700));
   }
 }

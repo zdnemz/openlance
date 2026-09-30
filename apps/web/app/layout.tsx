@@ -23,7 +23,12 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OpenLance — milestone escrow for freelance work",
+  // `template` lets a nested layout set its own title; without it every tab and
+  // every shared link showed the root title verbatim.
+  title: {
+    default: "OpenLance — milestone escrow for freelance work",
+    template: "%s · OpenLance",
+  },
   description:
     "Freelance marketplace with smart-contract escrow: fund milestones, release on proof, dispute with SBT-staked arbiters. Base-native, on-chain settlement.",
   keywords: ["escrow", "freelance", "web3", "milestones", "solidity", "Base"],

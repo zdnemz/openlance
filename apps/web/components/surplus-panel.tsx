@@ -44,8 +44,11 @@ export function SurplusPanel({ jobId, jobRef }: { jobId: string; jobRef: string 
     if (!escrow || withdrawing) return;
     setWithdrawing(true);
     try {
-      const back = await returnBudgetSurplus(escrow, jobRef, chainId);
-      if (back === 0n) throw new Error("Nothing to withdraw, or the withdrawal did not land");
+      // `reason` carries the true cause out of the never-throwing withdrawal,
+      // so a rejected signature is not reported as an empty balance.
+      let reason: string | null = null;
+      const back = await returnBudgetSurplus(escrow, jobRef, chainId, (m) => { reason = m; });
+      if (back === 0n) throw new Error(reason ?? "Nothing to withdraw, or the withdrawal did not land");
       await loadFree();
       invalidate.job(jobId);
       toast.success("Surplus withdrawn", { description: `${formatEth(back.toString())} ETH back to your wallet.` });

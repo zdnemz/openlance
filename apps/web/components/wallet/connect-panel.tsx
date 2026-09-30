@@ -20,6 +20,10 @@ import { toast } from "sonner";
 export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { connectInjected, address } = useWallet();
   const chainId = useRuntime((s) => s.chainId);
+  // `chainId` defaults to 31337 until /overview answers, and `load()` swallows
+  // its error — so a fast click (or an API blip) ran `ensureChain(31337)` and
+  // walked a Base Sepolia user onto Anvil while the copy said otherwise.
+  const runtimeLoaded = useRuntime((s) => s.loaded);
   const session = useSession();
   const router = useRouter();
   const [signingIn, setSigningIn] = useState(false);
@@ -67,19 +71,24 @@ export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChan
         <div className="px-4 pb-4">
           <button
             type="button"
-            disabled={!injectedAvailable || signingIn}
+            disabled={!injectedAvailable || signingIn || !runtimeLoaded}
             onClick={() => void connectReal()}
-            className={`flex w-full items-center justify-center gap-3 rounded-2xl px-5 py-4 text-sm font-medium text-white transition-all ${press} ${
-              injectedAvailable ? "bg-rose-accent hover:bg-rose-bright" : "cursor-not-allowed bg-white/[0.06] text-faint"
+            className={`flex w-full items-center justify-center gap-3 rounded-2xl px-5 py-4 text-sm font-medium text-white ${press} ${              injectedAvailable && runtimeLoaded ? "bg-rose-accent hover:bg-rose-bright" : "cursor-not-allowed bg-white/[0.06] text-faint"
             }`}
           >
             {signingIn ? <Spinner className="h-4 w-4 animate-spin" /> : injectedAvailable ? <Wallet weight="bold" className="h-4 w-4" /> : <Plugs className="h-4 w-4" />}
-            {signingIn ? "Waiting for signature…" : injectedAvailable ? "Connect browser wallet" : "No browser wallet detected"}
+            {signingIn
+              ? "Waiting for signature…"
+              : !runtimeLoaded
+                ? "Reading chain config…"
+                : injectedAvailable ? "Connect browser wallet" : "No browser wallet detected"}
           </button>
           <p className="mt-3 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-faint">
             <Info className="mt-px h-3 w-3 shrink-0" />
             {injectedAvailable
-              ? `We will ask your wallet to switch to chain ${chainId} if needed, then request one signature (SIWE). Testnet only — no real funds.`
+              ? runtimeLoaded
+                ? `We will ask your wallet to switch to chain ${chainId} if needed, then request one signature (SIWE). Testnet only — no real funds.`
+                : "Waiting for the API to report which chain this deployment uses."
               : "Install MetaMask, Coinbase Wallet, or Rabby, then reload. Mobile wallets work via their in-app browser."}
           </p>
           {address && (

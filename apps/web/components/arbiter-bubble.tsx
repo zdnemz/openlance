@@ -174,7 +174,7 @@ export function ArbiterDetailDialog({
                   onClick={actions.onReject}
                   className="flex-1 rounded-full border border-line bg-transparent py-3 text-[13px] font-medium text-dim hover:border-destructive/50 hover:text-destructive"
                 >
-                  Reject
+                  {actions.busy ? "Rejecting…" : "Reject"}
                 </Button>
               )}
               {actions.onApprove && (
@@ -207,7 +207,7 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   return (
     <div className="rounded-2xl border border-line bg-white/[0.02] px-4 py-3">
       <div className={`num text-lg font-medium leading-none ${accent ? "text-state-released" : "text-foreground"}`}>{value}</div>
-      <div className="mt-1.5 text-[10.5px] uppercase tracking-[0.14em] text-faint">{label}</div>
+      <div className="mt-1.5 text-[11px] uppercase tracking-[0.14em] text-faint">{label}</div>
     </div>
   );
 }

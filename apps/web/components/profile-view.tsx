@@ -119,7 +119,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
                 {user.kycStatus === "verified" && <span className="num flex items-center gap-1 rounded-full bg-state-released/10 px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-state-released"><SealCheck weight="fill" className="h-3 w-3" /> verified</span>}
                 {arbitersLoading && <InlineLoading label="arbiter…" />}
                 {!isArbiterSeat && arbiter?.registered && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-state-split/10 px-2.5 py-0.5 text-[10.5px] text-state-split">
+                  <span className="flex items-center gap-1.5 rounded-full bg-state-split/10 px-2.5 py-0.5 text-[11px] text-state-split">
                     <SealCheck weight="fill" className="h-3.5 w-3.5" /> arbiter · trust {arbiter.trustScore}
                   </span>
                 )}
@@ -193,7 +193,9 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
                         <Star key={n} weight={n <= r.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= r.rating ? "text-amber-300" : "text-faint"}`} />
                       ))}
                     </div>
-                    <span className="num text-[10.5px] text-faint">{timeAgo(r.createdAt)} · tx {r.txHash?.slice(0, 8)}…</span>
+                    <span className="num text-[11px] text-faint">
+                      {timeAgo(r.createdAt)}{r.txHash && <> · tx {r.txHash.slice(0, 8)}…</>}
+                    </span>
                   </div>
                   {r.body && <p className="mt-2.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{r.body}</p>}
                 </div>
@@ -297,31 +299,31 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
     if (f === "name") {
       return (
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">{copy.name}</label>
-          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
+          <label htmlFor="profile-name" className="text-[13px] font-medium">{copy.name}</label>
+          <Input id="profile-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
         </div>
       );
     }
     if (f === "skills") {
       return (
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">{copy.skills} (comma-separated)</label>
-          <Input value={skills} onChange={(e) => setSkills(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
+          <label htmlFor="profile-skills" className="text-[13px] font-medium">{copy.skills} (comma-separated)</label>
+          <Input id="profile-skills" value={skills} onChange={(e) => setSkills(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
         </div>
       );
     }
     if (f === "bio") {
       return (
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">{copy.bio}</label>
-          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
+          <label htmlFor="profile-bio" className="text-[13px] font-medium">{copy.bio}</label>
+          <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
         </div>
       );
     }
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-[13px] font-medium">{copy.links}</label>
+          <span className="text-[13px] font-medium" id="profile-links-label">{copy.links}</span>
           <button
             type="button"
             onClick={() => setLinks((rows) => [...rows, { k: "", v: "" }])}
@@ -421,9 +423,13 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
         <Button variant="ghost" onClick={onDone} className="rounded-full border border-line px-5 text-dim">
           <X className="mr-2 h-4 w-4" /> Cancel
         </Button>
-        <Link href="/arbiters" className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">
-          arbiter staking &amp; registry →
-        </Link>
+        {/* `/arbiters` is arbiter-only in the seat matrix, so this sent every
+            client and freelancer who opened Edit to a bounce off /dashboard. */}
+        {user.role === "arbiter" && (
+          <Link href="/arbiters" className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">
+            arbiter staking &amp; registry →
+          </Link>
+        )}
       </div>
     </div>
   );

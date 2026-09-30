@@ -183,6 +183,12 @@ export interface DisputeView {
    * projects and holds nothing for an arbiter.
    */
   onchainId: number | null;
+  /**
+   * Whether the caller is one of the two parties. Only a party may appeal or
+   * discard a record. Stated by the API because the client was inferring it
+   * from its own project list, which is both scoped to that and paginated.
+   */
+  isParty: boolean;
   openedById: string;
   reason: string;
   status: DisputeStatus;

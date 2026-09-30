@@ -12,6 +12,7 @@
     "dev:web": "pnpm --filter @openlance/web dev",
     "dev:api": "pnpm --filter @openlance/api dev",
     "chain": "bash scripts/anvil/dev-real.sh",
+    "stop": "bash scripts/stop.sh",
     "build": "pnpm -r build",
     "build:web": "pnpm --filter @openlance/web build",
     "build:api": "pnpm --filter @openlance/api build",

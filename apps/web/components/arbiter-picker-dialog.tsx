@@ -178,16 +178,20 @@ function ArbiterRow({
   const tierName = (TIER_NAMES[a.tier ?? 0] ?? "unstaked").toLowerCase();
   const belowMinStake = (() => { try { return BigInt(a.stakeWei || "0") < BigInt(minStakeWei || "0"); } catch { return false; } })();
   const disabled = !pickable(a, minStakeWei);
+  const label = a.profile?.displayName || shortAddress(a.address);
 
   return (
     <li className={picked ? "bg-rose-soft/40" : undefined}>
       <div className="flex items-center gap-4 px-6 py-4">
         <button
           type="button"
-          aria-label={picked ? "Deselect arbiter" : "Select arbiter"}
+          // Every row announced the identical "Select arbiter" with no way to
+          // tell which one, and the picked state existed only as a colour.
+          aria-label={`${picked ? "Deselect" : "Select"} ${label}`}
+          aria-pressed={picked}
           disabled={disabled}
           onClick={onToggle}
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+          className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors ${
             picked
               ? "border-rose-accent bg-rose-accent text-white"
               : disabled
@@ -207,7 +211,7 @@ function ArbiterRow({
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-[14px] font-medium transition-colors group-hover:text-rose-bright">
-                {a.profile?.displayName ?? shortAddress(a.address)}
+                {label}
               </span>
               <SealCheck weight="fill" className="h-3.5 w-3.5 shrink-0 text-rose-bright" />
             </span>
@@ -222,7 +226,7 @@ function ArbiterRow({
           <span className={`num text-[13.5px] font-medium ${belowMinStake ? "text-state-disputed" : "text-dim"}`}>
             {formatEth(a.stakeWei)}
           </span>
-          <span className="num text-[10.5px] uppercase tracking-[0.16em] text-faint">ETH staked</span>
+          <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">ETH staked</span>
         </span>
       </div>
     </li>

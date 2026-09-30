@@ -1,13 +1,14 @@
 "use client";
 
 /** /admin — operator surface: reconciliation, fees, indexer health. */
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@/lib/wallet";
-import { get, post, useInvalidate, useOverview, useLedger } from "@/lib/queries";
+import { get, post, useInvalidate, useOverview } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { useChainAction, withdrawFeesAction } from "@/lib/chain-actions";
 import { ListHead, EthAmount, HashText, press, Skeleton, StatusBadge } from "@/components/design";
-import { formatEth, timeAgo } from "@/lib/format";
+import { formatEth, timeAgo, toWei } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ShieldStar } from "@phosphor-icons/react/dist/csr/ShieldStar";
@@ -19,8 +20,7 @@ interface ReconciliationRun {
   id: string;
   startedAt: string;
   drifts: number;
-  repaired: number;
-  report: { solvency?: { ok: boolean; balanceWei: string; liabilitiesWei: string } } | null;
+  report: { stats?: { corrected?: number }; solvency?: { ok: boolean; balanceWei: string; liabilitiesWei: string } } | null;
 }
 
 export default function AdminPage() {
@@ -28,10 +28,34 @@ export default function AdminPage() {
   const { address } = useWallet();
   const isAdmin = !!session.user?.isAdmin;
   const { data: overview } = useOverview();
-  const { data: ledger } = useLedger({ type: "FeeWithdrawn", limit: "10" });
+  // Fee accrual is a SUM OVER EVENT HISTORY, not a field on a row. Asking the
+  // ledger for `type: "FeeWithdrawn"` and then filtering that page for
+  // MilestoneReleased/Split could only ever return [] — the card read a
+  // permanent "0 ETH" and the fee-exit button below it was dead forever.
+  // `/ledger/summary` is the endpoint that already totals it.
+  const { data: feeSummary } = useQuery({
+    queryKey: ["ledger-summary"],
+    queryFn: () => get<{ fees: { accruedWei: string; withdrawnWei: string; pendingWei: string } }>("/ledger/summary"),
+    enabled: isAdmin,
+    refetchInterval: 15_000,
+  });
   const [runs, setRuns] = useState<ReconciliationRun[] | null>(null);
   const [reconciling, setReconciling] = useState(false);
   const chain = useChainAction();
+
+  const loadRuns = useCallback(async () => {
+    try {
+      setRuns(await get<ReconciliationRun[]>("/admin/reconciliations"));
+    } catch {
+      setRuns([]);
+    }
+  }, []);
+  // Was a network call in the render body: it re-fired on every render while
+  // `runs` was still null — and again under every 15s poll beneath it. Declared
+  // above the non-admin early return, because hooks cannot be conditional.
+  useEffect(() => {
+    if (isAdmin) void loadRuns();
+  }, [isAdmin, loadRuns]);
 
   if (!isAdmin) {
     return (
@@ -69,20 +93,14 @@ export default function AdminPage() {
     );
   }
 
-  async function loadRuns() {
-    try {
-      setRuns(await get<ReconciliationRun[]>("/admin/reconciliations"));
-    } catch {
-      setRuns([]);
-    }
-  }
-  if (runs === null) void loadRuns();
-
   async function reconcile() {
     setReconciling(true);
     try {
-      const result = await post<{ drifts: number; repaired: number }>("/admin/reconcile");
-      toast.success("Reconciliation complete", { description: `${result.drifts} drifts found · ${result.repaired} repaired` });
+      // `runReconciliation` returns { checked, drifts, report } — there is no
+      // `repaired` field, so the toast used to read "undefined repaired". The
+      // repaired count lives in the persisted run's report.stats.corrected.
+      const result = await post<{ checked: number; drifts: number }>("/admin/reconcile");
+      toast.success("Reconciliation complete", { description: `${result.checked} checked · ${result.drifts} drifts found` });
       await loadRuns();
     } catch (err) {
       toast.error("Reconciliation failed", { description: err instanceof Error ? err.message : "Unknown error" });
@@ -91,10 +109,9 @@ export default function AdminPage() {
     }
   }
 
-  const feeEvents = (ledger?.items ?? []).filter((e) => e.eventType === "MilestoneReleased" || e.eventType === "MilestoneSplit");
-  const withdrawnEvents = (ledger?.items ?? []);
-  void withdrawnEvents;
-  const accruedWei = feeEvents.reduce((acc, e) => acc + BigInt(String((e.payload as Record<string, string>).fee ?? "0")), 0n);
+  const accruedWei = toWei(feeSummary?.fees.accruedWei);
+  const withdrawnWei = toWei(feeSummary?.fees.withdrawnWei);
+  const pendingWei = toWei(feeSummary?.fees.pendingWei);
 
   return (
     <div className="space-y-10">
@@ -115,7 +132,7 @@ export default function AdminPage() {
             {[
               ["chain", `anvil · ${overview?.config.chainId ?? "…"}`],
               ["mode", overview?.config.chainMode ?? "…"],
-              ["fee", `${((overview?.config.feeBps ?? 0) / 100).toFixed(1)}% (${overview?.config.feeBps ?? "…"} bps)`],
+              ["fee", overview?.config.feeBps != null ? `${(overview.config.feeBps / 100).toFixed(1)}% (${overview.config.feeBps} bps)` : "…"],
             ].map(([k, v]) => (
               <div key={k} className="flex items-baseline justify-between gap-6 py-2.5">
                 <dt className="text-[12px] text-faint">{k}</dt>
@@ -138,7 +155,13 @@ export default function AdminPage() {
           <EthAmount wei={accruedWei} className="mt-3 block text-3xl font-medium tracking-tight text-state-split" />
           <p className="mt-2 max-w-[56ch] text-[12px] leading-relaxed text-faint">
             The contract is the authority; this figure re-derives from ledger events.
+            {withdrawnWei > 0n && <> {formatEth(withdrawnWei)} ETH already withdrawn.</>}
           </p>
+          {/* A disabled control with no stated reason reads as broken. */}
+          {!address && <p className="mt-2 text-[12px] text-amber-300">Connect the operator wallet to sign the withdrawal.</p>}
+          {!!address && accruedWei === 0n && !chain.active && (
+            <p className="mt-2 text-[12px] text-amber-300">Nothing accrued yet — fees appear when a milestone is released or split.</p>
+          )}
           <Button
             disabled={chain.active || accruedWei === 0n || !address}
             onClick={async () => {
@@ -179,7 +202,9 @@ export default function AdminPage() {
           ) : (
             <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <p className="max-w-[52ch] text-[12.5px] leading-relaxed text-faint">
-                Run a reconciliation to verify escrow solvency against the chain — held balance vs unsettled milestones and accrued fees.
+                {overview?.config.chainMode === "real"
+                  ? "Run a reconciliation to verify escrow solvency against the chain — held balance vs unsettled milestones and accrued fees."
+                  : "Solvency is a chain read, and this deployment is running in mock mode — it cannot be verified here. Boot the real chain to see the balance sheet."}
               </p>
               <Button onClick={reconcile} disabled={reconciling} className="shrink-0 rounded-full bg-rose-accent px-6 py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
                 <ArrowsClockwise className={`mr-2 h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
@@ -196,7 +221,7 @@ export default function AdminPage() {
           {(runs ?? []).map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-x-6 gap-y-1.5 bg-white/[0.012] px-6 py-4">
               <StatusBadge status={r.drifts === 0 ? "released" : "disputed"} pulse={false} />
-              <span className="num text-[12.5px] text-dim">{r.drifts} drifts · {r.repaired} repaired</span>
+              <span className="num text-[12.5px] text-dim">{r.drifts} drifts · {r.report?.stats?.corrected ?? 0} repaired</span>
               {r.report?.solvency && (
                 <span className="num text-[11px] text-faint">
                   solvency {r.report.solvency.ok ? "ok" : "FAIL"} · {formatEth(r.report.solvency.balanceWei)} vs {formatEth(r.report.solvency.liabilitiesWei)}

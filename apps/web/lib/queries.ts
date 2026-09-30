@@ -74,20 +74,6 @@ export function useProposals(jobId: string) {
   });
 }
 
-export function useMyProposals() {
-  const token = useSession((s) => s.token);
-  return useQuery({
-    queryKey: ["my-proposals", token],
-    queryFn: async () => {
-      const projects = await get<ProjectView[]>("/projects");
-      // discover the user's proposals by walking their jobs — the API exposes
-      // proposals per job; my active ones live on open jobs I bid on.
-      return projects;
-    },
-    enabled: !!token,
-  });
-}
-
 export function useProjects() {
   const token = useSession((s) => s.token);
   return useQuery({
@@ -193,11 +179,15 @@ export function useUserReviews(address: string) {
   });
 }
 
-export function useLedger(filters?: Record<string, string>) {
+export function useLedger(filters?: Record<string, string>, enabled = true) {
+  const token = useSession((s) => s.token);
   const search = new URLSearchParams(filters ?? {}).toString();
   return useQuery({
     queryKey: qk.ledger(filters),
-    queryFn: () => get<{ items: LedgerEntry[]; total: number }>(`/ledger?${search}`),
+    queryFn: () => get<{ items: LedgerEntry[]; total: number }>(`/ledger${search ? `?${search}` : ""}`),
+    // The chain pulse is rendered above the signed-out empty state, so without
+    // this guard a signed-out visitor's dashboard fired a 401-ing read.
+    enabled: enabled && !!token,
     refetchInterval: 10_000,
   });
 }

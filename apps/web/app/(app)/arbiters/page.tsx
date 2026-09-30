@@ -113,14 +113,16 @@ export default function ArbitersPage() {
                   href={`/profile/${a.address}`}
                   className={`group relative flex flex-col gap-4 bg-white/[0.012] px-6 py-6 transition-colors hover:bg-white/[0.035] md:flex-row md:items-center ${press}`}
                 >
-                  {i === 0 && <span aria-hidden className="absolute inset-y-0 left-0 w-[2.5px] bg-rose-bright" />}
+                  {/* rank carries the #1 emphasis on its own (rose numeral above);
+                      the 2.5px accent rail here was a banned coloured left border. */}
                   {/* pick checkbox — only while seating arbiters on a project */}
                   {pickable && (
                     <button
                       type="button"
-                      aria-label={picked ? "Deselect arbiter" : "Select arbiter"}
+                      aria-label={`${picked ? "Deselect" : "Select"} ${a.profile?.displayName || shortAddress(a.address)}`}
+                      aria-pressed={picked}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePick(a.address); }}
-                      className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                      className={`relative z-10 grid size-9 shrink-0 place-items-center rounded-lg border transition-colors ${
                         picked ? "border-rose-accent bg-rose-accent text-white" : "border-line-strong text-transparent hover:border-rose-accent/60"
                       }`}
                     >
@@ -146,7 +148,7 @@ export default function ArbitersPage() {
                         </span>
                         <SealCheck weight="fill" className="h-4 w-4 shrink-0 text-rose-bright" />
                         <span
-                          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium"
+                          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
                           style={{
                             color: st.color,
                             borderColor: `color-mix(in oklab, ${st.color} 32%, transparent)`,
@@ -163,23 +165,26 @@ export default function ArbitersPage() {
                       </span>
                     </span>
                   </span>
-                  {/* record — hairline columns, left-aligned */}
-                  <span className="flex items-center gap-0 divide-x divide-white/[0.07] md:gap-6">
-                    <span className="pr-5 text-left md:pr-6">
+                  {/* record — hairline columns, left-aligned. Wraps on narrow
+                      screens: four `px-5` columns of uppercase-tracked labels
+                      were ~430px wide inside a 312px content box, so the page
+                      scrolled sideways and "earned" sat off-screen. */}
+                  <span className="flex flex-wrap items-center gap-y-3 gap-x-0 divide-x divide-white/[0.07] md:gap-x-6">
+                    <span className="pr-3 text-left md:pr-6">
                       <span className="num block text-lg font-medium leading-none">{a.resolutions}</span>
                       <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">resolved</span>
                     </span>
-                    <span className="px-5 text-left md:px-6">
+                    <span className="px-3 text-left md:px-6">
                       <span className="num block text-lg font-medium leading-none text-state-released">{a.resolutionsWithinSla}</span>
                       <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">within SLA</span>
                     </span>
-                    <span className="px-5 text-left md:px-6">
+                    <span className="px-3 text-left md:px-6">
                       <span className={`num block text-lg font-medium leading-none ${a.resolutionsLate > 0 ? "text-state-disputed" : "text-dim"}`}>
                         {a.resolutionsLate}
                       </span>
                       <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">late</span>
                     </span>
-                    <span className="px-5 text-left md:px-6">
+                    <span className="px-3 text-left md:px-6">
                       <span className="num block text-lg font-medium leading-none text-rose-bright">
                         {formatEth(a.totalEarnedWei)}
                       </span>

@@ -61,8 +61,77 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 function derivePhase(resolved: boolean, now: number, commitDeadline: number, revealDeadline: number): DisputePhase {
   if (resolved) return "resolved";
   if (now < commitDeadline) return "commit";
-  if (now <= revealDeadline) return "reveal";
   return "reveal"; // deadline passed but not yet tallied — still "reveal" (tally pending)
+}
+
+/* ── Chain gates ────────────────────────────────────────────────────────────
+ * Every "may this seat do that" question the dispute UI asks, in one place,
+ * each one a transcription of the Escrow check it stands for. The two surfaces
+ * that render a round used to answer these inline, and had already drifted.
+ *
+ * The boundaries are deliberately off-by-one to match the contract, which
+ * compares with `>` for a closed window and `<=` for an open one. Off-by-one
+ * here is not cosmetic: `commitVote` and `revealVote` meet at exactly one
+ * second, and a UI that closes the commit window early removes a legitimate
+ * vote while a UI that opens the reveal window early reverts on every click.
+ */
+
+/** `Escrow.commitVote` reverts when `block.timestamp > commitDeadline`. */
+export function commitWindowOpen(now: number, commitDeadline: number): boolean {
+  return now <= commitDeadline;
+}
+
+/** `Escrow.revealVote` reverts unless `commitDeadline < now <= revealDeadline`. */
+export function revealWindowOpen(now: number, commitDeadline: number, revealDeadline: number): boolean {
+  return now > commitDeadline && now <= revealDeadline;
+}
+
+/** `Escrow.resolveDispute` reverts while the window is open and a vote is out. */
+function tallyOpen(round: RoundState, now: number): boolean {
+  if (round.resolved || round.arbiterCount === 0) return false;
+  if (now > round.revealDeadline) return true;
+  return round.revealCount >= round.arbiterCount; // early tally, once everyone revealed
+}
+
+/**
+ * The reveal window is open, but only for an arbiter whose salt survived.
+ *
+ * The salt lives in this browser and nowhere else — the contract stores the
+ * hash, never the outcome. So "I committed" is not the same as "I can
+ * reveal": an arbiter who cleared storage, switched device, or opened a
+ * private window holds a live commitment they can never satisfy, and the round
+ * is one reveal short of quorum because of it. `hasSalt: false` is exactly
+ * that case, and the UI has to say so rather than render a button that can
+ * only revert.
+ */
+export function canReveal(v: { hasSalt: boolean; isSelected: boolean; myRevealed: boolean }): boolean {
+  return v.isSelected && v.hasSalt && !v.myRevealed;
+}
+
+/**
+ * `Escrow.finalizeDispute` reverts while the appeal window is open, and that
+ * window is the one `Escrow.appeal` is gated on — so the two are exact
+ * complements and a single deadline drives both. A surface that gates them
+ * separately will eventually offer a party an appeal on a payout that already
+ * moved.
+ */
+export function canFinalize(v: { resolved: boolean; appealEndsAt: number | null }, now: number): boolean {
+  return v.resolved && v.appealEndsAt !== null && now > v.appealEndsAt;
+}
+
+/** Everything a dispute surface may offer, derived from the live round. */
+export function roundGates(round: RoundState, now: number, appealWindow = 0) {
+  // The appeal window runs from the reveal deadline, which is chain truth
+  // (`getRound`). The only non-chain input is the window's LENGTH.
+  const appealEndsAt = round.resolved ? round.revealDeadline + appealWindow : null;
+  return {
+    canCommit: !round.resolved && commitWindowOpen(now, round.commitDeadline),
+    canReveal: !round.resolved && revealWindowOpen(now, round.commitDeadline, round.revealDeadline),
+    canTally: tallyOpen(round, now),
+    canFinalize: canFinalize({ resolved: round.resolved, appealEndsAt }, now),
+    appealEndsAt,
+    appealOpen: appealEndsAt !== null && now <= appealEndsAt,
+  };
 }
 
 export async function fetchRound(escrow: string, milestoneId: bigint, round: number): Promise<RoundState | null> {
@@ -206,9 +275,21 @@ export function useNow(intervalMs = 1000): number {
  * Polls the live round state for a dispute. Falls back to null (offline) if the
  * escrow address is unknown or the read fails.
  */
-export function useRoundState(dispute: DisputeView | null | undefined, onchainId: number | null | undefined): RoundState | null {
+export interface RoundStateResult {
+  /** The live round, or null when the chain genuinely has none for this index. */
+  round: RoundState | null;
+  /**
+   * True once a read has actually completed. Before this — and forever after a
+   * failed one — `round` is null for a reason that is NOT "no round exists", and
+   * the caller must not claim the opening transaction is missing.
+   */
+  read: boolean;
+}
+
+export function useRoundState(dispute: DisputeView | null | undefined, onchainId: number | null | undefined): RoundStateResult {
   const escrow = useRuntime((s) => s.escrow);
   const [round, setRound] = useState<RoundState | null>(null);
+  const [read, setRead] = useState(false);
   const roundIndex = dispute?.round ?? 0;
 
   useEffect(() => {
@@ -216,7 +297,11 @@ export function useRoundState(dispute: DisputeView | null | undefined, onchainId
     let cancelled = false;
     const load = async () => {
       const r = await fetchRound(escrow, BigInt(onchainId), roundIndex);
-      if (!cancelled) setRound(r);
+      if (cancelled) return;
+      setRound(r);
+      // Only a COMPLETED read counts — a relay that is down leaves `round` null
+      // forever, and calling that "the opening tx never landed" is a lie.
+      setRead(true);
     };
     void load();
     const t = setInterval(load, 4000);
@@ -226,7 +311,7 @@ export function useRoundState(dispute: DisputeView | null | undefined, onchainId
     };
   }, [escrow, dispute, onchainId, roundIndex]);
 
-  return round;
+  return { round, read };
 }
 
 /** Human label for an outcome ordinal. */

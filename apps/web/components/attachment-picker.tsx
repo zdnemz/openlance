@@ -31,9 +31,9 @@ export function AttachmentPicker({
   const full = files.length >= max;
   return (
     <div className="space-y-2">
-      <label className="text-[13px] font-medium">
+      <span className="text-[13px] font-medium" id={`${label}-count`}>
         {label} <span className="num text-faint">({files.length}/{max})</span>
-      </label>
+      </span>
       <label
         className={`flex items-center gap-2.5 rounded-2xl border border-dashed px-4 py-3.5 text-[13px] transition-colors ${
           full
@@ -48,6 +48,7 @@ export function AttachmentPicker({
           multiple
           className="sr-only"
           disabled={full}
+          aria-label={`${label} — add file`}
           onChange={(e) => {
             // Trim to the ceiling rather than rejecting: the chips already show
             // what is attached, so dropping the overflow is the predictable move.
@@ -68,7 +69,7 @@ export function AttachmentPicker({
                 type="button"
                 aria-label={`Remove ${f.name}`}
                 onClick={() => onChange(files.filter((_, j) => j !== i))}
-                className="text-faint hover:text-destructive"
+                className="-mr-1 grid size-6 shrink-0 place-items-center rounded-full text-faint hover:text-destructive"
               >
                 <X className="h-3 w-3" weight="bold" />
               </button>

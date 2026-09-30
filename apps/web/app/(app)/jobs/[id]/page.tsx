@@ -40,7 +40,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
   const session = useSession();
   const { data: job, isLoading } = useJob(id);
   const isPoster = job?.poster?.id && session.user?.id === job.poster.id;
-  const { data: proposals } = useProposals(isPoster ? id : "");
+  const { data: proposals, isLoading: proposalsLoading } = useProposals(isPoster ? id : "");
   const invalidate = useInvalidate();
   const escrow = useRuntime((s) => s.escrow);
   const chainId = useRuntime((s) => s.chainId);
@@ -62,6 +62,10 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
   }, [projectId, router, id, stay]);
 
   async function accept(proposalId: string) {
+    // `disabled={awarding}` only shut THIS row's button. Clicking Accept on a
+    // second bid before the first funding tx mined sent two concurrent
+    // /accept POSTs — the exact double-write `chain-actions` guards against.
+    if (awarding) return;
     setAwarding(proposalId);
     try {
       const result = await post<{
@@ -79,7 +83,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       // milestones start.
       let funded = true;
       if (escrow && result.funding?.items?.length) {
-        const total = result.funding.items.reduce((a, m) => a + BigInt(m.amountWei), 0n);
+        const total = result.funding.items.reduce((a, m) => a + toWei(m.amountWei), 0n);
         const budget = await readJobBudget(escrow, result.funding.jobRef).catch(() => null);
         if (budget && total > budget.free) {
           // Already funded on-chain (e.g. award retried after the first batch
@@ -95,7 +99,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
               result.funding.jobRef,
               result.funding.items.map((m) => m.ref),
               result.funding.items.map(() => result.funding.freelancer),
-              result.funding.items.map((m) => BigInt(m.amountWei)),
+              result.funding.items.map((m) => toWei(m.amountWei)),
             ],
             expectedChainId: chainId,
           });
@@ -120,7 +124,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
         const returnedWei = escrow && jobRef ? await returnBudgetSurplus(escrow, jobRef, chainId) : 0n;
         const tail = returnedWei > 0n
           ? ` Surplus ${formatEth(returnedWei.toString())} ETH is back in your wallet.`
-          : result.surplusLockedWei && BigInt(result.surplusLockedWei) > 0n
+          : toWei(result.surplusLockedWei) > 0n
             ? ` Surplus ${formatEth(result.surplusLockedWei)} ETH is still locked on the job.`
             : "";
         toast.success("Proposal accepted — milestones funded", {
@@ -235,8 +239,15 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
           {isPoster && job.status !== "draft" && <SurplusPanel jobId={id} jobRef={job.jobRef} />}
           {isPoster ? (
             <section>
-              <ListHead>Proposals · {proposals?.length ?? 0}</ListHead>
-              {!proposals?.length ? (
+              {/* Gated on the query: `proposals?.length ?? 0` printed "0" and
+                  flashed "No proposals yet" while the list was still loading. */}
+              <ListHead>Proposals{!proposalsLoading ? ` · ${proposals?.length ?? 0}` : ""}</ListHead>
+              {!proposals && proposalsLoading ? (
+                <div className="mt-4 space-y-3">
+                  <Skeleton className="h-24 rounded-3xl" />
+                  <Skeleton className="h-24 rounded-3xl" />
+                </div>
+              ) : !proposals?.length ? (
                 <EmptyState
                   className="mt-4"
                   title="No proposals yet"
@@ -249,7 +260,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
               ) : (
                 <div className="mt-4 space-y-4">
                   {proposals.map((p) => (
-                    <ProposalCard key={p.id} proposal={p} onAccept={() => accept(p.id)} awarding={awarding === p.id} />
+                    <ProposalCard key={p.id} proposal={p} onAccept={() => accept(p.id)} awarding={awarding !== null} />
                   ))}
                 </div>
               )}
@@ -386,7 +397,7 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
           abi: ESCROW_ABI,
           functionName: "lockBudget",
           args: [jobRef],
-          value: BigInt(budgetWei),
+          value: toWei(budgetWei),
           expectedChainId: chainId,
         });
         const receipt = await waitForReceipt(hash);
@@ -395,7 +406,10 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
       } else {
         // Dev mode (no escrow configured): the server accepts the hash shape
         // alone; real mode verifies the lock on-chain before publishing.
-        depositTxHash = `0x${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}`;
+        // `crypto.randomUUID` is undefined in a non-secure context (a LAN dev
+        // origin) and in Safari < 15.4 — "Dev mode" became a TypeError toast.
+        const rand = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`).replace(/-/g, "");
+        depositTxHash = `0x${rand()}${rand().slice(0, 32)}`;
       }
       setPhase("publishing");
       await post(`/jobs/${jobId}/publish`, { depositTxHash });
@@ -426,7 +440,7 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
         onClick={depositAndPublish}
         className="mt-4 w-full rounded-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
       >
-        {phase === "idle" ? `Lock ${formatEth(budgetWei)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
+        {phase === "idle" ? `Lock ${formatEth(budgetWei, 6)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
       </Button>
     </section>
   );
@@ -440,6 +454,8 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
    the bytes never touch a public path. */
 
 const EMPTY_MILESTONE = { title: "", description: "", amount: "" };
+/** Mirrors the API's `z.array(...).max(20)` on a proposal's milestones. */
+const MAX_PROPOSAL_MILESTONES = 20;
 
 /* ── proposal card (poster view) ──────────────────────────────────────── */
 
@@ -497,14 +513,24 @@ function ProposeForm({ jobId }: { jobId: string }) {
   const [deliveryDays, setDeliveryDays] = useState("14");
   const [milestones, setMilestones] = useState<{ title: string; description: string; amount: string }[]>([EMPTY_MILESTONE]);
   const [files, setFiles] = useState<File[]>([]);
-  const [open, setOpen] = useState(!mine);
+  // `open` was SEEDED from `mine`, which is still `undefined` on the first
+  // render (the proposals query hasn't resolved) — so it latched `true` and
+  // never re-synced. A freelancer revisiting a job they bid on got the blank
+  // form, whose own hint says "one proposal per freelancer", and submitting it
+  // 409'd. Derive it from the query instead of seeding from it.
+  const [dismissedMine, setDismissedMine] = useState(false);
+  const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const showForm = open || !mine || dismissedMine;
 
-  const total = milestones.reduce((acc, m) => acc + (Number(m.amount) || 0), 0);
-  const ceiling = Number(job?.budget.maxEth ?? 0);
-  const overCeiling = ceiling > 0 && total > ceiling;
+  // The server charges `Σ toWei(amount)` exactly; a `Number` sum rounded the
+  // freelancer's own approval surface away from that amount in both directions
+  // (0.0004 showed "0.000 ETH", 0.0015 showed "0.002 ETH").
+  const totalWei = milestones.reduce((acc, m) => acc + toWei(m.amount), 0n);
+  const ceilingWei = toWei(job?.budget.maxWei);
+  const overCeiling = ceilingWei > 0n && totalWei > ceilingWei;
 
   async function submit() {
     setError(null);
@@ -515,7 +541,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
     if (!milestones.every((m) => m.title.trim() && m.description.trim() && /^\d*\.?\d+$/.test(m.amount))) {
       return setError("Every milestone needs a title, a description, and a valid ETH amount.");
     }
-    if (overCeiling) return setError(`Your bid (${total.toFixed(3)} ETH) is over the client's ceiling of ${ceiling} ETH.`);
+    if (overCeiling) return setError(`Your bid (${formatEth(totalWei)} ETH) is over the client's ceiling of ${formatEth(ceilingWei)} ETH.`);
     setSubmitting(true);
     try {
       // Files hang off the proposal, so the proposal row has to exist first.
@@ -532,6 +558,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
         }
       }
       invalidate.proposals(jobId);
+      setDismissedMine(true);
       setOpen(false);
       toast.success("Proposal submitted", { description: "The poster sees it instantly. Awarding creates the project." });
     } catch (err) {
@@ -542,7 +569,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
     }
   }
 
-  if (mine && !open) {
+  if (mine && !showForm) {
     return (
       <section>
         <ListHead>Your proposal</ListHead>
@@ -562,15 +589,16 @@ function ProposeForm({ jobId }: { jobId: string }) {
     );
   }
 
-  if (!open) return null;
+  if (!showForm) return null;
 
   return (
     <section>
       <ListHead>Propose</ListHead>
       <div className="glass mt-4 space-y-5 rounded-3xl p-6">
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">Cover note</label>
+          <label htmlFor="proposal-cover" className="text-[13px] font-medium">Cover note</label>
           <Textarea
+            id="proposal-cover"
             value={coverNote}
             onChange={(e) => setCoverNote(e.target.value)}
             rows={5}
@@ -580,9 +608,10 @@ function ProposeForm({ jobId }: { jobId: string }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">Delivery window</label>
+          <label htmlFor="proposal-days" className="text-[13px] font-medium">Delivery window</label>
           <div className="flex items-center gap-3">
             <Input
+              id="proposal-days"
               type="number" min={1} max={365} value={deliveryDays}
               onChange={(e) => setDeliveryDays(e.target.value)}
               className="num h-10 w-28 border-line bg-white/[0.03]"
@@ -594,13 +623,16 @@ function ProposeForm({ jobId }: { jobId: string }) {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <label className="text-[13px] font-medium">Your milestone breakdown</label>
-              <p className="mt-1 text-[11px] text-faint">You shape the work. The client reviews this and pays the total if they accept.</p>
+              <span className="text-[13px] font-medium">Your milestone breakdown</span>
+              <p className="mt-1 text-[11px] text-faint">You shape the work. The client reviews this and pays the total if they accept. Up to {MAX_PROPOSAL_MILESTONES}.</p>
             </div>
             <button
               type="button"
+              // The server caps at 20 (`z.array(...).max(20)`); uncapped, the 21st
+              // row submitted fine and came back as a raw schema error.
+              disabled={milestones.length >= MAX_PROPOSAL_MILESTONES}
               onClick={() => setMilestones([...milestones, { ...EMPTY_MILESTONE }])}
-              className="shrink-0 text-[12px] text-rose-bright hover:underline"
+              className="shrink-0 text-[12px] text-rose-bright hover:underline disabled:cursor-not-allowed disabled:text-faint disabled:no-underline"
             >
               + add milestone
             </button>
@@ -613,14 +645,15 @@ function ProposeForm({ jobId }: { jobId: string }) {
                   placeholder={`Milestone ${i + 1} title`} className="h-9 border-line bg-white/[0.03] text-[13px]"
                 />
                 <Input
+                  aria-label={`Milestone ${i + 1} amount in ETH`} inputMode="decimal"
                   value={m.amount} onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
                   placeholder="0.00" className="num h-9 w-28 shrink-0 border-line bg-white/[0.03] text-[13px]"
                 />
                 {milestones.length > 1 && (
                   <button
-                    type="button" aria-label="Remove milestone"
+                    type="button" aria-label={`Remove milestone ${i + 1}`}
                     onClick={() => setMilestones(milestones.filter((_, j) => j !== i))}
-                    className="shrink-0 text-faint hover:text-destructive"
+                    className="grid size-9 shrink-0 place-items-center rounded-lg text-faint hover:text-destructive"
                   >
                     <Stack className="h-4 w-4" />
                   </button>
@@ -636,10 +669,10 @@ function ProposeForm({ jobId }: { jobId: string }) {
           ))}
           <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${overCeiling ? "bg-destructive/10" : "bg-white/[0.04]"}`}>
             <span className="num text-[11px] uppercase tracking-wider text-faint">
-              your bid {ceiling > 0 ? `· ceiling ${ceiling} ETH` : ""}
+              your bid{ceilingWei > 0n ? ` · ceiling ${formatEth(ceilingWei)} ETH` : ""}
             </span>
             <span className={`num text-lg font-medium ${overCeiling ? "text-destructive" : "text-rose-bright"}`}>
-              {total.toFixed(3)} ETH
+              {formatEth(totalWei)} ETH
             </span>
           </div>
         </div>
@@ -654,7 +687,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
         />
 
         {error && (
-          <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+          <p role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
             <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
           </p>
         )}

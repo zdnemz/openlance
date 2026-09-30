@@ -16,7 +16,7 @@ import { EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText, In
 import { PageHeader } from "@/components/page-header";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
 import { SpotCard } from "@/components/motion";
-import { STATE_COLORS, timeAgo } from "@/lib/format";
+import { STATE_COLORS, timeAgo, toWei, ledgerDotColor } from "@/lib/format";
 import type { DisputeView, JobView } from "@/lib/types";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Briefcase } from "@phosphor-icons/react/dist/csr/Briefcase";
@@ -51,15 +51,17 @@ export default function DashboardPage() {
   const { data: ledger } = useLedger({ limit: "8" });
   const { data: arbiters, isLoading: arbitersLoading } = useArbiters();
 
-  // Belt over the proxy gate's suspenders: unfinished onboarding bounces
-  // instantly (covers a stale gate cookie; the proxy is the enforcer).
+  // Belt over the proxy gate's suspenders: an unfinished onboarding bounces
+  // instantly. Only while NOT yet onboarded, though — `proxy.ts` one-way
+  // redirects /onboarding for an onboarded visitor, so sending one there
+  // ping-ponged this effect against the proxy forever.
   useEffect(() => {
-    if (session.token && session.user && session.user.kycStatus !== "verified") {
+    if (session.token && session.user && session.user.kycStatus !== "verified" && !session.user.role) {
       router.replace("/onboarding");
     }
   }, [session.token, session.user, router]);
 
-  if (!session.token) {
+  if (!session.token || !session.user) {
     return (
       <EmptyState
         className="mt-16"
@@ -70,7 +72,7 @@ export default function DashboardPage() {
     );
   }
 
-  const me = session.user!;
+  const me = session.user;
   const role = me.role;
   const head = HEAD[role] ?? HEAD.client;
   const myJobs = (allJobs?.items ?? []).filter((j) => j.poster?.id === me.id);
@@ -104,7 +106,7 @@ export default function DashboardPage() {
       )}
 
       <PageHeader
-        title={me.displayName ? `${head.title}` : head.title}
+        title={head.title}
         desc={me.displayName ? `${greet(me.displayName, role)} ${head.desc}` : head.desc}
         meta={meta}
         actions={
@@ -229,7 +231,7 @@ export default function DashboardPage() {
           <div className="mt-4 divide-y divide-white/[0.04] overflow-hidden rounded-3xl border border-line">
             {(ledger?.items ?? []).slice(0, 6).map((e) => (
               <div key={e.id} className="flex items-center gap-3 bg-white/[0.012] px-5 py-3.5">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ledgerColor(e.eventType) }} />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ledgerDotColor(e.eventType) }} />
                 <span className="num min-w-0 flex-1 truncate text-[12px] text-dim">
                   {e.eventType} {e.milestoneOnchainId !== null ? `· m${e.milestoneOnchainId}` : ""}
                 </span>
@@ -260,7 +262,7 @@ function ArbiterStats({ open, settled, serving }: { open: number; settled: numbe
       <Stat label="open disputes" value={<span className="num text-rose-bright">{open}</span>} icon={open ? <Gavel className="h-4 w-4 text-rose-bright" /> : undefined} />
       <Stat label="settled" value={<span className="num">{settled}</span>} sub="majority decided" />
       <Stat label="serving" value={<span className="num">{serving}</span>} sub="projects in flight" />
-      <Stat label="appeals" value={<span className="num">2-of-3</span>} sub="majority rules" />
+      <Stat label="appeals" value={<span className="num">2 of 3</span>} sub="majority rules an appeal" />
     </div>
   );
 }
@@ -272,7 +274,7 @@ function JobRows({ jobs }: { jobs: JobView[] }) {
         <Link key={j.id} href={`/jobs/${j.id}`} className="flex items-center justify-between bg-white/[0.012] px-5 py-4 transition-colors hover:bg-white/[0.035]">
           <div className="min-w-0">
             <div className="truncate text-[14px] font-medium">{j.title}</div>
-            <div className="num mt-0.5 text-[11px] text-faint">{j.status.replace("_", " ")} · {timeAgo(j.createdAt)}</div>
+            <div className="num mt-0.5 text-[11px] text-faint">{j.status.replace(/_/g, " ")} · {timeAgo(j.createdAt)}</div>
           </div>
           <StatusBadge status={j.status} />
         </Link>
@@ -320,7 +322,7 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">
-            {role} · vs {counterpart.displayName ?? <AddressText value={counterpart.walletAddress} size={3} />}
+            {role} · vs {counterpart.displayName || <AddressText value={counterpart.walletAddress} size={3} />}
           </div>
           <div className="mt-2 line-clamp-2 text-[15.5px] font-medium leading-snug tracking-tight transition-colors group-hover:text-rose-bright">
             {job?.title ?? (jobLoading ? <Skeleton className="inline-block h-5 w-40 align-middle" /> : (p.milestones[0]?.title ?? "Project room"))}
@@ -345,23 +347,14 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
         <div className="flex flex-wrap gap-2">
           {p.milestones.map((m) => (
             <span key={m.id} className="num flex items-center gap-1.5 text-[11px] text-faint">
-              <span className="h-1 w-1 rounded-full" style={{ background: STATE_COLORS[m.chainStatus] }} aria-hidden />
+              <span className="h-1 w-1 rounded-full" style={{ background: STATE_COLORS[m.chainStatus] ?? "var(--color-state-pending)" }} aria-hidden />
               m{m.position}
             </span>
           ))}
         </div>
-        <EthAmount wei={p.milestones.reduce((a, m) => a + BigInt(m.amountWei), 0n)} className="text-sm text-dim" />
+        <EthAmount wei={p.milestones.reduce((a, m) => a + toWei(m.amountWei), 0n)} className="text-sm text-dim" />
       </div>
       </SpotCard>
     </Link>
   );
-}
-
-function ledgerColor(eventType: string): string {
-  if (eventType.includes("Released") || eventType.includes("Split")) return "#34d399";
-  if (eventType.includes("Dispute")) return "#fb923c";
-  if (eventType.includes("Funded")) return "#fbbf24";
-  if (eventType.includes("Trust") || eventType.includes("Arbiter")) return "#f43f5e";
-  if (eventType.includes("Fee")) return "#a7f3d0";
-  return "#a1a1aa";
 }

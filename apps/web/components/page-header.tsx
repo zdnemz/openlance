@@ -27,7 +27,7 @@ export function PageHeader({
         {desc && <p className="mt-3 text-sm leading-relaxed text-dim">{desc}</p>}
         {actions && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}
       </div>
-      {meta && <div className="num pb-1.5 text-right text-[12px] leading-relaxed text-faint">{meta}</div>}
+      {meta && <div className="num w-full pb-0 text-[12px] leading-relaxed text-faint md:w-auto md:pb-1.5 md:text-right">{meta}</div>}
     </div>
   );
 }

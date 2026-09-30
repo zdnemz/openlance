@@ -23,16 +23,14 @@ import {
   useChainAction, openDisputeAction, commitVoteAction, revealVoteAction, tallyDisputeAction,
   finalizeDisputeAction, appealDisputeAction, readJobBudget,
 } from "@/lib/chain-actions";
-import {
-  useRoundState, useDisputeWindows, useNow, computeCommitHash, makeSalt, saveCommit, loadCommit, clearCommit,
-} from "@/lib/dispute-round";
+import { computeCommitHash, makeSalt } from "@/lib/dispute-round";
 import { DISPUTE_OUTCOME, MAX_ARBITERS, MIN_ARBITERS, QUORUM, requiredReveals } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
 import {
   AddressAvatar, AddressText, EthAmount, HashText, ListHead, Skeleton, EmptyState, press,
   StatusBadge, Copyable,
 } from "@/components/design";
-import { STATE_COLORS, MILESTONE_LABELS, clockTime, formatEth, toWei, shortAddress, timeAgo, timeUntil, feeOn } from "@/lib/format";
+import { STATE_COLORS, MILESTONE_LABELS, clockTime, formatEth, toWei, shortAddress, timeAgo, timeUntil, feeOn, ledgerDotColor } from "@/lib/format";
 import type { MessageView, ProjectMilestone, DisputeView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -42,6 +40,7 @@ import { ArbiterBubbles } from "@/components/arbiter-bubble";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SurplusPanel } from "@/components/surplus-panel";
+import { DisputePanel } from "@/components/dispute-panel";
 import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -810,7 +809,13 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         )}
 
         {dispute && (
-          <DisputePanel projectId={projectId} milestone={m} dispute={dispute} wait={wait} />
+          <ActionBlock
+            icon={<Scales className="h-4 w-4" />}
+            title={dispute.finalized ? "Dispute settled" : "Dispute in progress"}
+            body={dispute.reason}
+          >
+            <DisputePanel dispute={dispute} />
+          </ActionBlock>
         )}
 
         {showReview && (
@@ -838,7 +843,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                   {[1, 2, 3, 4, 5].map((n) => (
                     <Star key={n} weight={n <= myReview.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= myReview.rating ? "text-amber-300" : "text-faint"}`} />
                   ))}
-                  <span className="num ml-2 text-[11px] text-faint">tx {myReview.txHash?.slice(0, 10)}…</span>
+                  {myReview.txHash && <span className="num ml-2 text-[11px] text-faint">tx {myReview.txHash.slice(0, 10)}…</span>}
                 </div>
                 {myReview.body && <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-dim">{myReview.body}</p>}
               </div>
@@ -955,294 +960,6 @@ function SubmissionFiles({ files, onChange, max }: { files: File[]; onChange: (f
   );
 }
 
-/* ── dispute panel (multi-arbiter commit-reveal) ──────────────────────── */
-
-function DisputePanel({
-  projectId, milestone, dispute, wait,
-}: {
-  projectId: string;
-  milestone: ProjectMilestone;
-  dispute: DisputeView;
-  wait: (s: string | string[]) => (p: import("@/lib/types").ProjectView) => boolean;
-}) {
-  const session = useSession();
-  const { address } = useWallet();
-  const { data: project } = useProject(projectId);
-  const invalidate = useInvalidate();
-  const chain = useChainAction();
-  const { disputeFeeWei } = useRuntime();
-  const round = useRoundState(dispute, milestone.onchainId);
-  const windows = useDisputeWindows();
-  const now = useNow();
-  const [outcome, setOutcome] = useState<keyof typeof DISPUTE_OUTCOME>("split");
-  const active = chain.active;
-
-  if (!project || milestone.onchainId === null) return null;
-  const onchainId = milestone.onchainId;
-  const isClient = project.client.id === session.user?.id;
-  const isFreelancer = project.freelancer.id === session.user?.id;
-  const iAmSelected = round?.arbiters.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
-  const myCommitted = dispute.committedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
-  const myRevealed = dispute.revealedArbiters?.some((a) => a.toLowerCase() === address?.toLowerCase()) ?? false;
-  const allRevealed = !!round && round.arbiterCount > 0 && round.revealCount >= round.arbiterCount;
-  const canTally = !!round && round.arbiterCount > 0 && !round.resolved && (now > round.revealDeadline || allRevealed);
-  // Below quorum the tally is still valid — the contract refunds the opener
-  // and returns the milestone to Submitted (no-quorum fallback).
-  const tallyFallsBack = !!round && !round.resolved && round.revealCount < requiredReveals(round.arbiterCount);
-  const canFinalize = !!round && round.resolved && !dispute.finalized && now > round.revealDeadline + windows.appeal;
-  // ponytail: derived from the live round + chain windows — the only honest finalize clock.
-  const appealEndsAt = round?.resolved && !dispute.finalized ? round.revealDeadline + windows.appeal : null;
-  const finalizeInSecs = appealEndsAt !== null ? appealEndsAt - now : 0;
-  const phaseLabel = dispute.finalized ? "finalized" : round?.phase ?? dispute.phase;
-
-  return (
-    <ActionBlock
-      icon={<Scales className="h-4 w-4" />}
-      title={dispute.finalized ? "Dispute settled" : round ? `Disputed · ${phaseLabel} phase` : "Dispute opening…"}
-      body={dispute.reason}
-    >
-      <div className="space-y-4">
-        {/* Record exists but no on-chain round yet: the opener's tx never
-          landed. Nothing votable/tallizable until it does. */}
-        {!round && !dispute.finalized && (
-          <div className="num rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
-            Waiting for the on-chain open — {(isClient || isFreelancer) && ["funded", "submitted"].includes(milestone.chainStatus)
-              ? "re-send it from “Can't agree? Open the arbiter path” above."
-              : "a party still has to send the opening transaction."}
-            {(isClient || isFreelancer) && (
-              <button
-                type="button"
-                disabled={active}
-                onClick={async () => {
-                  try {
-                    await del(`/projects/${projectId}/milestones/${milestone.id}/disputes`);
-                    invalidate.disputes();
-                    toast.success("Record discarded", { description: "No round existed on-chain — post again to retry the open." });
-                  } catch (err) {
-                    toast.error("Could not discard", { description: err instanceof Error ? err.message : "Unknown error" });
-                  }
-                }}
-                className="mt-1.5 block font-medium underline underline-offset-2 hover:text-amber-100 disabled:opacity-50"
-              >
-                Discard this record
-              </button>
-            )}
-          </div>
-        )}
-        {/* phase + clocks */}
-        <div className="grid grid-cols-2 gap-2.5 text-center sm:grid-cols-4">
-          <Stat label="round" value={String((dispute.round ?? 0) + 1)} />
-          <Stat label="arbiters" value={round ? `${round.arbiterCount}` : "—"} />
-          <Stat label="committed" value={round ? `${round.commitCount}` : "—"} />
-          <Stat label="revealed" value={round ? `${round.revealCount}/${round.arbiterCount}` : "—"} />
-        </div>
-
-        {round && !round.resolved && (
-          <div className="num rounded-2xl border border-line bg-white/[0.02] px-4 py-3 text-[11.5px] text-faint">
-            {round.phase === "commit" && <>commit window closes {timeUntil(new Date(round.commitDeadline * 1000).toISOString())}</>}
-            {round.phase === "reveal" && now <= round.revealDeadline && <>reveal window closes {timeUntil(new Date(round.revealDeadline * 1000).toISOString())}</>}
-            {round.phase === "reveal" && now > round.revealDeadline && <>reveal window closed — tally is available</>}
-            {round.revealCount < round.arbiterCount && round.phase === "reveal" && (
-              <span className="text-amber-300"> · waiting on {round.arbiterCount - round.revealCount} arbiter(s)</span>
-            )}
-          </div>
-        )}
-
-        {/* selected arbiters + reveals */}
-        {round && round.arbiters.length > 0 && (
-          <div className="space-y-1.5">
-            <div className="num text-[11px] uppercase tracking-wider text-faint">selected arbiters</div>
-            <div className="flex flex-wrap gap-2">
-              {round.arbiters.map((a) => {
-                const committed = (dispute.committedArbiters ?? []).some((x) => x.toLowerCase() === a.toLowerCase());
-                const revealed = (dispute.revealedArbiters ?? []).some((x) => x.toLowerCase() === a.toLowerCase());
-                return (
-                  <span key={a} className={`num inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] ${revealed ? "border-state-released/40 text-state-released" : committed ? "border-white/15 text-dim" : "border-line text-faint"}`}>
-                    {shortAddress(a, 4)}
-                    <span className="text-[10px] opacity-70">{revealed ? "revealed" : committed ? "committed" : "pending"}</span>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* live tally */}
-        {round && (round.revealCount > 0 || dispute.finalized) && (
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {(["Release", "Refund", "Split"] as const).map((label, i) => (
-              <div key={label} className="rounded-xl border border-line bg-white/[0.02] px-3 py-2">
-                <div className="num text-[11px] uppercase tracking-wider text-faint">{label}</div>
-                <div className="num mt-0.5 text-[16px]">{round.tally[i] ?? 0}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* arbiter voting */}
-        {iAmSelected && !dispute.finalized && round && (
-          <div className="space-y-3 border-t border-line pt-4">
-            <div className="flex items-center gap-2 text-[13px] font-medium text-rose-bright">
-              <HandCoins className="h-4 w-4" /> You are a selected arbiter
-            </div>
-
-            {round.phase === "commit" && (
-              <>
-                <p className="text-[11.5px] leading-relaxed text-faint">
-                  Choose your ruling and commit the hash now. Your choice stays hidden until the reveal phase — this
-                  prevents anyone copying a vote.
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["release", "refund", "split"] as const).map((o) => (
-                    <button
-                      key={o}
-                      type="button"
-                      onClick={() => setOutcome(o)}
-                      className={`rounded-full border px-3 py-2 text-[12px] font-medium ${press} ${outcome === o ? "border-rose-accent bg-rose-soft text-foreground" : "border-line text-dim hover:text-foreground"}`}
-                    >
-                      {o === "split" ? "Split 50/50" : o}
-                    </button>
-                  ))}
-                </div>
-                <Button
-                  disabled={active || myCommitted}
-                  onClick={async () => {
-                    const salt = makeSalt();
-                    const hash = computeCommitHash(DISPUTE_OUTCOME[outcome], salt, address!, toWei(onchainId), dispute.round ?? 0);
-                    const result = await commitVoteAction(chain.run)(onchainId, dispute.round ?? 0, hash, projectId);
-                    if (result.ok) {
-                      // Stash the salt so the reveal step can find it; losing it
-                      // means the commit can't be revealed.
-                      saveCommit(dispute.id, dispute.round ?? 0, outcome, salt);
-                      invalidate.disputes();
-                    }
-                  }}
-                  className="w-full rounded-full bg-rose-accent py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright"
-                >
-                  <PhaseLabel phase={chain.phase} idle={myCommitted ? "Committed — wait for reveal" : `Commit "${outcome === "split" ? "Split 50/50" : outcome}"`} />
-                </Button>
-              </>
-            )}
-
-            {round.phase === "reveal" && !myRevealed && now <= round.revealDeadline && (
-              <>
-                <p className="text-[11.5px] leading-relaxed text-faint">
-                  Reveal must match your commit exactly (same outcome + salt) — otherwise the transaction reverts.
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["release", "refund", "split"] as const).map((o) => (
-                    <button
-                      key={o}
-                      type="button"
-                      onClick={() => setOutcome(o)}
-                      className={`rounded-full border px-3 py-2 text-[12px] font-medium ${press} ${outcome === o ? "border-rose-accent bg-rose-soft text-foreground" : "border-line text-dim hover:text-foreground"}`}
-                    >
-                      {o === "split" ? "Split 50/50" : o}
-                    </button>
-                  ))}
-                </div>
-                <Button
-                  disabled={active}
-                  onClick={async () => {
-                    const saved = loadCommit(dispute.id, dispute.round ?? 0);
-                    if (!saved?.salt) {
-                      toast.error("No saved commit on this device", { description: "You can only reveal where you committed — the salt never leaves that browser." });
-                      return;
-                    }
-                    if (saved.outcome !== outcome) {
-                      toast.error("Outcome differs from your commit", { description: `You committed “${saved.outcome}” — switched back for you.` });
-                      setOutcome(saved.outcome as keyof typeof DISPUTE_OUTCOME);
-                      return;
-                    }
-                    const result = await revealVoteAction(chain.run)(
-                      onchainId, dispute.round ?? 0, DISPUTE_OUTCOME[outcome], saved.salt, projectId,
-                    );
-                    if (result.ok) {
-                      clearCommit(dispute.id, dispute.round ?? 0);
-                      invalidate.disputes();
-                    }
-                  }}
-                  className="w-full rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium text-foreground hover:bg-white/20"
-                >
-                  <PhaseLabel phase={chain.phase} idle={`Reveal "${outcome === "split" ? "Split 50/50" : outcome}"`} />
-                </Button>
-              </>
-            )}
-
-            {myRevealed && <p className="text-[12px] text-state-released">Your vote is revealed. Waiting for the tally.</p>}
-          </div>
-        )}
-
-        {/* tally + finalize (permissionless) */}
-        {!dispute.finalized && (
-          <div className="space-y-2.5 border-t border-line pt-4">
-            {(isClient || isFreelancer) && round?.resolved && !dispute.finalized && (
-              <p className="text-[11.5px] text-faint">
-                A party may still appeal within the window; otherwise anyone can finalize the payout.
-              </p>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                disabled={active || !canTally}
-                onClick={async () => {
-                  const result = await tallyDisputeAction(chain.run)(onchainId, dispute.round ?? 0, projectId);
-                  if (result.ok) invalidate.disputes();
-                }}
-                className="rounded-full bg-white/10 py-2.5 text-[12px] font-medium hover:bg-white/20"
-              >
-                Tally round
-              </Button>
-              <Button
-                disabled={active || !canFinalize}
-                onClick={async () => {
-                  const result = await finalizeDisputeAction(chain.run)(onchainId, projectId, wait(["resolved_release", "resolved_refund", "resolved_split"]));
-                  if (result.ok) { invalidate.disputes(); invalidate.overview(); }
-                }}
-                className="rounded-full bg-state-released/15 py-2.5 text-[12px] font-medium text-state-released hover:bg-state-released/25"
-              >
-                {finalizeInSecs > 0 ? `Finalize ${timeUntil(new Date(appealEndsAt! * 1000).toISOString())}` : "Finalize payout"}
-              </Button>
-            </div>
-            {finalizeInSecs > 0 && (
-              <p className="text-[11.5px] text-faint">Payout unlocks once the appeal window closes — anyone can finalize then.</p>
-            )}
-            {canTally && tallyFallsBack && (
-              <p className="text-[11.5px] text-amber-300">Fewer than {requiredReveals(round.arbiterCount)} reveals — tallying refunds the opener and returns the milestone to Submitted (no-quorum fallback).</p>
-            )}
-            {(isClient || isFreelancer) && round?.resolved && !dispute.finalized && (
-              <Button
-                disabled={active}
-                onClick={async () => {
-                  const result = await appealDisputeAction(chain.run)(onchainId, toWei(disputeFeeWei), projectId);
-                  if (result.ok) invalidate.disputes();
-                }}
-                className="w-full rounded-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10"
-              >
-                {toWei(disputeFeeWei) > 0n ? `Appeal (${formatEth(disputeFeeWei)} ETH)` : "Appeal (free)"} — penalises a wrong majority
-              </Button>
-            )}
-          </div>
-        )}
-
-        {dispute.finalized && (
-          <div className="flex items-center gap-2 border-t border-line pt-4 text-[12.5px] text-state-split">
-            <SealCheck weight="fill" className="h-4 w-4" />
-            Settled — {dispute.outcome ?? "—"} · majority {shortAddress(dispute.resolvedArbiter)}
-          </div>
-        )}
-      </div>
-    </ActionBlock>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-line bg-white/[0.02] px-3 py-2">
-      <div className="num text-[10.5px] uppercase tracking-wider text-faint">{label}</div>
-      <div className="num mt-0.5 text-[14px]">{value}</div>
-    </div>
-  );
-}
 
 /* ── review form ───────────────────────────────────────────────────────── */
 
@@ -1322,7 +1039,7 @@ function MessageBubble({
           )}
         >
           {msg.body}
-          <span className="num ml-2 inline-flex items-center gap-1 align-middle text-[10.5px] text-faint">
+          <span className="num ml-2 inline-flex items-center gap-1 align-middle text-[11px] text-faint">
             {clockTime(msg.createdAt)}
             {mine && (
               msg.readByOther
@@ -1514,7 +1231,7 @@ function ActivityTab({ projectId }: { projectId: string }) {
             const payloadFee = (e.payload as Record<string, string>)?.fee;
             return (
               <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-6 py-4">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATE_COLORS.eventType?.[e.eventType] ?? "#f43f5e" }} />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ledgerDotColor(e.eventType) }} />
                 <span className="min-w-0 flex-1">
                   <span className="text-[13.5px] text-foreground">{e.eventType}</span>
                   {e.milestoneOnchainId !== null && (

@@ -9,8 +9,8 @@
  */
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { NotificationBell } from "@/components/notification-bell";
@@ -129,6 +129,7 @@ function bottomItems(role: UserRole | undefined, disputesCount: number): RailIte
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const session = useSession();
   const sessionHydrated = useSessionHydrated();
   const chainId = useRuntime((s) => s.chainId);
@@ -145,13 +146,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!sessionHydrated) return;
     try {
+      // A session with no role must CLEAR the hint, not leave the previous
+      // account's seat in place — a stale `el_role` keeps the edge proxy
+      // guarding this visitor as a role they no longer hold.
       if (session.user?.role) {
         document.cookie = `el_role=${session.user.role}; path=/; max-age=2592000; samesite=lax`;
-      } else if (!session.token) {
+      } else {
         document.cookie = `el_role=; path=/; max-age=0; samesite=lax`;
       }
     } catch { /* noop */ }
-  }, [sessionHydrated, session.user?.role, session.token]);
+  }, [sessionHydrated, session.user?.role]);
   const items = railItems(role, isAdmin, openDisputes, unread, kycNone);
   const mobile = bottomItems(role, openDisputes);
   const railActive = activeHref(pathname, items);
@@ -165,6 +169,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // dashboard banner — so the chip never needs to restate them.
   const roleLine = session.user ? session.user.role : "member";
   const isBackable = pathname !== "/dashboard" && pathname !== "/jobs" && pathname !== "/stake";
+  // `history.back()` on a deep link (a shared project room, a notification, a
+  // pasted URL) walks the visitor straight out of the app into whatever page
+  // was open before this tab. Only offer Back once the router has actually
+  // moved within the app; otherwise the header falls back to the home logo.
+  // State, not a ref: a ref read during render does not re-render on change.
+  const [landedAt] = useState(() => pathname);
+  const [movedInApp, setMovedInApp] = useState(false);
+  useEffect(() => {
+    if (landedAt !== pathname) setMovedInApp(true);
+  }, [landedAt, pathname]);
+  const canGoBack = isBackable && movedInApp;
 
   return (
     <div className="min-h-[100dvh] w-full">
@@ -177,7 +192,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         {role && (
           <div className="px-6 pb-1">
-            <span className="num inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.03] px-2.5 py-1 text-[10.5px] uppercase tracking-[0.14em] text-dim">
+            <span className="num inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.03] px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-dim">
               <StatusDot color="#f43f5e" />
               {role} seat
             </span>
@@ -231,12 +246,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <span className="block text-[11px] leading-tight text-faint">{roleLine}</span>
                   </span>
                 </Link>
-                <Link
-                  href="/onboarding"
-                  className="num mt-0.5 block rounded-lg px-3.5 py-1.5 text-[11px] text-faint transition-colors hover:text-dim"
-                >
-                  Switch seat →
-                </Link>
+                {/* Not a link: the proxy one-way-redirects /onboarding for any
+                    onboarded user and the API locks the role after onboarding
+                    starts, so this route can never change a seat. Disconnecting
+                    from the wallet menu is the only path that can. */}
+                <p className="num mt-0.5 block rounded-lg px-3.5 py-1.5 text-[11px] leading-snug text-faint">
+                  Seat is permanent — disconnect to use another wallet
+                </p>
               </div>
             )}
           </div>
@@ -245,8 +261,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── mobile top bar ───────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-line bg-ink/80 px-4 backdrop-blur-xl lg:hidden">
-        {isBackable ? (
-          <button type="button" onClick={() => history.back()} className="flex items-center gap-1.5 text-sm text-dim" aria-label="Back">
+        {canGoBack ? (
+          <button type="button" onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-dim" aria-label="Back">
             <ArrowLeft className="h-4 w-4" /> <Logo size="sm" withMark={false} />
           </button>
         ) : (
@@ -256,7 +272,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <div className="flex items-center gap-2">
           {role && (
-            <span className="num rounded-full border border-line bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-wider text-dim">
+            <span className="num rounded-full border border-line bg-white/[0.03] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">
               {role}
             </span>
           )}
@@ -297,7 +313,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Icon weight={active ? "fill" : "regular"} className="h-5 w-5" />
               {item.label}
               {item.badge ? (
-                <span className="num absolute right-[22%] top-2.5 rounded-full bg-rose-accent px-1 text-[10px] text-white">
+                <span className="num absolute right-[22%] top-2.5 rounded-full bg-rose-accent px-1 text-[11px] text-white">
                   {item.badge}
                 </span>
               ) : null}

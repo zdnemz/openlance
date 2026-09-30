@@ -19,13 +19,18 @@ export function toWei(value: string | bigint | number | null | undefined): bigin
 }
 
 export function formatEth(wei: string | bigint | null | undefined, maxDecimals = 3): string {
-  if (wei === null || wei === undefined) return "—";
+  if (wei === null || wei === undefined || wei === "") return "—";
   try {
     const big = typeof wei === "bigint" ? wei : BigInt(wei);
     const neg = big < 0n;
     const abs = neg ? -big : big;
     const whole = abs / 10n ** 18n;
-    const frac = (abs % 10n ** 18n).toString().padStart(18, "0").slice(0, maxDecimals).replace(/0+$/, "");
+    const tail = (abs % 10n ** 18n).toString().padStart(18, "0");
+    // Truncation used to report a real non-zero amount as a flat "0" — a bid of
+    // 0.0004 ETH read "0 ETH" next to a wallet prompt for 4e14 wei. Anything
+    // that survives only past the displayed precision says so instead.
+    if (tail.slice(maxDecimals).replace(/0+$/, "") !== "") return "<0.001";
+    const frac = tail.slice(0, maxDecimals).replace(/0+$/, "");
     const num = frac ? `${whole}.${frac}` : `${whole}`;
     return neg ? `-${num}` : num;
   } catch {
@@ -42,11 +47,15 @@ export function formatUsdFromEth(eth: string, ethPrice = 3127.4): string {
 
 export function shortAddress(addr: string | null | undefined, size = 4): string {
   if (!addr) return "—";
+  // `slice(-0)` returns the WHOLE string, and a short value would print its own
+  // head twice ("0x12…0x12"). Only elide when both ends actually fit.
+  if (size <= 0 || addr.length <= 2 + size * 2) return addr;
   return `${addr.slice(0, 2 + size)}…${addr.slice(-size)}`;
 }
 
 export function shortHash(hash: string | null | undefined, size = 6): string {
   if (!hash) return "—";
+  if (size <= 0 || hash.length <= 2 + size + 4) return hash;
   return `${hash.slice(0, 2 + size)}…${hash.slice(-4)}`;
 }
 
@@ -54,6 +63,7 @@ export function timeAgo(iso: string | Date | null | undefined): string {
   if (!iso) return "—";
   const then = typeof iso === "string" ? new Date(iso).getTime() : iso.getTime();
   const diff = Date.now() - then;
+  if (!Number.isFinite(diff)) return "—";
   if (diff < 0) return "just now";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
@@ -79,12 +89,18 @@ export function clockTime(iso: string | Date): string {
 
 export function dateLabel(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  // A bad timestamp rendered the literal "Invalid Date" into the page.
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export function timeUntil(iso: string | null | undefined): string {
   if (!iso) return "—";
+  // NaN made every comparison false, so a bad timestamp fell through to
+  // `${NaN}m` — "NaNm" on a countdown the user is meant to trust.
   const diff = new Date(iso).getTime() - Date.now();
+  if (!Number.isFinite(diff)) return "—";
   if (diff <= 0) return "elapsed";
   const hours = Math.floor(diff / 3600000);
   const mins = Math.floor((diff % 3600000) / 60000);
@@ -121,4 +137,22 @@ export const STATE_COLORS: Record<string, string> = {
 
 export function feeOn(amountWei: string, feeBps: number): bigint {
   return (toWei(amountWei) * BigInt(feeBps)) / 10000n;
+}
+
+/**
+ * Ledger-event dot colour — money state semantics, never the rose accent.
+ *
+ * `STATE_COLORS` is keyed by MILESTONE status, not event type; indexing it with
+ * an event name was always `undefined`, so every row fell through to the accent
+ * and the whole on-chain log rendered in the one colour the system reserves for
+ * emphasis. The project room and the dashboard read the same map from here.
+ */
+export function ledgerDotColor(eventType: string): string {
+  if (/Released|Split/i.test(eventType)) return "var(--color-state-released)";
+  if (/Refund/i.test(eventType)) return "var(--color-state-refund)";
+  if (/Dispute|Finalized|Appeal|Tally/i.test(eventType)) return "var(--color-state-disputed)";
+  if (/Fund/i.test(eventType)) return "var(--color-state-funded)";
+  if (/Submitted|Commit/i.test(eventType)) return "var(--color-state-submitted)";
+  if (/Fee/i.test(eventType)) return "var(--color-state-split)";
+  return "var(--color-state-pending)";
 }

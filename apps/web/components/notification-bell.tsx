@@ -86,7 +86,7 @@ function NotifRow({ item, onNavigate }: { item: InboxItem; onNavigate: () => voi
 
 export function NotificationBell({ compact = false }: { compact?: boolean }) {
   const token = useSession((s) => s.token);
-  const { data } = useNotifications();
+  const { data, isLoading } = useNotifications();
   const invalidate = useInvalidate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -134,14 +134,18 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
       >
         <Bell weight={unread > 0 ? "fill" : "regular"} className="h-[17px] w-[17px]" />
         {unread > 0 && (
-          <span className="num absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-accent px-1 text-[10px] font-medium text-white">
+          <span className="num absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-accent px-1 text-[11px] font-medium text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-line bg-ink/95 shadow-2xl backdrop-blur-xl">
+        <div
+          role="dialog"
+          aria-label="Notifications"
+          className="absolute right-0 z-50 mt-2 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-line bg-ink/95 shadow-2xl backdrop-blur-xl"
+        >
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <span className="text-[13px] font-semibold">Notifications</span>
             <Link
@@ -161,6 +165,10 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
                 title="Sign in to see notifications"
                 body="Connect a wallet to receive milestone, dispute and review events."
               />
+            ) : isLoading ? (
+              // Without this the panel flashed "All clear" through every first
+              // fetch — telling a user with unread mail that they have none.
+              <p className="px-4 py-10 text-center text-sm text-faint">Loading your inbox…</p>
             ) : items.length === 0 ? (
               <EmptyState
                 icon={<CheckCircle />}

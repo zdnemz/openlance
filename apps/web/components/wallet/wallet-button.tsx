@@ -153,9 +153,14 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
             <button
               className="flex w-full items-center gap-1.5 text-left hover:text-foreground"
               onClick={() => {
-                void navigator.clipboard?.writeText(address);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1200);
+                // A permission-denied clipboard rejects with no handler, so the
+                // promise escaped unhandled — and the check-mark still appeared,
+                // telling the user the address was copied when it was not.
+                void navigator.clipboard
+                  ?.writeText(address)
+                  .then(() => setCopied(true))
+                  .catch(() => toast.error("Could not copy", { description: "Your browser blocked clipboard access." }))
+                  .finally(() => setTimeout(() => setCopied(false), 1200));
               }}
             >
               {shortAddress(address)}

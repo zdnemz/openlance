@@ -15,6 +15,15 @@ import { useSession } from "@/lib/session";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
 
+/**
+ * Absolute URL of a public API path, for the surfaces that need `fetch`
+ * directly (the backend console reads raw endpoints, streams nothing, and wants
+ * the Response rather than the parsed envelope). Same origin `get`/`post` use.
+ */
+export function apiUrl(path: string): string {
+  return buildUrl(path);
+}
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -47,6 +56,11 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   });
   const json = (await res.json().catch(() => ({}))) as { data?: T; error?: { code: string; message: string; details?: unknown } };
   if (!res.ok || json.error) {
+    // An expired JWT used to leave the whole app rendered as signed-in — rail,
+    // profile, role gates all still there — while every read and write failed
+    // with "Request failed (401)". Drop the dead session so the header offers
+    // Connect again instead of a session that can do nothing.
+    if (res.status === 401) useSession.getState().clear();
     throw new ApiError(res.status, json.error?.code ?? "unknown", json.error?.message ?? `Request failed (${res.status})`, json.error?.details);
   }
   return json.data as T;

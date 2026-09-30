@@ -29,7 +29,7 @@ export default function MyProfilePage() {
         className="mt-16"
         title="Your profile lives behind your key"
         body="Connect a wallet and prove ownership — then this page is yours to edit."
-        action={<Link href="/onboarding" className="text-sm text-rose-bright hover:underline">Go to onboarding</Link>}
+        action={<span className="text-sm text-faint">Use the Connect wallet button in the header.</span>}
       />
     );
   }

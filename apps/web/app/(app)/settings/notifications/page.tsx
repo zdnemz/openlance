@@ -90,9 +90,17 @@ function InboxBand() {
         <div className="space-y-2.5">
           {items.map((item) => <InboxRow key={item.id} item={item} />)}
           {(data?.items.length ?? 0) > 12 && !showAll && (
-            <button type="button" onClick={() => setShowAll(true)} className="w-full rounded-2xl border border-dashed border-line py-2.5 text-[12px] text-faint transition-colors hover:text-dim">
-              Show more
-            </button>
+            /* The inbox is fetched capped, so this reveals the rest of what was
+               loaded. It cannot page further — say so rather than implying it
+               reaches every notification ever. */
+            <div className="pt-1 text-center">
+              <button type="button" onClick={() => setShowAll(true)} className="w-full rounded-2xl border border-dashed border-line py-2.5 text-[12px] text-faint transition-colors hover:text-dim">
+                Show more
+              </button>
+              <p className="num mt-1.5 text-[11px] text-faint">
+                Showing {(data?.items.length ?? 0)} most recent — older events stay in the ledger.
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -117,14 +125,19 @@ function PreferencesBand() {
       await patch("/notifications/preferences", { eventType, muted });
       invalidate.notificationPreferences();
       invalidate.notifications();
-    } catch {
-      toast.error("Could not update preference");
+    } catch (err) {
+      toast.error("Could not update preference", { description: err instanceof Error ? err.message : undefined });
     } finally {
       setBusy(null);
     }
   };
 
   const globalMuted = mutedSet.has("*");
+  // `listPreferences` returns only EXPLICITLY stored rows, and muting everything
+  // writes just the `*` row. Reading each type's own entry therefore showed all
+  // 24 types still "on" while delivery was globally muted — and toggling one
+  // appeared to do nothing, because `*` still won server-side.
+  const isMuted = (t: string) => globalMuted || mutedSet.has(t);
 
   return (
     <section>
@@ -151,9 +164,9 @@ function PreferencesBand() {
                 key={t}
                 label={notifMeta(t).label}
                 hint={t}
-                muted={mutedSet.has(t)}
+                muted={isMuted(t)}
                 busy={busy === t}
-                onToggle={() => toggle(t, !mutedSet.has(t))}
+                onToggle={() => toggle(t, !isMuted(t))}
               />
             ))}
           </div>
@@ -181,7 +194,7 @@ function ToggleRow({ label, hint, muted, busy, onToggle, strong = false }: {
         : <ToggleRight className="h-5 w-5 shrink-0 text-rose-bright" />}
       <span className="min-w-0 flex-1">
         <span className={cn("block truncate text-[13px]", strong ? "font-medium" : "text-dim")}>{label}</span>
-        <span className="block truncate font-mono text-[10.5px] text-faint">{hint}</span>
+        <span className="block truncate font-mono text-[11px] text-faint">{hint}</span>
       </span>
       <span className={cn("shrink-0 text-[11px]", muted ? "text-faint" : "text-state-released")}>{muted ? "muted" : "on"}</span>
     </button>

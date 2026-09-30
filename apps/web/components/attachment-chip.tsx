@@ -21,7 +21,12 @@ export function AttachmentChip({ attachment }: { attachment: { id: string; filen
     setErr(null);
     try {
       const { url } = await get<{ url: string }>(`/attachments/${attachment.id}/url`);
-      window.open(fileUrl(url), "_blank", "noopener");
+      // `window.open` runs AFTER the await, so it is outside the click's
+      // transient user-activation window and a slow round-trip gets the popup
+      // blocked. Nothing was checked, so the click looked like a no-op and the
+      // reason was only ever a `title` — invisible on touch, silent for AT.
+      const win = window.open(fileUrl(url), "_blank", "noopener");
+      if (!win) setErr("Your browser blocked the new tab — allow popups for this site.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not open the file");
     } finally {
@@ -30,17 +35,21 @@ export function AttachmentChip({ attachment }: { attachment: { id: string; filen
   }
 
   return (
-    <button
-      type="button"
-      onClick={open}
-      disabled={busy}
-      title={err ?? attachment.filename}
-      className="inline-flex max-w-[15rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim transition-colors hover:border-line-strong hover:text-foreground disabled:opacity-50"
-    >
-      <Paperclip className="h-3.5 w-3.5 shrink-0 text-faint" weight="bold" />
-      <span className="truncate">{attachment.filename}</span>
-      <span className="num shrink-0 text-faint">{formatBytes(attachment.sizeBytes)}</span>
-    </button>
+    <span className="inline-flex max-w-[15rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim">
+      <button
+        type="button"
+        onClick={open}
+        disabled={busy}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-foreground disabled:opacity-50"
+      >
+        <Paperclip className="h-3.5 w-3.5 shrink-0 text-faint" weight="bold" />
+        <span className="truncate">{attachment.filename}</span>
+        <span className="num shrink-0 text-faint">{formatBytes(attachment.sizeBytes)}</span>
+      </button>
+      {/* role="alert" + visible text: a native `title` is the one place an error
+          can hide completely — no touch, no screen reader, no visual. */}
+      {err && <span role="alert" className="shrink-0 text-[11px] text-destructive">{err}</span>}
+    </span>
   );
 }
 

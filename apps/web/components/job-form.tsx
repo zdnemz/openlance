@@ -66,7 +66,11 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
     if (d.title.trim().length < 4) return setError("Give the job a real title (4+ characters).");
     if (d.description.trim().length < 20) return setError("The brief needs at least 20 characters — describe the work and the acceptance bar.");
     if (category.length < 2) return setError("Pick a category, or type a custom one (2+ characters).");
-    if (!(Number(d.budget) > 0)) return setError("Max budget must be a positive ETH amount.");
+    if (!(Number(d.budget) > 0) || !/^\d{1,18}(\.\d{1,18})?$/.test(d.budget.trim())) {
+      // `Number()` accepted "1e3" and "0x10", which the server's ETH_AMOUNT
+      // rejects — the user got a raw validation error instead of this message.
+      return setError("Max budget must be a positive ETH amount, up to 18 decimals.");
+    }
     setSubmitting(true);
     try {
       const payload = {
@@ -93,10 +97,16 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
   }
 
   return (
-    <div className="glass space-y-6 rounded-3xl p-7 md:p-9">
+    // A <form>, not a <div>: on a five-field form the user tabs to the bottom
+    // and presses Enter expecting to save.
+    <form
+      className="glass space-y-6 rounded-3xl p-7 md:p-9"
+      onSubmit={(e) => { e.preventDefault(); void submit(); }}
+    >
       <div className="space-y-2">
-        <label className="text-[13px] font-medium">Title</label>
+        <label htmlFor="job-title" className="text-[13px] font-medium">Title</label>
         <Input
+          id="job-title"
           value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })}
           placeholder="Invariant fuzz audit for a cross-chain bridge (Foundry)"
           className="h-11 border-line bg-white/[0.03] text-sm"
@@ -104,8 +114,9 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
       </div>
 
       <div className="space-y-2">
-        <label className="text-[13px] font-medium">The brief</label>
+        <label htmlFor="job-brief" className="text-[13px] font-medium">The brief</label>
         <Textarea
+          id="job-brief"
           value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })}
           rows={7}
           placeholder="Context, scope, acceptance criteria, what the reviewer checks when a milestone lands. Markdown-ish paragraphs work well."
@@ -115,11 +126,12 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">Category</label>
+          <span className="text-[13px] font-medium" id="job-category-label">Category</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
+                aria-labelledby="job-category-label"
                 className="flex h-11 w-full items-center justify-between rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
               >
                 <span>{d.category === CUSTOM_CATEGORY ? "Custom…" : d.category}</span>
@@ -147,6 +159,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
           </DropdownMenu>
           {d.category === CUSTOM_CATEGORY && (
             <Input
+              aria-label="Custom category"
               value={d.customCategory} onChange={(e) => setD({ ...d, customCategory: e.target.value })}
               placeholder="e.g. zero-knowledge"
               className="h-11 border-line bg-white/[0.03] text-sm"
@@ -154,14 +167,15 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
           )}
         </div>
         <div className="space-y-2">
-          <label className="text-[13px] font-medium">Max budget (ETH)</label>
-          <Input value={d.budget} onChange={(e) => setD({ ...d, budget: e.target.value })} className="num h-11 border-line bg-white/[0.03] text-sm" />
+          <label htmlFor="job-budget" className="text-[13px] font-medium">Max budget (ETH)</label>
+          {/* inputMode decimal: without it a phone raises the full keyboard for a number. */}
+          <Input id="job-budget" inputMode="decimal" value={d.budget} onChange={(e) => setD({ ...d, budget: e.target.value })} className="num h-11 border-line bg-white/[0.03] text-sm" />
           <p className="text-[12px] text-faint">The ceiling on any bid — and what you lock in escrow to publish. You pay the bid you accept; the rest is withdrawable.</p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-[13px] font-medium">Skills</label>
+        <span className="text-[13px] font-medium" id="job-skills-label">Skills</span>
         <SkillPicker
           value={d.skills}
           onChange={(skills) => setD({ ...d, skills })}
@@ -170,14 +184,16 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
         <p className="text-[12px] text-faint">Up to 15 — presets or your own, comma-free.</p>
       </div>
 
+      {/* role="alert": the only feedback a failed submit produces, and a screen
+          reader has no other way to learn it happened. */}
       {error && (
-        <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+        <p role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
           <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
         </p>
       )}
 
       <Button
-        onClick={submit}
+        type="submit"
         disabled={submitting}
         className="w-full rounded-full bg-rose-accent py-3.5 text-sm font-medium hover:bg-rose-bright"
       >
@@ -191,7 +207,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
         Freelancers shape the milestone breakdown themselves — you review the bids. Nothing moves on-chain until you
         lock the budget to publish.
       </p>
-    </div>
+    </form>
   );
 }
 
@@ -202,8 +218,14 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
   const tokens = skillTokens(value);
 
   function toggle(skill: string) {
-    const next = tokens.includes(skill) ? tokens.filter((t) => t !== skill) : [...tokens, skill];
-    onChange(next.join(", "));
+    if (tokens.includes(skill)) {
+      onChange(tokens.filter((t) => t !== skill).join(", "));
+      return;
+    }
+    // The cap lived only in `addCustom`, so the counter could read "16/15" and
+    // the 16th pick was then silently dropped by the `.slice(0, 15)` on save.
+    if (tokens.length >= 15) return onError("Up to 15 skills — remove one to add another.");
+    onChange([...tokens, skill].join(", "));
   }
 
   function addCustom() {
@@ -264,7 +286,7 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
           {tokens.map((t) => (
             <Chip key={t} className="gap-1.5 py-1 pl-2.5 pr-1.5">
               {t}
-              <button type="button" aria-label={`Remove ${t}`} onClick={() => toggle(t)} className="rounded-full p-0.5 text-faint transition-colors hover:text-foreground">
+              <button type="button" aria-label={`Remove ${t}`} onClick={() => toggle(t)} className="-mr-1 grid size-6 place-items-center rounded-full text-faint transition-colors hover:text-foreground">
                 <X className="h-3 w-3" weight="bold" />
               </button>
             </Chip>

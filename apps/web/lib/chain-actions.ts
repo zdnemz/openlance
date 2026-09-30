@@ -52,11 +52,16 @@ export async function readJobBudget(escrow: string, jobRef: string): Promise<{
  * wei handed back (0n when there was nothing to return, or it did not land) and
  * never throws, so it can never fail an award that already happened. The
  * SurplusPanel button is the manual retry for the declined case.
+ *
+ * `onError` is how the caller learns WHY it got 0n. A bare 0n collapsed "you
+ * rejected the signature" and "there is genuinely nothing there" into the same
+ * message, which sent people to re-check balances instead of retrying.
  */
 export async function returnBudgetSurplus(
   escrow: string,
   jobRef: string,
   chainId?: number,
+  onError?: (message: string) => void,
 ): Promise<bigint> {
   try {
     // Re-read AFTER funding: reserved only equals the bid once the batch mined.
@@ -70,7 +75,9 @@ export async function returnBudgetSurplus(
       expectedChainId: chainId,
     });
     return (await waitForReceipt(hash)).status === "success" ? budget.free : 0n;
-  } catch {
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : "Unknown error";
+    onError?.(/reject|denied/i.test(raw) ? "Request rejected in wallet" : raw);
     return 0n;
   }
 }
@@ -229,19 +236,21 @@ export function useChainAction() {
               value: opts.value,
             });
           } catch (relayErr) {
-            // Session lapsed / relayer hiccup → transparent user-paid fallback.
-            if (!useSponsorship.getState().isActive()) {
-              hash = await sendContractCall({
-                to: address,
-                abi: abi as never,
-                functionName: opts.functionName,
-                args: opts.args,
-                value: opts.value,
-                expectedChainId: chainId,
-              });
-            } else {
-              throw relayErr;
-            }
+            // The local store only knows its own `expiresAt`, so a session the
+            // SERVER revoked still read as "active" here — the fallback branch
+            // below was never taken, and every sponsored action (stake, dispute,
+            // vote) failed with a raw relay error until the user logged out and
+            // back in. Drop the dead session on any relay failure so the NEXT
+            // action takes the user-paid path.
+            useSponsorship.getState().clear();
+            hash = await sendContractCall({
+              to: address,
+              abi: abi as never,
+              functionName: opts.functionName,
+              args: opts.args,
+              value: opts.value,
+              expectedChainId: chainId,
+            });
           }
         } else {
           hash = await sendContractCall({
@@ -257,6 +266,16 @@ export function useChainAction() {
         setPhase("mining");
         const receipt = await waitForReceipt(hash);
         if (receipt.status !== "success") throw new Error("Transaction reverted on-chain");
+        // The receipt poll gave up, not the chain. The tx is live and will
+        // settle; saying "failed" and re-enabling the button is how a user
+        // double-spends. Say it is still pending and keep the hash on screen.
+        if (receipt.pending) {
+          setPhase("done");
+          toast.success("Transaction sent — still pending", {
+            description: `tx ${shortHash(hash)} · not mined yet, this view keeps polling`,
+          });
+          return { ok: true, hash };
+        }
 
         if (opts.projectId && opts.expect) {
           setPhase("indexing");

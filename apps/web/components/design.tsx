@@ -107,10 +107,15 @@ export function Copyable({ text, children, className }: { text: string; children
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        void navigator.clipboard?.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1200);
-        });
+        // `navigator.clipboard` is undefined on an insecure origin, and
+        // permission can be denied — both used to throw/reject with no handler,
+        // and the "copied" tick was shown either way.
+        const write = navigator.clipboard?.writeText(text);
+        if (!write) return;
+        void write
+          .then(() => setCopied(true))
+          .catch(() => {})
+          .finally(() => setTimeout(() => setCopied(false), 1200));
       }}
       className={cn("group inline-flex items-center gap-1.5 transition-colors hover:text-foreground", className)}
       title="Copy"

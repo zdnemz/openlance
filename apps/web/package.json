@@ -16,6 +16,7 @@
     "check:file-url": "tsx scripts/check-file-url.ts",
     "check:funding-refresh": "tsx scripts/check-funding-refresh.ts",
     "check:chain-busy": "tsx scripts/check-chain-busy.ts",
+    "check:dispute-round": "tsx scripts/check-dispute-round.ts",
     "check:provider-error": "tsx scripts/check-provider-error.ts",
     "check:wallet-rpc": "tsx scripts/check-wallet-rpc.ts"
   },

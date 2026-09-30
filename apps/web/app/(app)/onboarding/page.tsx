@@ -284,7 +284,20 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
       </div>
     );
   }
-  if (user.kycStatus === "verified") return null;
+  // The proxy one-way-redirects /onboarding for an onboarded visitor, so this
+  // branch is normally unreachable — but when a stale gate cookie let it render,
+  // it produced an empty bordered card with no message at all.
+  if (user.kycStatus === "verified") {
+    return (
+      <div className="glass rounded-3xl px-6 py-10 text-center">
+        <p className="text-[15px] font-medium">You are verified.</p>
+        <p className="mx-auto mt-2 max-w-[52ch] text-sm leading-relaxed text-faint">
+          Your seat is locked and identity is on file. Use the app to work — or disconnect from the header wallet menu
+          to start again with a different wallet.
+        </p>
+      </div>
+    );
+  }
 
   const nameOk = fullName.trim().length >= 2;
   const countryOk = country.trim().length >= 2;
@@ -384,7 +397,13 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
         )}
 
         <div className="flex items-center justify-between gap-3 pt-1">
-          <span className="num text-[11.5px] text-faint">{complete} of {parts.length} details ready</span>
+          {/* role="status": a screen reader needs to hear the count change as
+              fields are filled. A `title` on a DISABLED button is never
+              focusable and never announced, so the reason went unstated. */}
+          <span role="status" className="num text-[11.5px] text-faint">
+            {complete} of {parts.length} details ready
+            {!canSubmit && !busy && " — fill the rest to continue"}
+          </span>
           <button
             type="button" disabled={!canSubmit} onClick={() => void submit()}
             title={canSubmit ? undefined : "Fill every detail above to continue"}
@@ -406,10 +425,14 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Selecting an option (or Escape) unmounted the focused control and left
+  // focus on <body>, so the next Tab restarted from the top of a long KYC form.
+  const close = () => { setOpen(false); triggerRef.current?.focus(); };
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onDown = (e: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(e.target as Node)) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
@@ -419,6 +442,7 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open}
         onClick={() => { setQuery(""); setOpen((o) => !o); }}
         className="flex h-11 w-full items-center gap-2 rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50 disabled:opacity-60"
@@ -434,20 +458,23 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
             aria-label="Search countries"
             className="w-full border-b border-line bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-faint/60"
           />
-          <ul role="listbox" aria-label="Country" className="max-h-56 overflow-y-auto p-1.5">
+          {/* `role="option"` sat on the inner <button> while the <li> carried no
+              role, so the listbox reported ZERO options and this step was
+              unusable without a mouse. The role belongs on the <li>. */}
+          <ul id="country-listbox" role="listbox" aria-label="Country" className="max-h-56 overflow-y-auto p-1.5">
             {matches.length === 0 && <li className="px-3 py-2.5 text-[12.5px] text-faint">No matches — try another spelling.</li>}
             {matches.map((c) => (
-              <li key={c}>
-                <button
-                  type="button" role="option" aria-selected={c === value}
-                  onClick={() => { onChange(c); setOpen(false); }}
-                  className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-[13px] transition-colors ${
-                    c === value ? "bg-rose-soft text-foreground" : "text-dim hover:bg-white/[0.04] hover:text-foreground"
-                  }`}
-                >
-                  {c}
-                  {c === value && <Check weight="bold" className="h-3.5 w-3.5 shrink-0 text-rose-bright" />}
-                </button>
+              <li
+                key={c}
+                role="option"
+                aria-selected={c === value}
+                onClick={() => { onChange(c); close(); }}
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-[13px] transition-colors ${
+                  c === value ? "bg-rose-soft text-foreground" : "text-dim hover:bg-white/[0.04] hover:text-foreground"
+                }`}
+              >
+                {c}
+                {c === value && <Check weight="bold" className="h-3.5 w-3.5 shrink-0 text-rose-bright" />}
               </li>
             ))}
           </ul>

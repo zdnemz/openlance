@@ -36,6 +36,7 @@ import { useRuntime } from "@/lib/runtime";
 import { useSession } from "@/lib/session";
 import { TIER_NAMES } from "@/lib/roles";
 import { formatEth } from "@/lib/format";
+import { useNow } from "@/lib/dispute-round";
 import { Skeleton } from "@/components/design";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,7 +81,11 @@ function standingOf(state: MyArbiterState, minsToEligible: number, minsToWithdra
   if (state.busy) return { label: `serving ${state.activeDisputes} dispute${state.activeDisputes === 1 ? "" : "s"}`, tone: "var(--color-state-submitted)", icon: "gavel" };
   if (state.locked) return { label: `locked — score ${state.trustScore} < floor ${state.minScoreToWithdraw}`, tone: "var(--color-state-disputed)", icon: "locked" };
   if (state.unstakeRequested) {
-    return { label: minsToWithdraw > 0 ? `unstaking — withdraw in ${fmtDuration(minsToWithdraw * 60)}` : "unstaking — ready to withdraw", tone: "var(--color-state-pending)", icon: "clock" };
+    // `withdrawStake` has NO time gate in ArbiterRegistry.sol (it reverts only
+    // when unregistered / not requested / busy / score below the floor), so a
+    // countdown here sat on a live Withdraw button and told the arbiter to wait
+    // out a cooldown that does not exist on the withdrawal.
+    return { label: "unstaking — withdrawal available now", tone: "var(--color-state-pending)", icon: "clock" };
   }
   if (state.eligible) return { label: "eligible for selection", tone: "var(--color-state-released)", icon: "open" };
   return { label: `eligibility in ${fmtDuration(minsToEligible * 60)}`, tone: "var(--color-state-submitted)", icon: "closed" };
@@ -196,6 +201,10 @@ function RankProgress({ stakeWei, tier, minWei, silverWei, goldWei }: {
 
 export function ArbiterStakeSummary() {
   const { hydrated, address, state, loading } = useStakeContext();
+  // Same frozen-clock fix as the hub: `state.chainNow` is the read timestamp,
+  // so without a tick every countdown here sat frozen at its first value.
+  // Declared above the early returns — hooks cannot be conditional.
+  const wallNow = useNow(1000);
 
   if (!hydrated) {
     return <div className="rounded-3xl border border-line bg-white/[0.012] px-6 py-5 text-[13px] text-faint">Checking your wallet…</div>;
@@ -235,8 +244,9 @@ export function ArbiterStakeSummary() {
     );
   }
 
-  const minsToEligible = state ? Math.max(0, Math.ceil((state.eligibleAt - state.chainNow) / 60)) : 0;
-  const minsToWithdraw = state ? Math.max(0, Math.ceil((state.unstakeReadyAt - state.chainNow) / 60)) : 0;
+  const nowSec = Math.max(state.chainNow, wallNow);
+  const minsToEligible = state ? Math.max(0, Math.ceil((state.eligibleAt - nowSec) / 60)) : 0;
+  const minsToWithdraw = state ? Math.max(0, Math.ceil((state.unstakeReadyAt - nowSec) / 60)) : 0;
   const st = standingOf(state, minsToEligible, minsToWithdraw);
 
   return (
@@ -265,14 +275,14 @@ export function ArbiterStakeSummary() {
       </div>
       <div className="grid grid-cols-2 gap-4 border-t border-line px-6 py-4 sm:grid-cols-3">
         <div>
-          <div className="num text-[10.5px] uppercase tracking-wider text-faint">trust score</div>
+          <div className="num text-[11px] uppercase tracking-wider text-faint">trust score</div>
           <div className={cn("num mt-1 text-lg font-medium", state.locked ? "text-state-disputed" : "text-state-released")}>
             {state.trustScore}
             <span className="ml-1 text-[11px] font-normal text-faint">/ 100</span>
           </div>
         </div>
         <div>
-          <div className="num text-[10.5px] uppercase tracking-wider text-faint">active disputes</div>
+          <div className="num text-[11px] uppercase tracking-wider text-faint">active disputes</div>
           <div className={cn("num mt-1 text-lg font-medium", state.activeDisputes > 0 ? "text-state-submitted" : "text-dim")}>
             {state.activeDisputes}
             <span className="ml-1 text-[11px] font-normal text-faint">serving</span>
@@ -299,6 +309,11 @@ export function ArbiterStakeHub() {
   const [reduceInput, setReduceInput] = useState("");
   const [retrying, setRetrying] = useState(false);
   const active = chain.active;
+  // Above every early return — hooks cannot be conditional. `state.chainNow` is
+  // stamped when the registry is READ and the read has no interval, so without
+  // this tick every clock below froze at page load and "Request unstake" stayed
+  // dead for an arbiter whose cooldown expired with the tab open.
+  const wallNow = useNow(1000);
 
   const stakeWei = ethToWei(stakeInput);
   const topUpWei = ethToWei(topUpInput);
@@ -370,16 +385,15 @@ export function ArbiterStakeHub() {
   const currentTier = state?.tier ?? 0;
 
   // Pending partial exit, validated like the contract (reduceStake reverts
-  // otherwise): positive, strictly partial, remainder above the floor.
+  // otherwise): positive, strictly partial, remainder above the floor. The
+  // busy / locked / cooldown gates are checked further down, next to the values
+  // they read — `reduceStake` reverts on all of them too, and signing one was
+  // exactly what this file's header promises never happens.
   const reduceWei = ethToWei(reduceInput);
   const stakeTotal = toWei(state?.stakeWei);
   const minFloor = toWei(state?.minStakeWei);
   const reduceRemaining = stakeTotal - reduceWei;
   const reduceTier = tierForTotal(reduceRemaining >= 0n ? reduceRemaining : 0n);
-  const reduceInvalid = reduceWei <= 0n ? "Enter an amount above 0."
-    : !minKnown ? "Live registry reads unavailable — check your wallet network."
-    : reduceWei >= stakeTotal ? "To exit fully, request unstake below instead."
-    : reduceRemaining < minFloor ? `Must keep at least ${formatEth(minFloor)} ETH staked.` : null;
 
   if (!hydrated) {
     return (
@@ -429,7 +443,9 @@ export function ArbiterStakeHub() {
   const minScore = state?.minScoreToWithdraw ?? minScoreToWithdraw ?? 0;
   const minStakeDays = state ? Math.max(1, Math.round(state.minStakeDurationSeconds / 86400)) : 0;
   const cooldownDays = state ? Math.max(0, Math.round(state.unstakeCooldownSeconds / 86400)) : 0;
-  const nowSec = state?.chainNow ?? Math.floor(Date.now() / 1000);
+  // `wallNow` is declared at the top of this component (above the early
+  // returns); the read's own timestamp stays as a floor so it never runs back.
+  const nowSec = state?.chainNow !== undefined ? Math.max(state.chainNow, wallNow) : wallNow;
   const minsToEligible = state ? Math.max(0, Math.ceil((state.eligibleAt - nowSec) / 60)) : 0;
   const minsToWithdraw = state ? Math.max(0, Math.ceil((state.unstakeReadyAt - nowSec) / 60)) : 0;
   const registered = Boolean(state?.registered);
@@ -446,6 +462,18 @@ export function ArbiterStakeHub() {
     : 0;
   const requestLocked = registered && secsToRequestable > 0;
   const requestBlocked = exitBlocked || requestLocked;
+  // `reduceStake` reverts on the SAME three gates as `requestUnstake` —
+  // `_isBusy`, `trustScore < minScoreToWithdraw`, and `stakedAt +
+  // unstakeCooldown` — and none were checked, so a serving / locked / cooling
+  // arbiter got a fully enabled modal and signed a guaranteed revert.
+  const reduceInvalid = reduceWei <= 0n ? "Enter an amount above 0."
+    : !minKnown ? "Live registry reads unavailable — check your wallet network."
+    : reduceWei >= stakeTotal ? "To exit fully, request unstake below instead."
+    : reduceRemaining < minFloor ? `Must keep at least ${formatEth(minFloor)} ETH staked.`
+    : busy ? "You are serving a dispute — the contract blocks stake changes until it resolves."
+    : locked ? `Locked: your trust score is below the ${minScore} floor.`
+    : requestLocked ? `The ${cooldownDays}d cooldown applies — request unstake below once it clears.`
+    : null;
   const st = state ? standingOf(state, minsToEligible, minsToWithdraw) : null;
   // isEligible covers stake floor + duration + score + bench; when the clock
   // has passed but stake < min the user is NOT selectable — surface top-up.
@@ -527,7 +555,7 @@ export function ArbiterStakeHub() {
         ) : (
           <dl className="mt-5 space-y-3 text-[13px]">
             <RuleRow label="Minimum stake" value={`${formatEth(minStake)} ETH`} strong />
-            <RuleRow label="Starting trust score" value="100 / 100" />
+            <RuleRow label="Trust score" value="100 / 100 on a first badge" hint="a returning wallet keeps the score it earned" />
             <RuleRow label="Selectable after" value={`${minStakeDays}d continuous`} />
             <RuleRow label="Lock floor" value={`${minScore} / 100`} hint="below this the stake locks" />
             <RuleRow label="Zero score" value="full slash" hint="stake → treasury" accent />
@@ -651,8 +679,8 @@ export function ArbiterStakeHub() {
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
                     Withdrawing returns your collateral and removes you from the roster — your soulbound badge stays
-                    as history. Re-joining mints a <span className="num">fresh</span> badge and restarts the{" "}
-                    {minStakeDays}d eligibility clock.
+                    as history. Re-joining reuses that badge and the trust score you earned (it only resets for a
+                    wallet that has never been registered), and restarts the {minStakeDays}d eligibility clock.
                   </span>
                 </p>
               </div>
@@ -918,8 +946,8 @@ export function ArbiterStakeHub() {
                 <span className="num text-dim">immediate</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-faint">Starting trust score</span>
-                <span className="num text-state-released">100 / 100</span>
+                <span className="text-faint">Trust score</span>
+                <span className="num text-state-released">100 on a first badge</span>
               </div>
             </div>
 

@@ -3,13 +3,13 @@
 /**
  * OpenLance — Backend Console.
  *
- * The product frontend arrives in a later build phase; this page is the live
- * window into the backend-first deliverable (Next.js route handlers on /api): health,
- * adapter modes, seeded demo project, the on-chain ledger mirror, arbiter
- * trust scores, and the API surface. All requests are same-origin `/api` calls
- * served by this Next.js app's route handlers.
+ * The live window into the backend: health, adapter modes, the seeded demo
+ * project, the on-chain ledger mirror, arbiter trust scores, and the API
+ * surface. The API is a separate Hono service, so every request here is a
+ * cross-origin call to `NEXT_PUBLIC_API_BASE` (`apiUrl`).
  */
 import { useCallback, useEffect, useState } from 'react'
+import { apiUrl } from '@/lib/api'
 import {
   Activity, ArrowUpRight, Blocks, Boxes, Coins, Database, FileText, Gauge, HardDrive,
   Layers, Link2, MessageSquare, Radio, ServerCog, ShieldCheck, Star, Users, Wallet, Zap,
@@ -20,9 +20,13 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-const API_PORT = 3030
-/** Backend now runs in the same Next.js app under /api (same-origin). */
-const GW = (path: string) => `/api/${path.replace(/^\//, '')}`
+/**
+ * The API is a SEPARATE origin (`NEXT_PUBLIC_API_BASE`), not a route handler
+ * inside this app — this file has no `app/api/**` and next.config has no
+ * rewrite, so a same-origin `/api/...` request 404'd on every load and the page
+ * reported "Backend unreachable (HTTP 404)" against a backend that was up.
+ */
+const GW = (path: string) => apiUrl(path)
 
 async function fetchApi(path: string): Promise<Response> {
   return fetch(GW(path), { cache: 'no-store' })
@@ -158,7 +162,9 @@ export default function BackendConsole() {
     return () => clearInterval(id)
   }, [refresh])
 
-  const online = !error && !!data
+  // `loaded` gates it: without it the pill read "API offline" through the whole
+  // first fetch, on every load, against an API that was simply still answering.
+  const online = loaded && !error && !!data
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -176,7 +182,7 @@ export default function BackendConsole() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <StatusPill ok={online} label={online ? 'API online' : 'API offline'} />
+              <StatusPill ok={online} label={!loaded ? 'checking…' : online ? 'API online' : 'API offline'} />
               {data ? (
                 <>
                   <Badge variant="outline" className="font-mono">chain {data.config.chainMode}</Badge>
@@ -203,7 +209,7 @@ export default function BackendConsole() {
           {loaded && error ? (
             <Card className="border-rose-500/30 bg-rose-500/5">
               <CardContent className="p-4 text-sm text-rose-700 dark:text-rose-400">
-                Backend unreachable ({error}). Start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">bun run dev</code> and ensure <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">DATABASE_URL</code> is set, then this console refreshes automatically.
+                API unreachable ({error}). The API is a separate service — start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">pnpm --filter @openlance/api dev</code>, check that <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">NEXT_PUBLIC_API_BASE</code> points at it and that <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">DATABASE_URL</code> is set, then this console refreshes automatically.
               </CardContent>
             </Card>
           ) : null}
@@ -317,7 +323,7 @@ export default function BackendConsole() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-emerald-600" aria-hidden />Arbiter registry <span className="text-muted-foreground font-normal text-sm">(SBT)</span></CardTitle>
-                <CardDescription>ERC-5194 soulbound trust: +1 per resolution within SLA, −2 late. Pure function of history.</CardDescription>
+                <CardDescription>ERC-5194 soulbound trust, 0–100: +5 majority vote, −10 minority, −15 missed deadline, −25 overturned. A pure function of resolution history.</CardDescription>
               </CardHeader>
               <CardContent>
                 {data ? (
@@ -336,7 +342,7 @@ export default function BackendConsole() {
                           </div>
                           <div className="flex flex-col items-end">
                             <span className="text-lg font-semibold tabular-nums leading-none">{a.trustScore}</span>
-                            <span className={`text-[10px] ${a.registered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{a.registered ? 'active' : 'deregistered'}</span>
+                            <span className={`text-[11px] ${a.registered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{a.registered ? 'active' : 'deregistered'}</span>
                           </div>
                         </li>
                       ))}

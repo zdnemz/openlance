@@ -55,6 +55,9 @@ export default function JobsPage() {
         <label className="relative flex-1 basis-64">
           <MagnifyingGlass className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
+            // The <label> wraps the field but holds no text, so it provided no
+            // accessible name at all — the field announced as a bare edit box.
+            aria-label="Search job titles"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search titles…"
@@ -68,11 +71,12 @@ export default function JobsPage() {
               key={c}
               type="button"
               onClick={() => setCategory(c)}
-              className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs transition-all ${press} ${
+              className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs ${press} ${
                 category === c
                   ? "border-rose-accent/40 bg-rose-soft text-rose-bright"
                   : "border-line text-dim hover:border-line-strong hover:text-foreground"
               }`}
+              aria-pressed={category === c}
             >
               {c}
             </button>

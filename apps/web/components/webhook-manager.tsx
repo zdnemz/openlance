@@ -78,7 +78,7 @@ function SubscriptionCard({ sub, onChanged }: { sub: WebhookSubscription; onChan
   const load = async () => {
     const next = !open;
     setOpen(next);
-    if (next && deliveries === null) {
+    if (next) {
       try {
         const res = await get<{ items: WebhookDelivery[]; total: number }>(`/webhooks/${sub.id}/deliveries?limit=50`);
         setDeliveries(res.items);
@@ -93,7 +93,9 @@ function SubscriptionCard({ sub, onChanged }: { sub: WebhookSubscription; onChan
     try {
       await post(`/webhooks/${sub.id}/test`, {});
       toast.success("Test delivery queued", { description: sub.url });
-      if (open) setDeliveries(null);
+      // Invalidate unconditionally: `if (open)` left the log stale forever when a
+      // test was sent from the collapsed card and the user never re-collapsed it.
+      setDeliveries(null);
     } catch (e) {
       toast.error("Test failed", { description: e instanceof Error ? e.message : undefined });
     } finally {
@@ -222,7 +224,9 @@ export function WebhookManager({ subscriptions, loading, reload }: {
   const [creating, setCreating] = useState(false);
 
   const create = async () => {
-    if (!url.trim()) return;
+    // The button honoured `creating`; the input's Enter handler did not, so
+    // Enter-spam fired N concurrent POSTs and left duplicate subscriptions.
+    if (creating || !url.trim()) return;
     setCreating(true);
     try {
       await post("/webhooks", { url: url.trim(), eventTypes: selected });
@@ -246,6 +250,7 @@ export function WebhookManager({ subscriptions, loading, reload }: {
       <div className="rounded-2xl border border-line bg-white/[0.012] p-4">
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
+            aria-label="Webhook endpoint URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && create()}
@@ -263,7 +268,7 @@ export function WebhookManager({ subscriptions, loading, reload }: {
           </button>
         </div>
 
-        <button type="button" onClick={() => setShowScope((v) => !v)} className="mt-2.5 flex items-center gap-1.5 text-[11px] text-faint hover:text-dim">
+        <button type="button" aria-expanded={showScope} onClick={() => setShowScope((v) => !v)} className="mt-2.5 flex items-center gap-1.5 text-[11px] text-faint hover:text-dim">
           <CaretDown className={cn("h-3 w-3 transition-transform", showScope && "rotate-180")} />
           {selected.length === 0 ? "Subscribed to all events" : `${selected.length} event types selected`}
         </button>
@@ -274,6 +279,7 @@ export function WebhookManager({ subscriptions, loading, reload }: {
               <button
                 key={t}
                 type="button"
+                aria-pressed={selected.includes(t)}
                 onClick={() => toggle(t)}
                 className={cn(
                   "rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",
