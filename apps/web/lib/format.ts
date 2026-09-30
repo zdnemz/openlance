@@ -19,6 +19,28 @@ export function toWei(value: string | bigint | number | null | undefined): bigin
 }
 
 /**
+ * Decimal ETH text → wei. The INVERSE of `formatEth`, and the counterpart to the
+ * API's `toWei` (which is `parseEther`).
+ *
+ * `toWei` above parses INTEGER wei and is the wrong function for a typed
+ * amount: `toWei("5")` is 5 wei, not 5 ETH. Reading a milestone input with it
+ * made a 5 ETH bid sum to `0.000000000000000005` — the total the freelancer
+ * reviews, and the total the server is about to charge, were both off by 10^18.
+ *
+ * String arithmetic, never `Number`: a float loses wei precision and rounds
+ * sub-wei input up or down. Unparseable or partial text ("", ".", "abc") is 0n
+ * so this is safe to call on every render of a live input.
+ */
+export function ethToWei(eth: string | null | undefined): bigint {
+  const m = /^(\d*)(?:\.(\d*))?$/.exec((eth ?? "").trim());
+  if (!m) return 0n;
+  // Past 18 decimals is not representable, and the server's ETH_AMOUNT rejects
+  // it — truncate to stay in scale rather than inflate the amount 10x.
+  const frac = (m[2] ?? "").slice(0, 18).padEnd(18, "0");
+  return BigInt(m[1] || "0") * 10n ** 18n + BigInt(frac);
+}
+
+/**
  * Wei → ETH, exactly, with trailing zeros trimmed.
  *
  * This formatter has lied three times, all in the same direction — understating

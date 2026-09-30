@@ -35,7 +35,7 @@ import { useArbiterStaking, type MyArbiterState } from "@/lib/register-arbiter";
 import { useRuntime } from "@/lib/runtime";
 import { useSession } from "@/lib/session";
 import { TIER_NAMES } from "@/lib/roles";
-import { formatEth } from "@/lib/format";
+import { formatEth, ethToWei } from "@/lib/format";
 import { useNow } from "@/lib/dispute-round";
 import { Skeleton } from "@/components/design";
 import { Button } from "@/components/ui/button";
@@ -132,13 +132,6 @@ function toWei(v: string | bigint | null | undefined): bigint {
   } catch {
     return 0n;
   }
-}
-
-/** ETH string → wei, rounded to 6dp precision (matches the input UX). */
-function ethToWei(v: string): bigint {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n < 0) return 0n;
-  return BigInt(Math.round(n * 1e6)) * 10n ** 12n;
 }
 
 /** Trust meter: 0..100 with the lock floor marked; the fill carries the status tone. */

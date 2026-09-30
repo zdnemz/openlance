@@ -11,7 +11,7 @@
  * and payout still add up to the printed value.
  */
 import assert from 'node:assert/strict'
-import { formatEth, toWei, feeOn } from '../lib/format.ts'
+import { formatEth, toWei, ethToWei, feeOn } from '../lib/format.ts'
 
 let pass = 0
 let fail = 0
@@ -95,6 +95,39 @@ for (const [amount, bps] of [
 
 // ── negative amounts (a payout can be negative if the fee exceeds it) ───────
 check('a negative amount keeps its sign', formatEth('-1000000000000000') === '-0.001', formatEth('-1000000000000000'))
+
+// ── the reported bug: ETH TEXT must scale, `toWei` must not ─────────────────
+//
+// The propose form summed milestone amounts with `toWei`, which parses INTEGER
+// wei: a 5 ETH bid summed to 5 wei and read "0.000000000000000005 ETH". The
+// figure a freelancer approves is the figure the server charges, so the two must
+// round-trip through one conversion. `ethToWei` is the inverse of `formatEth`.
+check('a 5 ETH bid reads as 5, not 5 wei', ethToWei('5') === 5000000000000000000n, `${ethToWei('5')}`)
+check('a 0.5 ETH bid reads as 0.5', ethToWei('0.5') === 500000000000000000n)
+check('a 0.3 + 0.2 bid sums to the 0.5 ceiling', ethToWei('0.3') + ethToWei('0.2') === ethToWei('0.5'))
+check('18 decimals survive exactly', ethToWei('0.000000000000000001') === 1n)
+check('a 7dp amount is not float-rounded', ethToWei('0.1234567') === 123456700000000000n, `${ethToWei('0.1234567')}`)
+check('a sub-0.001 amount is not hidden', ethToWei('0.0004') === 400000000000000n)
+check('a bid is checked against the ceiling in the same unit',
+  ethToWei('0.6') > ethToWei('0.5') && ethToWei('0.5') >= ethToWei('0.5'))
+// formatEth(ethToWei(x)) === x for any x the server's ETH_AMOUNT accepts that
+// formatEth prints canonically (it trims trailing zeros, so "0.500" → "0.5").
+for (const s of ['0', '1', '5', '0.5', '0.0004', '0.0000125', '12.34567890123456789']) {
+  check(`"${s}" survives the text → wei → text round trip`, formatEth(ethToWei(s)) === s, formatEth(ethToWei(s)))
+}
+// A trailing zero is trimmed on display, but the VALUE is still exact.
+check('trailing zeros are trimmed on read, not lost in value',
+  ethToWei('0.500') === ethToWei('0.5') && formatEth(ethToWei('0.500')) === '0.5')
+check('18 decimals are read exactly', ethToWei('12.345678901234567890') === 12345678901234567890n)
+// A live input runs through this on every render, mid-typing and empty.
+for (const s of ['', '.', 'abc', '-1', '1e3', '0x10', '  ']) {
+  check(`partial/garbage input "${s}" is 0n, not a throw`, ethToWei(s) === 0n)
+}
+// Past 18 decimals the server refuses the amount; truncating keeps it in scale
+// rather than inflating it 10x, which is what a naive `BigInt(frac)` would do.
+check('over-precision input stays in scale', ethToWei('0.0000000000000000001') === 0n)
+// The whole point: the wei parser is NOT this function.
+check('toWei still parses wei and is not the ETH converter', toWei('5') === 5n && ethToWei('5') !== toWei('5'))
 
 // ── the threshold string always parses back to something real ──────────────
 for (const w of ['500000000000000', '2500000000000000', '50000000000000']) {
