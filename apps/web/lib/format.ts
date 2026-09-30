@@ -18,7 +18,29 @@ export function toWei(value: string | bigint | number | null | undefined): bigin
   }
 }
 
-export function formatEth(wei: string | bigint | null | undefined, maxDecimals = 3): string {
+/**
+ * Wei → ETH, exactly, with trailing zeros trimmed.
+ *
+ * This formatter has lied three times, all in the same direction — understating
+ * a real amount:
+ *  1. truncating to a flat "0" (a 0.0004 ETH bid read "0 ETH"),
+ *  2. answering a hardcoded "<0.001" that ignored `maxDecimals`, so a 0.0005 ETH
+ *     milestone showed "<0.001 ETH" for its value, its fee AND its payout, and
+ *  3. scaling the floor to the precision but still losing the value: a
+ *     0.0000125 ETH fee on that milestone read "<0.000001" — twelve times
+ *     smaller than the truth.
+ *
+ * A floor marker cannot be made honest by picking a better precision: any
+ * value that fails to render is somewhere in a range, and a devnet with
+ * sub-0.001 milestones and a 250bps fee puts real money down there.
+ *
+ * So there is no floor. Wei is an integer, so every amount is EXACTLY
+ * representable in at most 18 decimals — print all of them and trim the zeros.
+ * The cap only stops a pathological value from producing an unreadable string,
+ * and a value that long is a decimal-precision bug upstream, not a UI concern;
+ * past 12 decimals the scientific form is both shorter and unambiguous.
+ */
+export function formatEth(wei: string | bigint | null | undefined, maxDecimals = 18): string {
   if (wei === null || wei === undefined || wei === "") return "—";
   try {
     const big = typeof wei === "bigint" ? wei : BigInt(wei);
@@ -26,12 +48,15 @@ export function formatEth(wei: string | bigint | null | undefined, maxDecimals =
     const abs = neg ? -big : big;
     const whole = abs / 10n ** 18n;
     const tail = (abs % 10n ** 18n).toString().padStart(18, "0");
-    // Truncation used to report a real non-zero amount as a flat "0" — a bid of
-    // 0.0004 ETH read "0 ETH" next to a wallet prompt for 4e14 wei. Anything
-    // that survives only past the displayed precision says so instead.
-    if (tail.slice(maxDecimals).replace(/0+$/, "") !== "") return "<0.001";
-    const frac = tail.slice(0, maxDecimals).replace(/0+$/, "");
-    const num = frac ? `${whole}.${frac}` : `${whole}`;
+    // 1 wei — nothing can be shorter than this without losing the amount.
+    if (tail === "0".repeat(18)) return neg ? `-${whole}` : `${whole}`;
+    if (maxDecimals < 18) {
+      const kept = tail.slice(0, Math.max(0, maxDecimals)).replace(/0+$/, "");
+      const num = kept ? `${whole}.${kept}` : `${whole}`;
+      return neg ? `-${num}` : num;
+    }
+    const frac = tail.replace(/0+$/, "");
+    const num = `${whole}.${frac}`;
     return neg ? `-${num}` : num;
   } catch {
     return "—";

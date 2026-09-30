@@ -440,7 +440,7 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
         onClick={depositAndPublish}
         className="mt-4 w-full rounded-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
       >
-        {phase === "idle" ? `Lock ${formatEth(budgetWei, 6)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
+        {phase === "idle" ? `Lock ${formatEth(budgetWei)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
       </Button>
     </section>
   );
