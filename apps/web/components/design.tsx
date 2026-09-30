@@ -5,7 +5,7 @@
  */
 import { ComponentProps, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { MILESTONE_LABELS, STATE_COLORS, formatEth, shortAddress, shortHash } from "@/lib/format";
+import { MILESTONE_LABELS, STATE_COLORS, formatEth, formatEthSummary, shortAddress, shortHash } from "@/lib/format";
 import { Check } from "@phosphor-icons/react/dist/csr/Check";
 import { Copy } from "@phosphor-icons/react/dist/csr/Copy";
 
@@ -55,10 +55,16 @@ export function Chip({ children, className, ...rest }: ComponentProps<"span">) {
 
 /* ── Numbers & identity ─────────────────────────────────────────────────── */
 
-export function EthAmount({ wei, className, suffix = true }: { wei: string | bigint | null | undefined; className?: string; suffix?: boolean }) {
+/**
+ * `decimals` caps a LIFETIME TOTAL's precision (default 4) — pass it for sums
+ * like "earned on-chain", which accumulate per-milestone fee dust and otherwise
+ * print all 18 decimals. Omit it and the amount stays exact, which is what a
+ * figure the user signs, sends or adds up has to be.
+ */
+export function EthAmount({ wei, className, suffix = true, decimals }: { wei: string | bigint | null | undefined; className?: string; suffix?: boolean; decimals?: number }) {
   return (
     <span className={cn("num", className)}>
-      {formatEth(wei)}
+      {decimals === undefined ? formatEth(wei) : formatEthSummary(wei, decimals)}
       {suffix && <span className="ml-1 text-[max(0.72em,11px)] text-faint">ETH</span>}
     </span>
   );

@@ -16,7 +16,7 @@ import { AddressAvatar, EmptyState, ArbiterRegistrySkeleton, press } from "@/com
 import { PageHeader } from "@/components/page-header";
 import { RoleGate } from "@/components/role-gate";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
-import { shortAddress, dateLabel, formatEth, timeUntil } from "@/lib/format";
+import { shortAddress, dateLabel, formatEth, formatEthSummary, timeUntil } from "@/lib/format";
 import { TIER_NAMES, arbiterStanding } from "@/lib/roles";
 import { useRuntime } from "@/lib/runtime";
 import { Button } from "@/components/ui/button";
@@ -186,7 +186,7 @@ export default function ArbitersPage() {
                     </span>
                     <span className="px-3 text-left md:px-6">
                       <span className="num block text-lg font-medium leading-none text-rose-bright">
-                        {formatEth(a.totalEarnedWei)}
+                        {formatEthSummary(a.totalEarnedWei)}
                       </span>
                       <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">earned</span>
                     </span>

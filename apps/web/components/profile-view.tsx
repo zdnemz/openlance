@@ -55,13 +55,13 @@ type Stat = { label: string; value: React.ReactNode; tone?: string };
 function statsFor(user: PublicUser, arbiter: ArbiterView | undefined): Stat[] {
   if (user.role === "client") {
     return [
-      { label: "paid via escrow", value: <EthAmount wei={user.stats.totalPaidWei} />, tone: "text-state-submitted" },
+      { label: "paid via escrow", value: <EthAmount wei={user.stats.totalPaidWei} decimals={4} />, tone: "text-state-submitted" },
       { label: "projects completed", value: <span className="num">{user.stats.completedProjectsAsClient}</span> },
     ];
   }
   if (user.role === "freelancer") {
     return [
-      { label: "earned", value: <EthAmount wei={user.stats.totalEarnedWei} />, tone: "text-state-released" },
+      { label: "earned", value: <EthAmount wei={user.stats.totalEarnedWei} decimals={4} />, tone: "text-state-released" },
       { label: "projects completed", value: <span className="num">{user.stats.completedProjectsAsFreelancer}</span> },
     ];
   }

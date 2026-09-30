@@ -154,14 +154,14 @@ export default function DashboardPage() {
         <ArbiterStats open={openDisputes.length} settled={settledDisputes.length} serving={active.length} />
       ) : role === "freelancer" ? (
         <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
-          <Stat label="earned on-chain" value={<EthAmount wei={me.stats.totalEarnedWei} className="text-rose-bright" />} icon={<TrendUp className="h-4 w-4 text-rose-bright" />} />
+          <Stat label="earned on-chain" value={<EthAmount wei={me.stats.totalEarnedWei} decimals={4} className="text-rose-bright" />} icon={<TrendUp className="h-4 w-4 text-rose-bright" />} />
           <Stat label="projects in flight" value={<span className="num">{active.length}</span>} sub={`${done.length} completed`} />
           <Stat label="open disputes" value={<span className="num">{openDisputes.length}</span>} icon={openDisputes.length ? <Gavel className="h-4 w-4 text-state-disputed" /> : undefined} />
           <Stat label="open jobs" value={<span className="num">{openJobs.length}</span>} sub="to propose on" />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
-          <Stat label="paid through escrow" value={<EthAmount wei={me.stats.totalPaidWei} className="text-rose-bright" />} icon={<TrendDown className="h-4 w-4 text-rose-bright" />} />
+          <Stat label="paid through escrow" value={<EthAmount wei={me.stats.totalPaidWei} decimals={4} className="text-rose-bright" />} icon={<TrendDown className="h-4 w-4 text-rose-bright" />} />
           <Stat label="projects in flight" value={<span className="num">{active.length}</span>} sub={`${done.length} completed`} />
           <Stat label="your open jobs" value={<span className="num">{myJobs.length}</span>} sub={`${openJobs.length} open market-wide`} />
           <Stat label="open disputes" value={<span className="num">{openDisputes.length}</span>} icon={openDisputes.length ? <Gavel className="h-4 w-4 text-state-disputed" /> : undefined} />

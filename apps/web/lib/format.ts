@@ -85,6 +85,45 @@ export function formatEth(wei: string | bigint | null | undefined, maxDecimals =
   }
 }
 
+/**
+ * Wei → ETH for a LIFETIME TOTAL, rounded to `decimals` (default 4).
+ *
+ * `formatEth` prints all 18 decimals because an amount you sign, send or check
+ * must be exact. A total is not that: it is the sum of every settled milestone
+ * for a user, and each one is `amount - floor(amount * feeBps / 10000)`. The
+ * per-milestone integer division leaves sub-wei dust, and the sum of those is
+ * what made a real balance read `0.448500000000000009 ETH` — an amount nobody
+ * can act on, and a stat tile is the one place a rounded figure is honest.
+ *
+ * Two rules keep this from reintroducing the lie `formatEth` was rebuilt to
+ * stop committing:
+ *   - it ROUNDS (half-up, away from zero), never truncates, so a total is
+ *     never quietly smaller than what the user earned;
+ *   - a non-zero amount never rounds to `0` — a user who earned 0.00004 ETH is
+ *     told so exactly, rather than shown a flat `0`.
+ *
+ * Trailing zeros are still trimmed by `formatEth`, so `0.4485` stays 4dp and
+ * `12.7` stays 1dp: the cap is a maximum, not padding.
+ */
+export function formatEthSummary(wei: string | bigint | null | undefined, decimals = 4): string {
+  if (wei === null || wei === undefined || wei === "") return "—";
+  // NOT `toWei`, which collapses anything unparseable to 0n — a total that failed
+  // to read would then render as a confident "0" earned. "—" means unknown and
+  // "0" means nothing; this keeps that distinction, as `formatEth` does.
+  let big: bigint;
+  try {
+    big = typeof wei === "bigint" ? wei : BigInt(wei);
+  } catch {
+    return "—";
+  }
+  if (big === 0n) return "0";
+  const step = 10n ** BigInt(18 - Math.max(0, Math.min(17, decimals)));
+  const neg = big < 0n;
+  const abs = neg ? -big : big;
+  const rounded = ((abs + step / 2n) / step) * step;
+  return formatEth((neg ? -rounded : rounded) || abs);
+}
+
 export function formatUsdFromEth(eth: string, ethPrice = 3127.4): string {
   const n = Number(eth);
   if (!Number.isFinite(n)) return "—";

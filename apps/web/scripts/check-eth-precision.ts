@@ -11,7 +11,7 @@
  * and payout still add up to the printed value.
  */
 import assert from 'node:assert/strict'
-import { formatEth, toWei, ethToWei, feeOn } from '../lib/format.ts'
+import { formatEth, formatEthSummary, toWei, ethToWei, feeOn } from '../lib/format.ts'
 
 let pass = 0
 let fail = 0
@@ -138,6 +138,52 @@ for (const w of ['500000000000000', '2500000000000000', '50000000000000']) {
     check(`the placeholder "${s}" is never fed to a wei parser`, threw === false)
   }
 }
+
+// ── lifetime totals: dust is real, 18 decimals is not readable ──────────────
+//
+// `totalEarnedWei` sums every settled milestone, and each is
+// `amount - floor(amount * feeBps / 10000)`. That integer division leaves
+// sub-wei dust, so a real balance summed to `0.448500000000000009 ETH` on a
+// dashboard stat tile — a number nobody can act on. Totals round; amounts the
+// user signs, sends or adds up do not.
+
+check('the reported total reads as 0.4485, not 0.448500000000000009',
+  formatEthSummary('448500000000000009') === '0.4485', formatEthSummary('448500000000000009'))
+check('and the exact figure is still one call away',
+  formatEth('448500000000000009') === '0.448500000000000009', formatEth('448500000000000009'))
+
+// A total is never quietly SMALLER than what was earned — it rounds, never
+// truncates. Truncation is the lie this file was rebuilt to stop committing.
+check('a total rounds up, it does not truncate',
+  formatEthSummary('1999950000000000000') === '2', formatEthSummary('1999950000000000000'))
+check('a total whose 5th decimal is 0 is left alone',
+  formatEthSummary('1999000000000000000') === '1.999', formatEthSummary('1999000000000000000'))
+check('0.0025 at 3dp rounds to 0.003, where the truncating cap gave 0.002',
+  formatEthSummary('2500000000000000', 3) === '0.003', formatEthSummary('2500000000000000', 3))
+// ...but the truncating `maxDecimals` on formatEth is untouched: a check above
+// pins it, and callers that opted into it still mean it.
+check('the truncating cap on formatEth is unchanged', formatEth('2500000000000000', 3) === '0.002')
+
+// A real amount must never round to a flat 0. This is the one case where the
+// total is printed exactly instead of rounded.
+check('a tiny real total is not rounded away to 0',
+  formatEthSummary('40000000000000') === '0.00004', formatEthSummary('40000000000000'))
+check('1 wei is still shown, not rounded to 0',
+  formatEthSummary('1') === '0.000000000000000001', formatEthSummary('1'))
+check('a value that rounds to zero keeps its exact digits',
+  formatEthSummary('40000000000000', 3) === '0.00004', formatEthSummary('40000000000000', 3))
+
+// The cap is a maximum, not padding — a round total stays round.
+check('a round total is not padded to the cap', formatEthSummary('1270000000000000000') === '1.27', formatEthSummary('1270000000000000000'))
+check('a whole total prints no decimals', formatEthSummary('2000000000000000000') === '2')
+check('3dp is honoured when asked for', formatEthSummary('1234000000000000000', 3) === '1.234', formatEthSummary('1234000000000000000', 3))
+
+// Same contract as formatEth on the edges: missing is an em dash, zero is 0.
+check('an absent total is an em dash', formatEthSummary(null) === '—' && formatEthSummary(undefined) === '—' && formatEthSummary('') === '—')
+check('a zero total reads as 0', formatEthSummary('0') === '0')
+check('garbage is an em dash, not NaN', formatEthSummary('not-a-number') === '—')
+check('a negative total keeps its sign and rounds away from zero',
+  formatEthSummary('-1236000000000000000') === '-1.236', formatEthSummary('-1236000000000000000'))
 
 console.log(`\n${fail ? 'FAIL' : 'PASS'} — ${pass} ok, ${fail} failed`)
 process.exit(fail ? 1 : 0)

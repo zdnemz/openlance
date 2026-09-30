@@ -21,7 +21,7 @@ import {
 import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
 import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
 import { ArrowSquareOut } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { formatEth, shortAddress } from "@/lib/format";
+import { formatEth, formatEthSummary, shortAddress } from "@/lib/format";
 import { TIER_NAMES } from "@/lib/roles";
 import type { ArbiterView } from "@/lib/types";
 
@@ -140,8 +140,10 @@ export function ArbiterDetailDialog({
                 <div className="mt-5 grid grid-cols-2 gap-3">
                   <Stat label="trust score" value={String(arbiter.trustScore)} accent={arbiter.trustScore > 0} />
                   <Stat label="tier" value={(TIER_NAMES[arbiter.tier ?? 0] ?? "unstaked").toLowerCase()} />
+                  {/* stake is a live balance and stays exact; earned is a lifetime
+                      sum over settled disputes, so it carries fee dust. */}
                   <Stat label="stake" value={`${formatEth(arbiter.stakeWei)} ETH`} />
-                  <Stat label="earned" value={`${formatEth(arbiter.totalEarnedWei)} ETH`} />
+                  <Stat label="earned" value={`${formatEthSummary(arbiter.totalEarnedWei)} ETH`} />
                   <Stat label="resolved" value={String(arbiter.resolutions)} />
                   <Stat label="standing" value={standingLabel(arbiter, minStakeWei)} />
                 </div>
