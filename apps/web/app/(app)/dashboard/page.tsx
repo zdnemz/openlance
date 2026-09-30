@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useProjects, useJobs, useDisputes, useProject, useJob, useLedger, useArbiters } from "@/lib/queries";
-import { useSession } from "@/lib/session";
+import { useSession, useSessionHydrated } from "@/lib/session";
 import { EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText, InlineLoading, press } from "@/components/design";
 import { PageHeader } from "@/components/page-header";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
@@ -44,6 +44,12 @@ const HEAD: Record<string, { title: string; desc: string; cta: { href: string; l
 
 export default function DashboardPage() {
   const session = useSession();
+  // The persisted session is null during SSR and the first client render, then
+  // flips in. Without this gate the page painted the signed-out EmptyState on
+  // the server, then swapped to the whole dashboard after hydration — and every
+  // seat-conditional section (the client's drafts above all) was decided against
+  // a session that did not exist yet. Same gate `profile/me` already uses.
+  const sessionHydrated = useSessionHydrated();
   const router = useRouter();
   const { data: projects, isLoading } = useProjects();
   const { data: allJobs } = useJobs();
@@ -66,6 +72,25 @@ export default function DashboardPage() {
       router.replace("/onboarding");
     }
   }, [session.token, session.user, router]);
+
+  // Hold a stable shape until the session has actually rehydrated. Rendering
+  // the signed-out card first and then the whole dashboard is a visible swap,
+  // and it made every seat-conditional section (drafts, stake, disputes) depend
+  // on a session that did not exist yet.
+  if (!sessionHydrated) {
+    return (
+      <div className="space-y-10" aria-busy="true">
+        <Skeleton className="h-14 w-2/3" />
+        <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
+          <Skeleton className="h-12 w-24" />
+          <Skeleton className="h-12 w-24" />
+          <Skeleton className="h-12 w-24" />
+          <Skeleton className="h-12 w-24" />
+        </div>
+        <Skeleton className="h-48 rounded-3xl" />
+      </div>
+    );
+  }
 
   if (!session.token || !session.user) {
     return (

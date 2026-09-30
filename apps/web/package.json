@@ -18,6 +18,7 @@
     "check:chain-busy": "tsx scripts/check-chain-busy.ts",
     "check:dispute-round": "tsx scripts/check-dispute-round.ts",
     "check:eth-precision": "tsx scripts/check-eth-precision.ts",
+    "check:dashboard-drafts": "tsx scripts/check-dashboard-drafts.tsx",
     "check:provider-error": "tsx scripts/check-provider-error.ts",
     "check:wallet-rpc": "tsx scripts/check-wallet-rpc.ts"
   },

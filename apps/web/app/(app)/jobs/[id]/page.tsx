@@ -15,7 +15,7 @@ import { AttachmentChip } from "@/components/attachment-chip";
 import { AttachmentPicker } from "@/components/attachment-picker";
 import { JobForm, CATEGORIES, CUSTOM_CATEGORY, type JobDraft } from "@/components/job-form";
 import type { JobView } from "@/lib/types";
-import { formatEth, timeAgo, toWei } from "@/lib/format";
+import { formatEth, timeAgo, toWei, ethToWei } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
 import { sendContractCall, waitForReceipt } from "@/lib/wallet";
 import { describeFundingRevert, readJobBudget, returnBudgetSurplus } from "@/lib/chain-actions";
@@ -236,7 +236,10 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
           {isPoster && job.status === "draft" && (
             <DepositPanel jobId={id} jobRef={job.jobRef} budgetWei={job.budget.maxWei} />
           )}
-          {isPoster && job.status !== "draft" && <SurplusPanel jobId={id} jobRef={job.jobRef} />}
+          {/* Every status, draft included: withdrawing a published job's budget
+              sends it back to draft, and a partial withdrawal leaves the rest
+              locked with no other way to reach it. The panel self-hides at zero. */}
+          {isPoster && <SurplusPanel jobId={id} jobRef={job.jobRef} />}
           {isPoster ? (
             <section>
               {/* Gated on the query: `proposals?.length ?? 0` printed "0" and
@@ -537,10 +540,11 @@ function ProposeForm({ jobId }: { jobId: string }) {
   const [error, setError] = useState<string | null>(null);
   const showForm = !mine || open || dismissedMine;
 
-  // The server charges `Σ toWei(amount)` exactly; a `Number` sum rounded the
+  // The server charges `Σ parseEther(amount)` exactly; a `Number` sum rounded the
   // freelancer's own approval surface away from that amount in both directions
-  // (0.0004 showed "0.000 ETH", 0.0015 showed "0.002 ETH").
-  const totalWei = milestones.reduce((acc, m) => acc + toWei(m.amount), 0n);
+  // (0.0004 showed "0.000 ETH", 0.0015 showed "0.002 ETH"). `ethToWei`, not the
+  // `toWei` wei parser — that read "5" as 5 wei and showed 5 ETH as 5e-18.
+  const totalWei = milestones.reduce((acc, m) => acc + ethToWei(m.amount), 0n);
   const ceilingWei = toWei(job?.budget.maxWei);
   const overCeiling = ceilingWei > 0n && totalWei > ceilingWei;
 
