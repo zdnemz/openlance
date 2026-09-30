@@ -16,7 +16,7 @@ import { EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText, In
 import { PageHeader } from "@/components/page-header";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
 import { SpotCard } from "@/components/motion";
-import { STATE_COLORS, timeAgo, toWei, ledgerDotColor } from "@/lib/format";
+import { STATE_COLORS, timeAgo, toWei, formatEth, ledgerDotColor } from "@/lib/format";
 import type { DisputeView, JobView } from "@/lib/types";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Briefcase } from "@phosphor-icons/react/dist/csr/Briefcase";
@@ -47,6 +47,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: projects, isLoading } = useProjects();
   const { data: allJobs } = useJobs();
+  // `GET /api/jobs` defaults to `status = 'open'` (the marketplace is open work
+  // only), so the unfiltered list above can never contain a draft — a client's
+  // unpublished postings were invisible on their own home. Drafts are
+  // poster-scoped server-side, so this only ever returns the caller's own.
+  const isClient = !!session.token && session.user?.role === "client";
+  const { data: draftJobs } = useJobs({ status: "draft" }, isClient);
   const { data: disputes } = useDisputes();
   const { data: ledger } = useLedger({ limit: "8" });
   const { data: arbiters, isLoading: arbitersLoading } = useArbiters();
@@ -77,6 +83,9 @@ export default function DashboardPage() {
   const head = HEAD[role] ?? HEAD.client;
   const myJobs = (allJobs?.items ?? []).filter((j) => j.poster?.id === me.id);
   const openJobs = (allJobs?.items ?? []).filter((j) => j.status === "open");
+  // Drafts live in their own query — see above. The API already orders by
+  // `desc(createdAt)`, newest first.
+  const drafts = draftJobs?.items ?? [];
   const active = (projects ?? []).filter((p) => p.status === "active");
   const done = (projects ?? []).filter((p) => p.status === "completed");
   const openDisputes = (disputes ?? []).filter((d) => d.status !== "resolved");
@@ -135,6 +144,36 @@ export default function DashboardPage() {
       )}
 
       {role === "arbiter" && <ArbiterStakeSummary />}
+
+      {/* Unpublished drafts. A draft is the client's next action — it needs a
+          budget lock to go live — so it leads, above everything else. */}
+      {role === "client" && drafts.length > 0 && (
+        <section>
+          <div className="flex items-baseline justify-between">
+            <ListHead>Drafts</ListHead>
+            <span className="num text-[11px] text-faint">
+              {drafts.length} unpublished · lock the budget to publish
+            </span>
+          </div>
+          <div className="mt-5 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-amber-400/25 bg-amber-400/[0.04]">
+            {drafts.map((j) => (
+              <Link
+                key={j.id}
+                href={`/jobs/${j.id}`}
+                className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 transition-colors hover:bg-white/[0.035]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[14px] font-medium">{j.title}</span>
+                  <span className="num mt-0.5 block text-[11px] text-faint">saved {timeAgo(j.createdAt)}</span>
+                </span>
+                <span className="num shrink-0 text-[12px] text-amber-300">
+                  {formatEth(j.budget.maxWei)} ETH to publish →
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* active projects */}
       <section>

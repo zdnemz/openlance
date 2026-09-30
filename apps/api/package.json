@@ -22,6 +22,7 @@
     "check:relay-reverts": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-relay-reverts.ts",
     "check:arbiter-eligibility": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-arbiter-eligibility.ts",
     "check:generation": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-chain-generation.ts",
+    "check:proposal-resubmit": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-proposal-resubmit.ts",
     "check:sponsored-value": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-sponsored-value.ts",
     "verify:notifications": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/verify-notifications.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",

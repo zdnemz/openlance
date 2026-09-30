@@ -506,7 +506,16 @@ function ProposeForm({ jobId }: { jobId: string }) {
   // The server's ceiling, not a local copy — the API refuses past it.
   const { storage } = useRuntime();
   const maxAttachments = storage?.maxAttachments ?? 3;
-  const mine = myProposals?.find((p) => p.freelancerId === session.user?.id && p.status !== "withdrawn");
+  // Mirrors the API's partial unique index: only a LIVE proposal (submitted or
+  // accepted) occupies the freelancer's one slot. Withdrawn and rejected are
+  // history, so they must not hide the form — filtering them out is what used to
+  // offer a fresh bid on a job where the resubmit was guaranteed to 409.
+  const mine = myProposals?.find(
+    (p) => p.freelancerId === session.user?.id && (p.status === "submitted" || p.status === "accepted"),
+  );
+  const myWithdrawn = myProposals?.find(
+    (p) => p.freelancerId === session.user?.id && p.status === "withdrawn",
+  );
   const invalidate = useInvalidate();
 
   const [coverNote, setCoverNote] = useState("");
@@ -519,11 +528,14 @@ function ProposeForm({ jobId }: { jobId: string }) {
   // form, whose own hint says "one proposal per freelancer", and submitting it
   // 409'd. Derive it from the query instead of seeding from it.
   const [dismissedMine, setDismissedMine] = useState(false);
+  // `open` is the "I want to replace my live bid" escape hatch, toggled from the
+  // summary card. A WITHDRAWN bid does not close the form: its slot is free, so
+  // the form is the primary surface and the summary sits above it.
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const showForm = open || !mine || dismissedMine;
+  const showForm = !mine || open || dismissedMine;
 
   // The server charges `Σ toWei(amount)` exactly; a `Number` sum rounded the
   // freelancer's own approval surface away from that amount in both directions
@@ -585,6 +597,40 @@ function ProposeForm({ jobId }: { jobId: string }) {
             </div>
           )}
         </div>
+      </section>
+    );
+  }
+
+  // A withdrawn bid is history, not a live claim. Showing the form on its own
+  // was the trap: it looked like a fresh start while the slot was still taken.
+  // Say what happened, and that the slot is open again.
+  if (myWithdrawn && !mine) {
+    return (
+      <section className="space-y-4">
+        <div className="rounded-3xl border border-line bg-white/[0.012] px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <ListHead>Your withdrawn proposal</ListHead>
+              <p className="mt-1.5 max-w-[58ch] text-[12.5px] leading-relaxed text-faint">
+                You pulled this bid, so it is no longer with the client. Your slot on this job is open again — you can
+                submit a new proposal while the job is still open.
+              </p>
+            </div>
+            <EthAmount wei={myWithdrawn.bidTotalWei} className="text-lg font-medium text-faint line-through" />
+          </div>
+          {myWithdrawn.attachments.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {myWithdrawn.attachments.map((a) => <AttachmentChip key={a.id} attachment={a} />)}
+            </div>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() => setDismissedMine(false)}
+          className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+        >
+          Submit a new proposal
+        </Button>
       </section>
     );
   }

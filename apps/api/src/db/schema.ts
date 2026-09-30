@@ -24,6 +24,14 @@ export const userRole = pgEnum('user_role', ['client', 'freelancer', 'arbiter'])
 export const kycStatus = pgEnum('kyc_status', ['none', 'pending', 'verified', 'rejected'])
 export const jobStatus = pgEnum('job_status', ['draft', 'open', 'in_progress', 'completed', 'cancelled'])
 export const proposalStatus = pgEnum('proposal_status', ['submitted', 'accepted', 'rejected', 'withdrawn'])
+/**
+ * Statuses that occupy a freelancer's one slot on a job (PRD F2).
+ *
+ * Declared here, next to the enum and the index that uses it, so the write-path
+ * guard in `createProposal` cannot drift from the constraint it mirrors —
+ * `check:proposal-resubmit` fails the build if the two lists differ.
+ */
+export const LIVE_PROPOSAL_STATUSES = ['submitted', 'accepted'] as const
 export const projectStatus = pgEnum('project_status', ['active', 'completed', 'cancelled'])
 /** Mirror of the on-chain milestone state machine (PRD F4/F5). */
 export const milestoneChainStatus = pgEnum('milestone_chain_status', [
@@ -169,7 +177,15 @@ export const proposals = pgTable('proposals', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex('proposals_job_freelancer_idx').on(t.jobId, t.freelancerId),
+  // One LIVE proposal per freelancer per job (PRD F2) — but only while it is
+  // live. The index was unconditional, so a freelancer who withdrew their bid
+  // kept occupying the slot forever: the job page then offered the form again
+  // (it filters `status !== "withdrawn"`) and every resubmit 409'd
+  // duplicate_proposal with no way out. `withdrawn` and `rejected` are terminal
+  // — the row is history, and a fresh bid is a new row.
+  uniqueIndex('proposals_job_freelancer_idx')
+    .on(t.jobId, t.freelancerId)
+    .where(sql`${t.status} IN (${sql.join(LIVE_PROPOSAL_STATUSES.map((s) => sql`${s}`), sql`, `)})`),
   // "proposals on this job" and "this freelancer's proposals" are both hot; the
   // unique index only serves the composite, so neither leading lookup was covered.
   index('proposals_job_idx').on(t.jobId),

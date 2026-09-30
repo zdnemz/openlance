@@ -22,6 +22,7 @@ const META: Record<string, NotifMeta> = {
   "proposal.received": { label: "Proposal received", icon: "file", tone: "proposal" },
   "proposal.accepted": { label: "Proposal accepted", icon: "handshake", tone: "proposal" },
   "proposal.rejected": { label: "Proposal rejected", icon: "file", tone: "proposal" },
+  "proposal.withdrawn": { label: "Proposal withdrawn", icon: "file", tone: "proposal" },
   "project.created": { label: "Project created", icon: "bolt", tone: "proposal" },
   "milestone.funded": { label: "Milestone funded", icon: "coins", tone: "money" },
   "submission.received": { label: "Submission received", icon: "file", tone: "money" },

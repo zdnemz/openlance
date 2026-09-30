@@ -3,6 +3,7 @@ export const NOTIFICATION_TYPES = [
   'proposal.received',
   'proposal.accepted',
   'proposal.rejected',
+  'proposal.withdrawn', // freelancer pulled their own bid; frees their slot to re-bid
   'project.created',
   'milestone.funded',
   'submission.received',

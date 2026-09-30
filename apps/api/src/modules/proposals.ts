@@ -15,6 +15,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db/index.ts'
+import { LIVE_PROPOSAL_STATUSES } from '../db/schema.ts'
 import { validate } from '../lib/http.ts'
 import { requireAuth, requireKyc, requireRole } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
@@ -96,10 +97,18 @@ export async function createProposal(request: Request, jobId: string) {
   }
   const db = getDb()
 
-  // One proposal per freelancer per job (PRD F2) — enforced by unique index too.
+  // One LIVE proposal per freelancer per job (PRD F2) — enforced by the partial
+  // unique index, which only covers submitted/accepted. Withdrawn and rejected
+  // are terminal, so a freelancer who pulled their bid may bid again; the guard
+  // below mirrors that index exactly, because a mismatch would turn the real
+  // constraint violation into a 500 instead of a readable 409.
   const existing = await db.select({ id: proposals.id }).from(proposals)
-    .where(and(eq(proposals.jobId, job.id), eq(proposals.freelancerId, user.id))).limit(1)
-  if (existing.length) throw Errors.conflict('duplicate_proposal', 'You already proposed on this job')
+    .where(and(
+      eq(proposals.jobId, job.id),
+      eq(proposals.freelancerId, user.id),
+      inArray(proposals.status, [...LIVE_PROPOSAL_STATUSES]),
+    )).limit(1)
+  if (existing.length) throw Errors.conflict('duplicate_proposal', 'You already have a live proposal on this job')
 
   const [poster] = await db.select({ walletAddress: users.walletAddress }).from(users)
     .where(eq(users.id, job.posterId)).limit(1)
@@ -134,6 +143,14 @@ export async function withdrawProposal(request: Request, proposalId: string) {
   if (p.status !== 'submitted') throw Errors.conflict('proposal_not_withdrawable', `Proposal is ${p.status}`)
   const [updated] = await db.update(proposals).set({ status: 'withdrawn', updatedAt: new Date() })
     .where(eq(proposals.id, p.id)).returning()
+  // Withdrawing frees the freelancer's one slot on this job (the partial unique
+  // index only covers live statuses), so they may bid again while the job is
+  // still open. The row stays as history — it is not deleted.
+  await emitNotification({
+    type: 'proposal.withdrawn',
+    actorAddress: user.walletAddress,
+    payload: { jobId: p.jobId, proposalId: p.id },
+  })
   return proposalView(updated!)
 }
 
