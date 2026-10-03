@@ -322,13 +322,25 @@ describe("ArbiterRegistry — scoring, locking, slashing (via escrow hooks)", ()
     assert.equal(treasuryAfter - treasuryBefore, MIN_STAKE); // collateral slashed to treasury
   });
 
+  it("refuses a re-stake from a slashed wallet (the new stake could never leave)", async function () {
+    const { registry, escrow, arbiters } = await deployWithEoaOwner();
+    const a = arbiters[0]!;
+    await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
+    await withEscrow(escrow, async () => {
+      for (let i = 0; i < 7 && (await registry.read.trustScoreOf([a.account.address])) > 0n; i++) {
+        await registry.write.applyScoreChange([a.account.address, -15n, 3], { account: escrow.address });
+      }
+    });
+    await assert.rejects(registry.write.registerArbiter({ value: MIN_STAKE, account: a.account }), /StakeIsLocked/);
+  });
+
   it("only the escrow can move scores", async function () {
     const { registry, arbiters } = await deployWithEoaOwner();
     const a = arbiters[0]!;
     await registry.write.registerArbiter({ value: MIN_STAKE, account: a.account });
     await assert.rejects(
       registry.write.applyScoreChange([a.account.address, 5n, 1], { account: a.account }),
-      /NotEscrow/,
+      /NotEscrow|0xfc447f62/, // IR codegen: the runner reports the selector, not the name
     );
   });
 

@@ -88,7 +88,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     // ── Admin/ops events ───────────────────────────────────────────────────────
     event EscrowSet(address indexed escrow);
 
-    // ── ERC-5194: Minimal Soulbound NFTs ───────────────────────────────────────
+    // ── ERC-5192: Minimal Soulbound NFTs ───────────────────────────────────────
     event Locked(uint256 indexed tokenId);
     event Unlocked(uint256 indexed tokenId); // never emitted: badges are born locked, forever
 
@@ -566,6 +566,11 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
     function _enroll(address arbiter, uint256 value) private returns (uint256 tokenId) {
         ArbiterInfo storage info = arbiters[arbiter];
         if (info.registered) revert AlreadyRegistered(arbiter);
+        // A returning wallet keeps its score; below the floor its new stake
+        // could never be withdrawn again, so refuse it instead of trapping it.
+        if (info.tokenId != 0 && info.trustScore < minScoreToWithdraw) {
+            revert StakeIsLocked(info.trustScore, minScoreToWithdraw);
+        }
 
         info.registered = true;
         info.stake = value;
@@ -579,6 +584,7 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
             info.tokenId = tokenId;
             info.trustScore = MAX_SCORE;
             _mint(arbiter, tokenId);
+            emit Locked(tokenId);
         } else {
             // ponytail: returning wallet reuses its SBT; trustScore + resolutions stay permanent (0 = perma-banned, still ineligible).
             tokenId = info.tokenId;
@@ -652,6 +658,12 @@ contract ArbiterRegistry is IArbiterRegistry, ERC721Upgradeable, OwnableUpgradea
         emit StakeSlashed(arbiter, treasury, amount);
         emit ArbiterDeregistered(arbiter);
         if (amount > 0) _pay(treasury, amount);
+    }
+
+    /// @dev Soulbound: minting is the only transfer a badge ever makes.
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+        if (_ownerOf(tokenId) != address(0)) revert NonTransferable(tokenId);
+        return super._update(to, tokenId, auth);
     }
 
     /// @dev Push payment — always the last effect (CEI).

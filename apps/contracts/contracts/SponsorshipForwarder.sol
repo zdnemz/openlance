@@ -60,11 +60,10 @@ contract SponsorshipForwarder is EIP712, Nonces, ReentrancyGuard {
         bytes data;
     }
 
-    /// @notice Authoritative record of the sponsorship sessions minted off-chain.
-    ///         The backend derives the same key from the login voucher; writing
-    ///         it here (by the relayer, on first use) lets any caller verify
-    ///         that a session was indeed signed by `owner` with this expiry.
-    mapping(bytes32 => bool) public sessionUsed;
+    /// @dev keccak256(owner, sessionId) => session expiry (0 = not registered).
+    ///      Keyed by owner so a session can only ever authorize its own signer,
+    ///      and nobody can squat another wallet's session id.
+    mapping(bytes32 => uint256) private _sessionExpiry;
 
     /// @notice Emitted when a session voucher is first consumed.
     event SessionRegistered(bytes32 indexed sessionId, address indexed owner, uint256 expiry);
@@ -147,10 +146,20 @@ contract SponsorshipForwarder is EIP712, Nonces, ReentrancyGuard {
         bytes32 digest = sponsorshipSessionDigest(owner, issuedAt, expiry, sessionId);
         if (ECDSA.recover(digest, signature) != owner) revert InvalidRequestSignature();
 
-        if (!sessionUsed[sessionId]) {
-            sessionUsed[sessionId] = true;
+        bytes32 key = _sessionKey(owner, sessionId);
+        if (_sessionExpiry[key] == 0) {
+            _sessionExpiry[key] = expiry;
             emit SessionRegistered(sessionId, owner, expiry);
         }
+    }
+
+    /// @notice Whether `owner` registered `sessionId` (expired or not).
+    function isSessionRegistered(address owner, bytes32 sessionId) external view returns (bool) {
+        return _sessionExpiry[_sessionKey(owner, sessionId)] != 0;
+    }
+
+    function _sessionKey(address owner, bytes32 sessionId) private pure returns (bytes32) {
+        return keccak256(abi.encode(owner, sessionId));
     }
 
     // ── Relayed execution ────────────────────────────────────────────────────
@@ -186,8 +195,9 @@ contract SponsorshipForwarder is EIP712, Nonces, ReentrancyGuard {
         // 3. Enforce the sponsorship session: only a session that was signed by
         //    `req.from` and is still valid may fund this request. The backend
         //    also caches this, but the contract is the authority.
-        if (!sessionUsed[sessionId]) revert InvalidSession(sessionId);
-        // (expiry/owner were validated at registration)
+        uint256 sessionExpiry = _sessionExpiry[_sessionKey(req.from, sessionId)];
+        if (sessionExpiry == 0) revert InvalidSession(sessionId);
+        if (block.timestamp > sessionExpiry) revert SessionExpired(sessionExpiry);
 
         // 4. The caller must supply the funds being forwarded (value) on top of
         //    the gas they already pay. Effects before interaction (CEI).
@@ -197,6 +207,13 @@ contract SponsorshipForwarder is EIP712, Nonces, ReentrancyGuard {
         // 5. ERC-2771 forward: append the real sender as a calldata suffix so the
         //    target's `_msgSender()` recovers `req.from`, not this contract.
         (bool ok, bytes memory ret) = req.to.call{value: req.value, gas: req.gas}(abi.encodePacked(req.data, req.from));
+        // EIP-150: a caller could forward less than `req.gas` and starve the
+        // target's fail-soft staticcalls. Burn the tx if it did (OZ's check).
+        if (gasleft() < req.gas / 63) {
+            assembly {
+                invalid()
+            }
+        }
         if (!ok) {
             emit SponsoredCallFailed(req.to, ret);
             // bubble the target's revert verbatim

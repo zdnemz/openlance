@@ -53,9 +53,9 @@ const FORWARDER_ABI = [
   },
   {
     type: 'function',
-    name: 'sessionUsed',
+    name: 'isSessionRegistered',
     stateMutability: 'view',
-    inputs: [{ name: '', type: 'bytes32' }],
+    inputs: [{ name: 'owner', type: 'address' }, { name: 'sessionId', type: 'bytes32' }],
     outputs: [{ name: '', type: 'bool' }],
   },
   // Without these viem cannot name a single revert this contract raises, so
@@ -110,8 +110,8 @@ export async function submitViaForwarder(args: SubmitArgs): Promise<string> {
   const already = await publicClient.readContract({
     address: forwarder,
     abi: FORWARDER_ABI,
-    functionName: 'sessionUsed',
-    args: [args.sessionId],
+    functionName: 'isSessionRegistered',
+    args: [args.sessionOwner, args.sessionId],
   })
   if (!already) {
     const registerHash = await wallet.writeContract({
