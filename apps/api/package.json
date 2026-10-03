@@ -32,7 +32,8 @@
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
     "db:setup": "pnpm db:migrate",
     "db:flush": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/db-flush.ts",
-    "check:db": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-db-integrity.ts"
+    "check:db": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-db-integrity.ts",
+    "check:sponsorable": "node --experimental-strip-types scripts/check-sponsorable.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",

@@ -94,6 +94,26 @@ export function assertNoSponsoredValue(valueWei: string): void {
   }
 }
 
+/** Ceiling on the gas a sponsored request may ask the relayer to forward. */
+const MAX_SPONSORED_GAS = 1_500_000n
+
+/**
+ * The relayer pays for OpenLance's own contracts and nothing else. It used to
+ * forward any calldata to any address with any gas, so a signed-in wallet
+ * (and wallets are free to make) could spend the relayer's ETH on anything.
+ */
+export function assertSponsorable(to: string, gas: string): void {
+  if (BigInt(gas) > MAX_SPONSORED_GAS) {
+    throw Errors.precondition('sponsored_gas_too_high', `Sponsored actions are capped at ${MAX_SPONSORED_GAS} gas`)
+  }
+  if (env.chainMode !== 'real') return // the mock relay targets nothing real
+  const allowed = [env.ESCROW_ADDRESS, env.ARBITER_REGISTRY_ADDRESS, env.ROLE_REGISTRY_ADDRESS]
+    .filter((a): a is string => !!a).map((a) => a.toLowerCase())
+  if (!allowed.includes(to.toLowerCase())) {
+    throw Errors.precondition('sponsored_target_not_allowed', 'Gasless relaying only covers OpenLance contracts')
+  }
+}
+
 /** Server-generated scoping id for a sponsorship session / login challenge. */
 function newSessionId(): `0x${string}` {
   return `0x${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '')}`.slice(0, 66) as `0x${string}`
@@ -269,6 +289,7 @@ export async function prepareForwardRequest(userId: string, address: string, bod
   const input = parseOrThrow(prepareSchema, body)
   // Refuse before the client is asked to sign anything.
   assertNoSponsoredValue(input.value)
+  assertSponsorable(input.to, input.gas)
 
   const session = await activeSession(userId)
   if (!session) throw Errors.forbidden('No active sponsorship session — sign in again')
@@ -459,6 +480,7 @@ export async function relayForwardRequest(userId: string, address: string, body:
   // The trust boundary: a value-bearing relay would move the relayer's ETH, so
   // it is refused here regardless of what the client signed or how it got here.
   assertNoSponsoredValue(req.value)
+  assertSponsorable(req.to, req.gas)
 
   const db = getDb()
   // Session must exist, be unexpired, and belong to this user.
