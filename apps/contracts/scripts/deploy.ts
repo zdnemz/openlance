@@ -109,6 +109,10 @@ async function main() {
     throw new Error(`Deployer ${deployerAddress} has zero balance — fund it first.`);
   }
 
+  // The indexer starts here: nothing of ours exists below this block, and
+  // scanning a public chain from genesis is millions of empty getLogs calls.
+  const startBlock = await publicClient.getBlockNumber();
+
   // ── 1. TimelockController ─────────────────────────────────────────────────
   const timelock = await viem.deployContract("OpenLanceTimelock", [
     minDelay,
@@ -227,6 +231,7 @@ async function main() {
     forwarder: forwarder.address,
     finalAdmin,
     networkName,
+    startBlock,
   };
 
   if (local) {
@@ -266,6 +271,7 @@ function printSummary(a: {
   timelock: string;
   forwarder: string;
   finalAdmin: string;
+  startBlock: bigint;
   networkName: string;
 }) {
   // Persist the addresses so export-abi.ts and the backend can consume them.
@@ -279,6 +285,7 @@ function printSummary(a: {
         escrow: a.escrow,
         arbiterRegistry: a.registry,
         roleRegistry: a.roleRegistry,
+        startBlock: Number(a.startBlock),
         timelock: a.timelock,
         sponsorshipForwarder: a.forwarder,
         treasury: (process.env.TREASURY ?? a.finalAdmin),
@@ -298,6 +305,7 @@ function printSummary(a: {
   console.log(`ESCROW_ADDRESS=${a.escrow}`);
   console.log(`ARBITER_REGISTRY_ADDRESS=${a.registry}`);
   console.log(`ROLE_REGISTRY_ADDRESS=${a.roleRegistry}`);
+  console.log(`INDEXER_START_BLOCK=${a.startBlock}`);
   console.log(`TIMELOCK_ADDRESS=${a.timelock}`);
   console.log(`SPONSORSHIP_FORWARDER_ADDRESS=${a.forwarder}`);
   console.log(`════════════════════════════════════════════════════════\n`);

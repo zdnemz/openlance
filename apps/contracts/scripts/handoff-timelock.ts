@@ -27,6 +27,8 @@ const TIMELOCK_ABI = [
   { type: "function", name: "CANCELLER_ROLE", stateMutability: "view", inputs: [], outputs: [{ type: "bytes32" }] },
   { type: "function", name: "DEFAULT_ADMIN_ROLE", stateMutability: "view", inputs: [], outputs: [{ type: "bytes32" }] },
   { type: "function", name: "grantRole", stateMutability: "nonpayable", inputs: [{ name: "role", type: "bytes32" }, { name: "account", type: "address" }], outputs: [] },
+  { type: "function", name: "getMinDelay", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "hasRole", stateMutability: "view", inputs: [{ name: "role", type: "bytes32" }, { name: "account", type: "address" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "renounceRole", stateMutability: "nonpayable", inputs: [{ name: "role", type: "bytes32" }, { name: "callerConfirmation", type: "address" }], outputs: [] },
 ] as const;
 
@@ -57,6 +59,24 @@ async function main() {
 
   console.log(`Handoff on ${networkName}: ${deployer.account.address} -> ${finalAdmin}\n`);
 
+  // Renounce only once FINAL_ADMIN demonstrably holds every role: renouncing
+  // first leaves a timelock nobody can operate (fees and upgrades locked).
+  if (renounce) {
+    for (const role of roles) {
+      if (!(await timelock.read.hasRole([role, finalAdmin]))) {
+        throw new Error(`FINAL_ADMIN does not hold ${role.slice(0, 10)}… yet — execute the scheduled grants first`);
+      }
+    }
+    for (const role of roles) {
+      const hash = await timelock.write.renounceRole([role, deployer.account.address], { account: deployer.account });
+      console.log(`  renounced ${role.slice(0, 10)}… (tx ${hash})`);
+    }
+    console.log("\n✓ Deployer roles renounced.");
+    return;
+  }
+
+  // A schedule below minDelay reverts (TimelockInsufficientDelay).
+  const delay = (await timelock.read.getMinDelay()) as bigint;
   for (const role of roles) {
     // Grant the role through the timelock (delay applies).
     const data = encodeFunctionData({
@@ -64,7 +84,7 @@ async function main() {
       functionName: "grantRole",
       args: [role, finalAdmin],
     });
-    await timelock.write.schedule([timelockAddress, 0n, data, zeroHash, zeroHash, 0n], { account: deployer.account });
+    await timelock.write.schedule([timelockAddress, 0n, data, zeroHash, zeroHash, delay], { account: deployer.account });
     console.log(`  scheduled grantRole(${role.slice(0, 10)}…)`);
   }
 
@@ -74,13 +94,6 @@ async function main() {
       `  RENOUNCE_DEPLOYER=1 npx hardhat run scripts/handoff-timelock.ts --network ${networkName}\n`,
   );
 
-  if (renounce) {
-    for (const role of roles) {
-      const hash = await timelock.write.renounceRole([role, deployer.account.address], { account: deployer.account });
-      console.log(`  renounced ${role.slice(0, 10)}… (tx ${hash})`);
-    }
-    console.log("\n✓ Deployer roles renounced.");
-  }
   void hre;
 }
 
