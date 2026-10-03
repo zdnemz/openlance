@@ -25,7 +25,8 @@ const ANVIL_DIR = resolve(ROOT, 'scripts/anvil')
 
 /** Guard: this process is a service, so dev-only side effects must be explicit. */
 function requireDev() {
-  if (process.env.NODE_ENV === 'production') throw Errors.notFound('Route')
+  // Explicit opt-in: an unset NODE_ENV must not expose a process-spawning route.
+  if (process.env.NODE_ENV !== 'development') throw Errors.notFound('Route')
 }
 
 async function status() {

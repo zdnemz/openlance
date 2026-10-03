@@ -23,6 +23,7 @@
  * reconcile is gated on a KV day-marker so a per-minute pinger does not run a
  * full reconciliation 1440 times a day.
  */
+import { timingSafeEqual } from 'node:crypto'
 import { and, eq, lte, or, isNull, asc } from 'drizzle-orm'
 import { env } from '../config.ts'
 import { getDb } from '../db/index.ts'
@@ -117,7 +118,7 @@ export function authorizeCron(request: Request): void {
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
   // Length-check first: timingSafeEqual throws on a length mismatch, and a
   // throw here would answer 500 and tell an attacker the secret's length.
-  if (token.length !== secret.length || token !== secret) {
+  if (token.length !== secret.length || !timingSafeEqual(Buffer.from(token), Buffer.from(secret))) {
     throw Errors.unauthorized('Invalid cron token')
   }
 }

@@ -19,7 +19,7 @@ import type { ProjectMilestone } from '../db/schema.ts'
 
 /** Guard: throw 404 unless the mock chain is active in a non-production env. */
 export function assertDevChainEnabled() {
-  if (env.NODE_ENV === 'production' || env.chainMode !== 'mock') {
+  if (env.NODE_ENV !== 'development' || env.chainMode !== 'mock') {
     throw Errors.notFound('Route')
   }
 }

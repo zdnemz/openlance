@@ -118,7 +118,7 @@ async function recordGeneration(liveAddress: string, lastBlock: number): Promise
  * log loudly and stop indexing until a human says what happened.
  */
 export function canAutoReset(): boolean {
-  return env.NODE_ENV !== 'production'
+  return env.NODE_ENV === 'development'
 }
 
 /**

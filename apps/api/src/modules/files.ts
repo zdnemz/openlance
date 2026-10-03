@@ -20,7 +20,7 @@
  * proposal file is readable by the job's poster (they are reviewing the bid)
  * and the bidding freelancer, and by nobody else.
  */
-import { createHmac, randomUUID } from 'node:crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
@@ -210,7 +210,9 @@ export async function getAttachmentRaw(attachmentId: string, url: URL): Promise<
   // verify HMAC signature
   const exp = Number(url.searchParams.get('exp') ?? 0)
   const sig = url.searchParams.get('sig') ?? ''
-  if (!exp || Date.now() > exp || hmac(`${attachmentId}.${exp}`) !== sig) {
+  const expected = Buffer.from(hmac(`${attachmentId}.${exp}`))
+  const given = Buffer.from(sig)
+  if (!exp || Date.now() > exp || expected.length !== given.length || !timingSafeEqual(expected, given)) {
     throw Errors.unauthorized('Invalid or expired download signature')
   }
   if (storageConfig().driver === 'supabase') throw Errors.badRequest('local_driver_only', 'This route exists only in local storage mode')

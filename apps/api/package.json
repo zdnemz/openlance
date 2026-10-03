@@ -5,8 +5,8 @@
   "type": "module",
   "description": "OpenLance API \u2014 Hono service: auth, escrow orchestration, chain indexer, webhooks",
   "scripts": {
-    "dev": "node --env-file-if-exists=.env.local --watch src/server.ts",
-    "start": "node --env-file-if-exists=.env.local src/server.ts",
+    "dev": "NODE_ENV=development node --env-file-if-exists=.env.local --watch src/serve.ts",
+    "start": "NODE_ENV=production node --env-file-if-exists=.env.local src/serve.ts",
     "build": "tsc --noEmit",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",

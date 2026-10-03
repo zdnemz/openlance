@@ -147,6 +147,12 @@ const schema = z.object({
   INDEXER_POLL_MS: z.coerce.number().int().positive().default(10_000),
   INDEXER_CONFIRMATIONS: z.coerce.number().int().positive().default(5),
   INDEXER_CHUNK_BLOCKS: z.coerce.number().int().positive().default(2000),
+  /**
+   * First block the indexer reads (the deploy block — `deploy.ts` prints it).
+   * Unset on a public chain means scanning from genesis: millions of empty
+   * getLogs calls before the first event of ours.
+   */
+  INDEXER_START_BLOCK: z.coerce.number().int().nonnegative().default(0),
 
   // ── Auth ────────────────────────────────────────────────────────────────
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(12 * 60 * 60),
@@ -191,12 +197,13 @@ const schema = z.object({
 
 const parsed = schema.safeParse(process.env)
 
-// In the Next.js server runtime we must not `process.exit` — fall back to the
-// schema defaults and surface the problem loudly instead.
+// Refuse to boot on an invalid environment. Falling back to the schema
+// defaults (as this once did, for the Next.js runtime) silently swapped a
+// production config for dev defaults — the public JWT secret included.
 if (!parsed.success) {
-  console.error('[config] invalid environment, falling back to defaults:', z.treeifyError(parsed.error))
+  throw new Error(`[config] invalid environment: ${JSON.stringify(z.treeifyError(parsed.error))}`)
 }
-const raw = parsed.success ? parsed.data : schema.parse({})
+const raw = parsed.data
 
 const appUrl = new URL(raw.APP_URI)
 
@@ -231,8 +238,10 @@ if (!sponsorshipEnabled && (raw.RELAYER_PRIVATE_KEY || raw.SPONSORSHIP_FORWARDER
   console.warn('[config] gasless sponsorship needs BOTH RELAYER_PRIVATE_KEY and SPONSORSHIP_FORWARDER_ADDRESS — disabling')
 }
 
-if (raw.NODE_ENV === 'production' && raw.SUPABASE_JWT_SECRET.includes('do-not-use-in-prod')) {
-  console.error('[config] SUPABASE_JWT_SECRET must be set to a real secret in production')
+// Anyone can mint a session for any user with the committed default secret, so
+// only a development process may run on it.
+if (raw.NODE_ENV !== 'development' && raw.SUPABASE_JWT_SECRET.includes('do-not-use-in-prod')) {
+  throw new Error('[config] SUPABASE_JWT_SECRET must be set to a real secret outside development')
 }
 
 export const env = {
