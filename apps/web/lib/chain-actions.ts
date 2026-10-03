@@ -596,3 +596,41 @@ export function claimSeatAction(run: ReturnType<typeof useChainAction>["run"]) {
       successMessage: "Seat claimed on-chain",
     });
 }
+
+const NO_ARBITER = "0x0000000000000000000000000000000000000000";
+
+/** The fixed-size panel the contract hashes: proposal order, zero-padded to 3. */
+export function padPanel(addresses: readonly string[]): [string, string, string] {
+  return [...addresses, NO_ARBITER, NO_ARBITER, NO_ARBITER].slice(0, 3) as [string, string, string];
+}
+
+/**
+ * Propose the dispute panel on-chain. `openDisputeWith` seats only a panel both
+ * parties agreed THERE — the database lock alone used to let the opener pass
+ * any arbiter it liked, its own included.
+ */
+export function proposePanelAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (counterparty: string, panel: readonly string[], projectId?: string) =>
+    run({
+      label: "Propose panel",
+      contract: "escrow",
+      functionName: "proposePanel",
+      args: [counterparty, padPanel(panel)],
+      projectId,
+      successMessage: "Panel proposed on-chain",
+    });
+}
+
+/** Accept the counterparty's proposed panel on-chain (the other half of the lock). */
+export function acceptPanelAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (proposer: string, panel: readonly string[], projectId?: string) =>
+    run({
+      label: "Accept panel",
+      contract: "escrow",
+      functionName: "acceptPanel",
+      args: [proposer, padPanel(panel)],
+      projectId,
+      successMessage: "Panel agreed on-chain",
+    });
+}
+

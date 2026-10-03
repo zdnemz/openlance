@@ -51,6 +51,35 @@ async function isRegisteredOnchain(address: string): Promise<boolean | null> {
   }
 }
 
+/**
+ * Whether the chain holds this exact panel as the pair's agreement. The lock is
+ * only meaningful if `openDisputeWith` will accept it, and that reads
+ * `Escrow.agreedPanel`, never this row. null = no chain to ask (mock / outage).
+ */
+async function panelAgreedOnchain(projectId: string, addresses: string[]): Promise<boolean | null> {
+  if (env.chainMode !== 'real' || !env.ESCROW_ADDRESS || !env.CHAIN_RPC_URL) return null
+  const db = getDb()
+  const project = await loadProject(projectId)
+  const [client] = await db.select().from(users).where(eq(users.id, project.clientId)).limit(1)
+  const [freelancer] = await db.select().from(users).where(eq(users.id, project.freelancerId)).limit(1)
+  if (!client || !freelancer) return null
+  try {
+    const { createPublicClient, http, parseAbi, keccak256, encodeAbiParameters } = await import('viem')
+    const chain = createPublicClient({ transport: http(env.CHAIN_RPC_URL) })
+    const abi = parseAbi(['function pairKey(address,address) pure returns (bytes32)', 'function agreedPanel(bytes32) view returns (bytes32)'])
+    const escrow = env.ESCROW_ADDRESS as `0x${string}`
+    const key = await chain.readContract({ address: escrow, abi, functionName: 'pairKey', args: [client.walletAddress as `0x${string}`, freelancer.walletAddress as `0x${string}`] })
+    const agreed = await chain.readContract({ address: escrow, abi, functionName: 'agreedPanel', args: [key] })
+    const padded = [...addresses, ZERO_ADDRESS, ZERO_ADDRESS, ZERO_ADDRESS].slice(0, MAX_PANEL) as `0x${string}`[]
+    return agreed === keccak256(encodeAbiParameters([{ type: 'address[3]' }], [padded as [`0x${string}`, `0x${string}`, `0x${string}`]]))
+  } catch (err) {
+    log.warn('agreed panel read failed', { err: String(err) })
+    return null
+  }
+}
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
 async function validateNominees(projectId: string, addresses: string[]) {
   const db = getDb()
   const project = await loadProject(projectId)
@@ -97,6 +126,10 @@ export async function approveArbiters(request: Request, projectId: string) {
   if (proposal.proposerId === user.id) throw Errors.conflict('self_approve', 'The other party must approve the proposal')
   // Re-validate at lock time: a nominee may have deregistered since proposal.
   await validateNominees(projectId, proposal.addresses)
+  // The row must not claim a lock the contract would refuse at dispute time.
+  if ((await panelAgreedOnchain(projectId, proposal.addresses)) === false) {
+    throw Errors.conflict('panel_not_agreed_onchain', 'Accept the panel on-chain first — a dispute only seats a panel both wallets agreed there')
+  }
   const now = new Date()
   const db = getDb()
   const [updated] = await db.update(projects)

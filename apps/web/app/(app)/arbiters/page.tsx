@@ -19,6 +19,7 @@ import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
 import { shortAddress, dateLabel, formatEth, formatEthSummary, timeUntil } from "@/lib/format";
 import { TIER_NAMES, arbiterStanding } from "@/lib/roles";
 import { useRuntime } from "@/lib/runtime";
+import { useChainAction, proposePanelAction, acceptPanelAction } from "@/lib/chain-actions";
 import { Button } from "@/components/ui/button";
 import { AddressText, ListHead } from "@/components/design";
 import { toast } from "sonner";
@@ -253,6 +254,7 @@ function ArbiterPicker({
   const { data: projects } = useProjects();
   const invalidate = useInvalidate();
   const [busy, setBusy] = useState(false);
+  const chain = useChainAction();
 
   const seatable = (projects ?? []).filter((p) => {
     const locked = (p.chosenArbiters ?? []) as string[];
@@ -274,6 +276,9 @@ function ArbiterPicker({
     }
     setBusy(true);
     try {
+      // On-chain first: `openDisputeWith` only seats a panel both parties agreed there.
+      const counterparty = project.client.id === session.user?.id ? project.freelancer.walletAddress : project.client.walletAddress;
+      if (!(await proposePanelAction(chain.run)(counterparty, picked, project.id)).ok) return;
       await post(`/projects/${project.id}/arbiters/propose`, { addresses: picked });
       invalidate.projects();
       onChooseProject(project.id);
@@ -289,6 +294,9 @@ function ArbiterPicker({
     if (!project) return;
     setBusy(true);
     try {
+      if (!proposal) return;
+      const proposerWallet = proposal.proposerId === project.client.id ? project.client.walletAddress : project.freelancer.walletAddress;
+      if (!(await acceptPanelAction(chain.run)(proposerWallet, proposal.addresses, project.id)).ok) return;
       await post(`/projects/${project.id}/arbiters/approve`, {});
       invalidate.projects();
       onChooseProject(null);

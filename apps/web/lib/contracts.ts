@@ -22,6 +22,9 @@ export const ESCROW_ABI = [
   // Multi-arbiter dispute lifecycle.
   { type: "function", name: "openDispute", stateMutability: "payable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },
   { type: "function", name: "openDisputeWith", stateMutability: "payable", inputs: [{ name: "milestoneId", type: "uint256" }, { name: "preferred", type: "address[3]" }], outputs: [] },
+  // The panel both parties agree on-chain — openDisputeWith seats only this.
+  { type: "function", name: "proposePanel", stateMutability: "nonpayable", inputs: [{ name: "counterparty", type: "address" }, { name: "panel", type: "address[3]" }], outputs: [] },
+  { type: "function", name: "acceptPanel", stateMutability: "nonpayable", inputs: [{ name: "proposer", type: "address" }, { name: "panel", type: "address[3]" }], outputs: [] },
   { type: "function", name: "commitVote", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }, { name: "round", type: "uint8" }, { name: "commitHash", type: "bytes32" }], outputs: [] },
   { type: "function", name: "revealVote", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }, { name: "round", type: "uint8" }, { name: "outcome", type: "uint8" }, { name: "salt", type: "bytes32" }], outputs: [] },
   { type: "function", name: "resolveDispute", stateMutability: "nonpayable", inputs: [{ name: "milestoneId", type: "uint256" }], outputs: [] },

@@ -21,7 +21,7 @@ import { AttachmentChip } from "@/components/attachment-chip";
 import { AttachmentPicker } from "@/components/attachment-picker";
 import {
   useChainAction, openDisputeAction, commitVoteAction, revealVoteAction, tallyDisputeAction,
-  finalizeDisputeAction, appealDisputeAction, readJobBudget,
+  finalizeDisputeAction, appealDisputeAction, readJobBudget, proposePanelAction, acceptPanelAction,
 } from "@/lib/chain-actions";
 import { computeCommitHash, makeSalt } from "@/lib/dispute-round";
 import { DISPUTE_OUTCOME, MAX_ARBITERS, MIN_ARBITERS, QUORUM, requiredReveals } from "@/lib/contracts";
@@ -216,6 +216,7 @@ function ArbiterPanel({ id }: { id: string }) {
   const invalidate = useInvalidate();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const chain = useChainAction();
 
   if (!project) return null;
   const locked = (project.chosenArbiters ?? []) as string[];
@@ -232,6 +233,9 @@ function ArbiterPanel({ id }: { id: string }) {
     }
     setBusy(true);
     try {
+      // On-chain first: `openDisputeWith` only seats a panel both parties agreed there.
+      const counterparty = project!.client.id === session.user?.id ? project!.freelancer.walletAddress : project!.client.walletAddress;
+      if (!(await proposePanelAction(chain.run)(counterparty, addresses, id)).ok) return;
       await post(`/projects/${id}/arbiters/propose`, { addresses });
       invalidate.project(id);
       setPickerOpen(false);
@@ -246,6 +250,8 @@ function ArbiterPanel({ id }: { id: string }) {
   async function approve() {
     setBusy(true);
     try {
+      const proposerWallet = proposal!.proposerId === project!.client.id ? project!.client.walletAddress : project!.freelancer.walletAddress;
+      if (!(await acceptPanelAction(chain.run)(proposerWallet, proposal!.addresses, id)).ok) return;
       await post(`/projects/${id}/arbiters/approve`, {});
       invalidate.project(id);
       toast.success("Arbiters locked", { description: "They are the panel — nobody outside it is ever asked." });
