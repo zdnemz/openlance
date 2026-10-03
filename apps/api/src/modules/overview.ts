@@ -91,6 +91,9 @@ export function runtimeConfig() {
     contracts: {
       escrow: adapter.escrowAddress,
       arbiterRegistry: adapter.registryAddress,
+      // Null on a deployment with no wallet-owned seat; the client then treats
+      // the DB column as the seat, exactly as it did before RoleRegistry.
+      roleRegistry: env.ROLE_REGISTRY_ADDRESS ?? null,
       timelock: env.TIMELOCK_ADDRESS ?? null,
       // No `vault` key: job budgets are held by the Escrow itself via
       // lockBudget(jobRef), so there is no separate vault contract to report.

@@ -1065,6 +1065,21 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         d.appealCount += 1;
         d.fee = msg.value; // appeal fee becomes the new reward pot
 
+        // Hand the in-flight seat over ATOMICALLY, in the same transaction that
+        // supersedes the round. `_startRound` only ever INCREMENTS a seated
+        // panel's `activeDisputes`, and the two release sites (`_tally`'s
+        // no-quorum branch and `finalizeDispute`) only ever see `d.round` — by
+        // then the appeal round. So an appealed round 0 kept its seat forever:
+        // `activeDisputes[arbiter]` stayed > 0 permanently, the registry's
+        // `_isBusy` read it, and `requestUnstake` / `withdrawStake` /
+        // `reduceStake` reverted `StillHandlingDispute` for the rest of the
+        // arbiter's life — collateral locked by a round that no longer exists.
+        //
+        // Release BEFORE the new panel is seated, so an arbiter re-drawn into
+        // both rounds nets back to exactly 1 (its round-1 seat) instead of
+        // relying on the `> 0` guard to paper over an over-count.
+        _releaseActive(pr.arbiters, pr.arbiterCount);
+
         emit AppealOpened(milestoneId, newRound, appellant, msg.value);
         address[3] memory none; // appeals re-draw fully at random
         _startRound(milestoneId, m, newRound, none);

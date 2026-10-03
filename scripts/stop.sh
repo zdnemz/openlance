@@ -2,7 +2,7 @@
 # Stop every background service this project runs:
 #
 #   anvil :8545  (started by scripts/anvil/dev-real.sh, nohup'd + disowned)
-#   api   :12322 (pnpm dev:api  → node --watch src/server.ts)
+#   api   :12322 (pnpm dev:api  → node --watch src/serve.ts)
 #   web   :12321 (pnpm dev:web  → next dev)
 #
 #   pnpm stop        # or: bash scripts/stop.sh

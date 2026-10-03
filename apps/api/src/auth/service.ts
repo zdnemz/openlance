@@ -1,38 +1,12 @@
 /** /auth domain logic — SIWE nonce + verify + me + logout. */
-import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { getDb } from '../db/index.ts'
 import { Errors } from '../lib/errors.ts'
 import { denySession, signSession, verifySession } from '../lib/jwt.ts'
 import { requireAuth } from './middleware.ts'
 import { issueNonce, verifySiwe } from './siwe.ts'
+import { loadUserByAddress, publicUser } from '../modules/users.ts'
 import { sponsorshipChallenge as getSponsorship, storeSponsorshipSession as storeSponsorship, sponsorshipEnabled, consumeVoucherLoginChallenge, recoverVoucherOwner, voucherSchema } from '../modules/sponsorship.ts'
-import { users } from '../db/schema.ts'
 import { env } from '../config.ts'
-
-/** Public wallet-style profile projection. */
-export function publicUser(u: typeof users.$inferSelect) {
-  return {
-    id: u.id,
-    walletAddress: u.walletAddress,
-    displayName: u.displayName,
-    avatarUrl: u.avatarUrl,
-    bio: u.bio,
-    skills: u.skills,
-    links: u.links,
-    role: u.role,
-    kycStatus: u.kycStatus,
-    kycLevel: u.kycLevel,
-    isAdmin: env.adminWallets.includes(u.walletAddress),
-    stats: {
-      totalEarnedWei: u.totalEarnedWei,
-      totalPaidWei: u.totalPaidWei,
-      completedProjectsAsClient: u.completedProjectsAsClient,
-      completedProjectsAsFreelancer: u.completedProjectsAsFreelancer,
-    },
-    createdAt: u.createdAt,
-  }
-}
 
 export async function getNonce() {
   const { nonce, expiresInSeconds } = await issueNonce()
@@ -60,14 +34,11 @@ export async function verifyLogin(body: unknown) {
   const input = parseLoginBody(siweLoginSchema, body)
   const { address } = await verifySiwe(input.message, input.signature)
 
-  // First sign-in creates the profile — wallet address IS the identity anchor.
-  const db = getDb()
-  let [user] = await db.select().from(users).where(eq(users.walletAddress, address)).limit(1)
-  if (!user) {
-    ;[user] = await db.insert(users).values({ walletAddress: address }).returning()
-  }
-  const session = await signSession({ sub: user!.id, address })
-  return { token: session.token, tokenType: 'Bearer', expiresIn: session.expiresIn, user: publicUser(user!) }
+  // First sign-in creates the profile — wallet address IS the identity anchor —
+  // and the seat comes back from the chain, not from the column default.
+  const user = await loadUserByAddress(address)
+  const session = await signSession({ sub: user.id, address })
+  return { token: session.token, tokenType: 'Bearer', expiresIn: session.expiresIn, user: publicUser(user) }
 }
 
 /**
@@ -84,15 +55,11 @@ export async function verifyVoucherLogin(body: unknown) {
   if (!recovered || recovered.toLowerCase() !== address.toLowerCase()) {
     throw Errors.badRequest('Login voucher signature does not match — request a fresh challenge')
   }
-  const db = getDb()
-  let [user] = await db.select().from(users).where(eq(users.walletAddress, address)).limit(1)
-  if (!user) {
-    ;[user] = await db.insert(users).values({ walletAddress: address }).returning()
-  }
-  const session = await signSession({ sub: user!.id, address })
-  const stored = await storeSponsorship(user!.id, address, input)
+  const user = await loadUserByAddress(address)
+  const session = await signSession({ sub: user.id, address })
+  const stored = await storeSponsorship(user.id, address, input)
   return {
-    token: session.token, tokenType: 'Bearer', expiresIn: session.expiresIn, user: publicUser(user!),
+    token: session.token, tokenType: 'Bearer', expiresIn: session.expiresIn, user: publicUser(user),
     sponsorship: { sessionId: stored.sessionId, expiresAt: stored.expiresAt },
   }
 }

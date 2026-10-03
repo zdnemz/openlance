@@ -95,9 +95,11 @@ DEPLOY_OUT="$(tail -1 "$HERE/.state/deploy.log")"
 log "deployed: $DEPLOY_OUT"
 ESCROW_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"escrow":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
 REGISTRY_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"arbiterRegistry":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
+ROLE_REGISTRY_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"roleRegistry":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
 TIMELOCK_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"timelock":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
 FWD_ADDR="$(echo "$DEPLOY_OUT" | sed -n 's/.*"sponsorshipForwarder":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
 [ -n "$ESCROW_ADDR" ] && [ -n "$REGISTRY_ADDR" ] || { log "FATAL: could not parse deployment"; exit 1; }
+[ -n "$ROLE_REGISTRY_ADDR" ] || { log "FATAL: deployment has no roleRegistry — seats would fall back to a column that dies with the DB"; exit 1; }
 [ -n "$FWD_ADDR" ] || { log "FATAL: deployment has no sponsorshipForwarder — gasless would point at a stale address"; exit 1; }
 
 # ── 2b. seed the arbiter roster ─────────────────────────────────────────────
@@ -153,7 +155,7 @@ esac
 # The forwarder address MUST be rewritten on every deploy: it is a fresh
 # contract each time, Escrow/Registry were initialized to trust exactly that
 # one, and a stale value makes every sponsored action revert NotParty().
-CHAIN_ENV_KEYS="CHAIN_MODE|CHAIN_ID|CHAIN_RPC_URL|ESCROW_ADDRESS|ARBITER_REGISTRY_ADDRESS|TIMELOCK_ADDRESS|SPONSORSHIP_FORWARDER_ADDRESS|INDEXER_POLL_MS|INDEXER_CONFIRMATIONS|PLATFORM_FEE_BPS|ADMIN_WALLETS"
+CHAIN_ENV_KEYS="CHAIN_MODE|CHAIN_ID|CHAIN_RPC_URL|ESCROW_ADDRESS|ARBITER_REGISTRY_ADDRESS|ROLE_REGISTRY_ADDRESS|TIMELOCK_ADDRESS|SPONSORSHIP_FORWARDER_ADDRESS|INDEXER_POLL_MS|INDEXER_CONFIRMATIONS|PLATFORM_FEE_BPS|ADMIN_WALLETS"
 write_chain_env() {
   ENV_FILE="$1"
   touch "$ENV_FILE"
@@ -165,6 +167,7 @@ CHAIN_ID=31337
 CHAIN_RPC_URL=http://127.0.0.1:8545
 ESCROW_ADDRESS=$ESCROW_ADDR
 ARBITER_REGISTRY_ADDRESS=$REGISTRY_ADDR
+ROLE_REGISTRY_ADDRESS=$ROLE_REGISTRY_ADDR
 TIMELOCK_ADDRESS=$TIMELOCK_ADDR
 SPONSORSHIP_FORWARDER_ADDRESS=$FWD_ADDR
 INDEXER_POLL_MS=1500
@@ -180,7 +183,7 @@ EOF
 # API keeps a stale forwarder, so every sponsored action reverts.
 write_chain_env "$ROOT/.env.local"
 [ -f "$ROOT/apps/api/.env.local" ] && write_chain_env "$ROOT/apps/api/.env.local"
-log "env updated (real mode, contracts $ESCROW_ADDR / $REGISTRY_ADDR, forwarder $FWD_ADDR)"
+log "env updated (real mode, contracts $ESCROW_ADDR / $REGISTRY_ADDR / $ROLE_REGISTRY_ADDR, forwarder $FWD_ADDR)"
 log "NOTE: restart the API service to pick up the new env values"
 
 # ── 4. sync the schema to the configured database (env DATABASE_URL) ───────

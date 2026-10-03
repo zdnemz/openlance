@@ -144,7 +144,13 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
         <div
           role="dialog"
           aria-label="Notifications"
-          className="absolute right-0 z-50 mt-2 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-line bg-ink/95 shadow-2xl backdrop-blur-xl"
+          // Below `sm` the panel is a viewport-anchored sheet, not a popover
+          // hung off the bell: on a phone the bell sits beside the wallet button,
+          // so `right-0` + a 360px width pushed the panel off the LEFT edge
+          // (max-w only caps width — it never re-anchors), and a 420px list did
+          // not fit the viewport. `sm:` keeps the popover, which fits beside the
+          // bell once there is room for it.
+          className="fixed inset-x-2 top-16 z-50 flex max-h-[calc(100dvh-4.5rem)] flex-col overflow-hidden rounded-2xl border border-line bg-ink/95 shadow-2xl backdrop-blur-xl sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] sm:max-h-none"
         >
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <span className="text-[13px] font-semibold">Notifications</span>
@@ -158,7 +164,12 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
             </Link>
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto p-1.5">
+          {/* flex-auto, not flex-1: the panel is capped by max-height but has no
+              definite height, so a zero flex-basis item has nothing to resolve
+              against. min-h-0 is the other half — a flex child defaults to
+              min-height:auto and would refuse to shrink, overflowing the capped
+              panel (clipped, unreachable) instead of scrolling inside it. */}
+          <div className="min-h-0 flex-auto overflow-y-auto p-1.5 sm:max-h-[420px]">
             {!token ? (
               <EmptyState
                 icon={<Bell />}

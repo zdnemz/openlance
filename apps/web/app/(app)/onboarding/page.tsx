@@ -18,10 +18,13 @@
 import { useEffect, useRef, useState } from "react";
 import { post } from "@/lib/api";
 import { useSession, useSessionHydrated } from "@/lib/session";
-import { useWallet, useWalletHydrated } from "@/lib/wallet";
+import { useWallet, useWalletHydrated, readContract } from "@/lib/wallet";
 import { ConnectPanel } from "@/components/wallet/connect-panel";
-import { ROLES } from "@/lib/roles";
+import { ROLES, roleFromOrdinal } from "@/lib/roles";
 import { ROLE_HOME } from "@/lib/role-routes";
+import { ROLE_REGISTRY_ABI } from "@/lib/contracts";
+import { useRuntime } from "@/lib/runtime";
+import { claimSeatAction, useChainAction } from "@/lib/chain-actions";
 import { COUNTRIES } from "@/lib/countries";
 import { press } from "@/components/design";
 import type { PublicUser, UserRole } from "@/lib/types";
@@ -107,16 +110,74 @@ export default function OnboardingPage() {
   );
 }
 
+/**
+ * The seat the CHAIN holds for a wallet. `off` is a deployment with no
+ * RoleRegistry (the DB column is the seat there and nothing is claimed);
+ * `unreadable` is a registry we could not ask, which must not be mistaken for
+ * "unclaimed" — the API refuses the write in that case, and so does this step.
+ */
+type SeatState =
+  | { state: "off" }
+  | { state: "unreadable" }
+  | { state: "none" }
+  | { state: "claimed"; role: UserRole }
+  | { state: "loading" };
+
+function useOnchainSeat(address: string | null): SeatState {
+  const roleRegistry = useRuntime((s) => s.roleRegistry);
+  const [seat, setSeat] = useState<SeatState>({ state: "loading" });
+  useEffect(() => {
+    if (!roleRegistry) {
+      setSeat({ state: "off" });
+      return;
+    }
+    if (!address) {
+      setSeat({ state: "loading" });
+      return;
+    }
+    let cancelled = false;
+    setSeat({ state: "loading" });
+    void (async () => {
+      const raw = await readContract<number>({
+        to: roleRegistry,
+        abi: ROLE_REGISTRY_ABI,
+        functionName: "roleOf",
+        args: [address],
+      });
+      if (cancelled) return;
+      const role = raw === null ? null : roleFromOrdinal(Number(raw));
+      setSeat(role ? { state: "claimed", role } : raw === null ? { state: "unreadable" } : { state: "none" });
+    })();
+    return () => { cancelled = true; };
+  }, [roleRegistry, address]);
+  return seat;
+}
+
 function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: boolean; setBusy: (v: boolean) => void; onConfirm: () => void }) {
   const session = useSession();
+  const chain = useChainAction();
+  const seat = useOnchainSeat(useWallet((s) => s.address));
   // Selection is local-only until confirm: tapping a card never touches the API.
   const [selectedRole, setSelectedRole] = useState<UserRole>(user.role);
+  // A claimed seat is the wallet's own — there is nothing left to choose, and
+  // the API refuses any other answer, so the picker would only offer a lie.
+  const claimed = seat.state === "claimed" ? seat.role : null;
+  const seatRole = claimed ?? selectedRole;
+
   async function confirm() {
     setBusy(true);
     try {
-      const updated = await post<PublicUser>("/users/me/role", { role: selectedRole });
+      // Claim FIRST: the API only mirrors a seat the chain already holds, so a
+      // claim that never lands must leave nothing to write. `off` means this
+      // deployment has no wallet-owned seat, so there is nothing to claim; a
+      // claimed seat is already on-chain and is mirrored as-is.
+      if (seat.state === "none") {
+        const claim = await claimSeatAction(chain.run)(seatRole);
+        if (!claim.ok) return;
+      }
+      const updated = await post<PublicUser>("/users/me/role", { role: seatRole });
       session.setUser(updated);
-      toast.success(`Role → ${selectedRole}`);
+      toast.success(`Role → ${seatRole}`);
       onConfirm();
     } catch (err) {
       toast.error("Role save failed", { description: err instanceof Error ? err.message : "Unknown error" });
@@ -124,43 +185,63 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
       setBusy(false);
     }
   }
-  const selected = ROLES.find((r) => r.id === selectedRole);
+  const selected = ROLES.find((r) => r.id === seatRole);
   return (
     <div>
-      <h2 className="text-lg font-medium">2 — Pick your seat (permanent)</h2>
-      <p className="mt-1 text-sm text-dim">One active role. Seats are strictly separated — the proxy guards every page to its seat. Confirm to continue to identity.</p>
-      <div className="mt-4 grid gap-2" role="radiogroup" aria-label="Role">
-        {ROLES.map((r) => {
-          const active = selectedRole === r.id;
-          return (
-            <button
-              key={r.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              disabled={busy}
-              onClick={() => setSelectedRole(r.id)}
-              className={`rounded-2xl border px-4 py-3.5 text-left transition-colors ${press} ${
-                active
-                  ? "border-rose-accent/50 bg-rose-soft"
-                  : "border-transparent hover:border-line hover:bg-white/[0.04]"
-              } disabled:opacity-60`}
-            >
-              <div className="text-sm font-medium">{r.title} {user.role === r.id && "· current"}</div>
-              <div className="text-xs text-dim">{r.blurb}</div>
-              <div className="mt-0.5 text-[11px] text-faint">{r.kyc}</div>
-            </button>
-          );
-        })}
-      </div>
+      <h2 className="text-lg font-medium">{claimed ? "2 — Your seat" : "2 — Pick your seat (permanent)"}</h2>
+      <p className="mt-1 text-sm text-dim">
+        {claimed
+          ? "This wallet already claimed a seat on-chain — it outlives our database, so the choice is already made."
+          : "One active role. Seats are strictly separated — the proxy guards every page to its seat. Confirm to continue to identity."}
+      </p>
+
+      {claimed ? (
+        <div className="mt-4 rounded-2xl border border-rose-accent/50 bg-rose-soft px-4 py-3.5">
+          <div className="text-sm font-medium">{selected?.title} · claimed on-chain</div>
+          <div className="text-xs text-dim">{selected?.blurb}</div>
+          <div className="mt-0.5 text-[11px] text-faint">{selected?.kyc}</div>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-2" role="radiogroup" aria-label="Role">
+          {ROLES.map((r) => {
+            const active = selectedRole === r.id;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={busy}
+                onClick={() => setSelectedRole(r.id)}
+                className={`rounded-2xl border px-4 py-3.5 text-left transition-colors ${press} ${
+                  active
+                    ? "border-rose-accent/50 bg-rose-soft"
+                    : "border-transparent hover:border-line hover:bg-white/[0.04]"
+                } disabled:opacity-60`}
+              >
+                <div className="text-sm font-medium">{r.title} {user.role === r.id && "· current"}</div>
+                <div className="text-xs text-dim">{r.blurb}</div>
+                <div className="mt-0.5 text-[11px] text-faint">{r.kyc}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {seat.state === "unreadable" && (
+        <p role="status" className="mt-3 text-[12.5px] text-amber-300">
+          Couldn&apos;t read your on-chain seat. Confirm is disabled until the registry answers — a seat we cannot verify is not one we will hand out.
+        </p>
+      )}
+
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || seat.state === "loading" || seat.state === "unreadable"}
         onClick={() => void confirm()}
         className={`mt-4 inline-flex items-center gap-2 rounded-full bg-rose-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
       >
         {busy ? <Spinner className="h-4 w-4 animate-spin" /> : null}
-        {busy ? "Saving…" : `Continue with ${selected?.title ?? "role"}`}
+        {busy ? "Saving…" : seat.state === "loading" ? "Checking your seat…" : `Continue with ${selected?.title ?? seatRole}`}
       </button>
     </div>
   );

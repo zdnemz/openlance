@@ -7,6 +7,7 @@
  *   TimelockController ── owns (sole upgrade authority of) ──┐
  *        │ proposer/executor = deployer (hand off in prod)    │
  *        ├── ArbiterRegistry proxy (ERC1967/UUPS)             │
+ *        ├── RoleRegistry proxy (ERC1967/UUPS) ── reads ──► ArbiterRegistry
  *        └── Escrow proxy (ERC1967/UUPS) ── reads ──► ArbiterRegistry
  *
  * Why a Timelock: a UUPS upgrade is a `delegatecall` swap of all the money
@@ -77,6 +78,10 @@ async function main() {
   const commitWindow = BigInt(process.env.COMMIT_WINDOW_SECONDS ?? (local ? "120" : "86400")); // 24h
   const revealWindow = BigInt(process.env.REVEAL_WINDOW_SECONDS ?? (local ? "120" : "86400")); // 24h
   const appealWindow = BigInt(process.env.APPEAL_WINDOW_SECONDS ?? (local ? "600" : "172800")); // 48h
+  // Wei charged by `RoleRegistry.switchRole` — the only paid seat change. Zero
+  // on the devnet; there is no UI for a paid switch yet, and a nonzero fee with
+  // no way to pay it would just make the seat unchangeable.
+  const roleChangeFee = BigInt(process.env.ROLE_CHANGE_FEE_WEI ?? 0n);
 
   const chainId = await publicClient.getChainId();
   const balance = await publicClient.getBalance({ address: deployerAddress });
@@ -95,6 +100,7 @@ async function main() {
   console.log(`  dispute reward: ${formatEther(disputeReward)} ETH (from rewardPool)`);
   console.log(`  windows (c/r/a): ${commitWindow}s / ${revealWindow}s / ${appealWindow}s`);
   console.log(`  treasury:       ${treasury}`);
+  console.log(`  role change fee: ${formatEther(roleChangeFee)} ETH`);
   console.log(`  sponsorship:    ${sponsorshipWallet}`);
   console.log(`  final admin:    ${finalAdmin}`);
   console.log(`──────────────────────────────────────────────────────────\n`);
@@ -157,6 +163,21 @@ async function main() {
   );
   console.log(`✓ Escrow proxy                ${escrow.address}`);
 
+  // The wallet-owned seat. Deployed after the arbiter registry because its
+  // initialize() takes that address for the arbiter exit gate.
+  const roleRegistry = await upgradesApi.deployProxy(
+    "RoleRegistry",
+    [
+      timelock.address, // owner
+      roleChangeFee, // roleChangeFee (wei; 0 = free, devnet default)
+      treasury, // treasury (fees)
+      registry.address, // arbiterRegistry (exit gate: no stake left behind)
+      forwarder.address, // trustedForwarder (ERC-2771)
+    ],
+    { kind: "uups" },
+  );
+  console.log(`✓ RoleRegistry proxy          ${roleRegistry.address}`);
+
   // ── 4. Owner-only wiring through the timelock ──────────────────────────────
   // Both contracts are owned by the timelock, so `registry.setEscrow` and
   // `escrow.setDisputeReward` must be scheduled. They are independent calls on
@@ -195,6 +216,19 @@ async function main() {
   const eta = BigInt(Math.floor(Date.now() / 1000)) + minDelay + 5n;
   console.log(`  eta ≈ ${eta}`);
 
+  // RoleRegistry needs no queued wiring: its `initialize` already took the
+  // arbiter registry address, and `setArbiterRegistry` is deliberately one-shot
+  // (it reverts as AlreadySet) so the exit gate can never be repointed.
+  const summary = {
+    registry: registry.address,
+    escrow: escrow.address,
+    roleRegistry: roleRegistry.address,
+    timelock: timelock.address,
+    forwarder: forwarder.address,
+    finalAdmin,
+    networkName,
+  };
+
   if (local) {
     // Local networks: we can advance time, but anvil/hardhat may not allow it
     // via viem easily — just wait out a short delay.
@@ -210,7 +244,7 @@ async function main() {
           `    npx hardhat run scripts/execute-timelock.ts --network ${networkName}`,
       );
     }
-    printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, forwarder: forwarder.address, finalAdmin, networkName });
+    printSummary(summary);
     return;
   }
 
@@ -222,12 +256,13 @@ async function main() {
     console.log(`✓ ${op.label} (tx ${hash})`);
   }
 
-  printSummary({ registry: registry.address, escrow: escrow.address, timelock: timelock.address, forwarder: forwarder.address, finalAdmin, networkName });
+  printSummary(summary);
 }
 
 function printSummary(a: {
   registry: string;
   escrow: string;
+  roleRegistry: string;
   timelock: string;
   forwarder: string;
   finalAdmin: string;
@@ -243,6 +278,7 @@ function printSummary(a: {
         network: a.networkName,
         escrow: a.escrow,
         arbiterRegistry: a.registry,
+        roleRegistry: a.roleRegistry,
         timelock: a.timelock,
         sponsorshipForwarder: a.forwarder,
         treasury: (process.env.TREASURY ?? a.finalAdmin),
@@ -261,6 +297,7 @@ function printSummary(a: {
   console.log(`CHAIN_ID=${a.networkName === "baseSepolia" ? 84532 : "<chain id>"}`);
   console.log(`ESCROW_ADDRESS=${a.escrow}`);
   console.log(`ARBITER_REGISTRY_ADDRESS=${a.registry}`);
+  console.log(`ROLE_REGISTRY_ADDRESS=${a.roleRegistry}`);
   console.log(`TIMELOCK_ADDRESS=${a.timelock}`);
   console.log(`SPONSORSHIP_FORWARDER_ADDRESS=${a.forwarder}`);
   console.log(`════════════════════════════════════════════════════════\n`);

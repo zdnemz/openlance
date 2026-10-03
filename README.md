@@ -16,7 +16,7 @@ Three deliverables, one repo:
 ## The devnet stack (what's running)
 
 ```
-anvil :8545 ── Escrow + ArbiterRegistry (fresh deploy per boot)
+anvil :8545 ── Escrow + ArbiterRegistry + RoleRegistry (fresh deploy per boot)
     │                ▲
     │  (JSON-RPC     │  (poll logs, re-derive
     │   relay)       │   money truth via RPC)
@@ -79,6 +79,7 @@ Key env vars (see [`.env.example`](./.env.example)):
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase Storage + Realtime (optional) |
 | `SUPABASE_JWT_SECRET` | HS256 secret; the SIWE session token doubles as a Supabase JWT (required in prod) |
 | `CHAIN_MODE` `CHAIN_RPC_URL` `ESCROW_ADDRESS` `ARBITER_REGISTRY_ADDRESS` | chain indexer (mock by default) |
+| `ROLE_REGISTRY_ADDRESS` | the wallet-owned seat. Set → sign-in re-seats from the chain and a role write is refused unless the wallet already claimed that seat on-chain. Unset → the `users.role` column is the seat (pre-RoleRegistry behaviour) |
 | `SPONSORSHIP_FORWARDER_ADDRESS` `RELAYER_PRIVATE_KEY` | gasless sponsorship (ERC-2771 forwarder + relayer). Both required; unset → user-paid gas |
 
 ### Gasless money actions (sponsored meta-txs)

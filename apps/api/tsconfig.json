@@ -1,7 +1,16 @@
 {
+  // `DOM` is here for the Fetch API types (Request/Response/Headers), not for
+  // the browser: this is a Hono service whose entire handler contract is
+  // Web Standard. `tsc` finds those globals locally via @types/node →
+  // undici-types, but Vercel's Hono builder typechecks the entrypoint with a
+  // LanguageService that omits module resolution, so that chain breaks and the
+  // build fails with "Property 'headers' does not exist on type 'Response'".
+  //
+  // Cost: browser-only globals (document, window) now typecheck here. This
+  // service must not use them — it has no DOM at runtime.
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "types": ["node"],

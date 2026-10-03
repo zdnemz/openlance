@@ -16,6 +16,19 @@ export function roleLabel(role: UserRole): string {
   return ROLES.find((r) => r.id === role)?.title ?? role;
 }
 
+/**
+ * IRoleRegistry.Role ordinals. `users.role` is a mirror of the contract, so
+ * the pick has to cross the boundary in both directions: outbound to `claim`,
+ * inbound from `roleOf`. Kept next to ROLES so the seat vocabulary has one home.
+ */
+export const ROLE_ORDINAL: Record<UserRole, number> = { client: 1, freelancer: 2, arbiter: 3 };
+
+/** roleOf → seat. 0 (Role.None = never claimed) and any unknown ordinal → null. */
+export function roleFromOrdinal(value: number): UserRole | null {
+  const hit = (Object.entries(ROLE_ORDINAL) as [UserRole, number][]).find(([, ordinal]) => ordinal === value);
+  return hit?.[0] ?? null;
+}
+
 /** The four fields the profile form edits — all of them, for every seat. */
 export type ProfileField = "name" | "links" | "skills" | "bio";
 

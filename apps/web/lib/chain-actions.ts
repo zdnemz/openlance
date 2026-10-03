@@ -14,11 +14,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { readContract, sendContractCall, waitForReceipt } from "@/lib/wallet";
 import { relayForwardRequest } from "@/lib/sponsorship";
 import { useSponsorship } from "@/lib/sponsorship-store";
-import { ESCROW_ABI, REGISTRY_ABI } from "@/lib/contracts";
+import { ESCROW_ABI, REGISTRY_ABI, ROLE_REGISTRY_ABI } from "@/lib/contracts";
 import { useRuntime } from "@/lib/runtime";
+import { ROLE_ORDINAL } from "@/lib/roles";
 import { get } from "@/lib/api";
 import { toast } from "sonner";
-import type { ProjectView } from "@/lib/types";
+import type { ProjectView, UserRole } from "@/lib/types";
 import { formatEth, shortHash, toWei } from "@/lib/format";
 
 /**
@@ -92,14 +93,14 @@ export function describeFundingRevert(message: string, totalWei: bigint, freeWei
     if (freeWei <= 0n) return "Already fully funded on-chain — nothing left to draw from the job budget.";
     return `Job budget too small: needs ${formatEth(totalWei)} ETH but only ${formatEth(freeWei)} ETH is free.`;
   }
-  // A key re-locks only once the previous lock is fully spent, so this is a
-  // partial withdrawal: the rest is still escrowed and has to come back first.
-  if (/BudgetAlreadyLocked/i.test(message)) return "This job still has a balance locked in escrow — withdraw the remainder above, then publish again.";
   // fundAllFromCredit takes two shapes: the first call for a job carries the
   // value that becomes the lock (and must equal the batch), later calls must
   // send nothing. A mismatch between the two is the usual funding failure.
   if (/ValueMismatch/i.test(message)) return "The funding value didn't match the milestone total — refresh and retry; if the budget was already locked, the batch must carry no value.";
   if (/NoBudgetLocked/i.test(message)) return "No budget locked for this job on the current chain.";
+  // A key re-locks only once the previous lock is fully spent, so this is a
+  // partial withdrawal: the rest is still escrowed and has to come back first.
+  if (/BudgetAlreadyLocked/i.test(message)) return "This job still has a balance locked in escrow — withdraw the remainder above, then publish again.";
   if (/NotClient/i.test(message)) return "Only the wallet that locked the job budget can fund from it — switch wallets and retry.";
   if (/BadBatch/i.test(message)) return "Funding batch malformed — refresh the page and try again.";
   return message;
@@ -180,6 +181,7 @@ export function useChainAction() {
   const [error, setError] = useState<string | null>(null);
   const escrow = useRuntime((s) => s.escrow);
   const registry = useRuntime((s) => s.registry);
+  const roleRegistry = useRuntime((s) => s.roleRegistry);
   const chainId = useRuntime((s) => s.chainId);
   const qc = useQueryClient();
 
@@ -191,7 +193,7 @@ export function useChainAction() {
   const run = useCallback(
     async (opts: {
       label: string;
-      contract: "escrow" | "registry";
+      contract: "escrow" | "registry" | "roleRegistry";
       functionName: string;
       args?: unknown[];
       value?: bigint;
@@ -201,7 +203,7 @@ export function useChainAction() {
       expect?: (p: ProjectView) => boolean;
       successMessage?: string;
     }): Promise<{ ok: boolean; hash: string | null }> => {
-      const address = opts.contract === "escrow" ? escrow : registry;
+      const address = opts.contract === "escrow" ? escrow : opts.contract === "registry" ? registry : roleRegistry;
       if (!address) {
         const msg = "Contract address unknown — API still syncing";
         setError(msg);
@@ -220,7 +222,7 @@ export function useChainAction() {
       setError(null);
       setPhase("signing");
       try {
-        const abi = opts.contract === "escrow" ? ESCROW_ABI : REGISTRY_ABI;
+        const abi = opts.contract === "escrow" ? ESCROW_ABI : opts.contract === "registry" ? REGISTRY_ABI : ROLE_REGISTRY_ABI;
         // Gasless path: when a sponsorship session is active AND the call is one
         // the relayer may sponsor, the user signs an EIP-712 ForwardRequest and
         // the relayer pays the gas. Falls back to a normal user-paid call if
@@ -310,7 +312,7 @@ export function useChainAction() {
         return { ok: false, hash: null };
       }
     },
-    [escrow, registry, chainId, qc],
+    [escrow, registry, roleRegistry, chainId, qc],
   );
 
   // `active` is exposed rather than re-derived at each call site, so "is a
@@ -576,5 +578,21 @@ export function registerArbiterAction(run: ReturnType<typeof useChainAction>["ru
       args: [arbiter],
       value: stakeWei,
       successMessage: "Arbiter registered with stake",
+    });
+}
+
+/**
+ * The one free write a wallet ever gets on its seat. Reverts with
+ * AlreadyClaimed if the wallet has taken a seat before — the API then refuses
+ * the mirror write too, so a second attempt cannot slip in through the column.
+ */
+export function claimSeatAction(run: ReturnType<typeof useChainAction>["run"]) {
+  return (role: UserRole) =>
+    run({
+      label: "Claim seat",
+      contract: "roleRegistry",
+      functionName: "claim",
+      args: [ROLE_ORDINAL[role]],
+      successMessage: "Seat claimed on-chain",
     });
 }

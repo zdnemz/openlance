@@ -301,7 +301,7 @@ when the outcome changed.
 | `revealVote(uint256 id, uint8 round, uint8 outcome, bytes32 salt)` | no | — | after commit deadline |
 | `resolveDispute(uint256 id)` | no | `nonReentrant` | tally, round 0; **no money moves** — except a no-quorum round, which settles itself |
 | `resolveAppeal(uint256 id)` | no | `nonReentrant` | tally + overturn penalty, round >= 1; same no-quorum settlement |
-| `appeal(uint256 id)` | yes | `nonReentrant` | new round, fully random draw |
+| `appeal(uint256 id)` | yes | `nonReentrant` | new round, fully random draw; releases the superseded round's in-flight seat in the same tx |
 | `finalizeDispute(uint256 id)` | no | `nonReentrant` | permissionless; **payout executes here** |
 
 ### Rewards & fees
@@ -361,7 +361,7 @@ are real; the rest are zero.
 | `milestones_` | `mapping(uint256 => Milestone)` | private; read via `getMilestone` |
 | `disputes_` | `mapping(uint256 => Dispute)` | private; read via `getDispute` |
 | `rounds_` | `mapping(uint256 => mapping(uint8 => Round))` | private; read via `getRound` |
-| `activeDisputes` | `mapping(address => uint256)` | per-arbiter in-flight round count; the registry reads this for `_isBusy` |
+| `activeDisputes` | `mapping(address => uint256)` | per-arbiter in-flight round count; the registry reads this for `_isBusy`. Incremented once per seat in `_startRound`, and every path that ends a round's hold must decrement it: `_tally`'s no-quorum branch, `finalizeDispute`, and **`appeal`** (which supersedes a round whose seat nothing else would ever release) |
 | `nextMilestoneId` | `uint256` | next id; starts at 1 |
 | `accruedFees` | `uint256` | unwithdrawn platform fees (solvency invariant) |
 | `rewardPool` | `uint256` | subsidy balance: `depositRewards` + dust, drawn down per dispute |
@@ -500,6 +500,18 @@ per-address `delete` loop that `_resetRound` used.
 fallback never restores `Disputed`, so an appeal opened on top of that round could never
 be tallied or finalized — `resolveAppeal` and `finalizeDispute` both require `Disputed` —
 yet the appeal fee was accepted and stranded. `appeal` now reverts `NotDisputed`.
+
+**`appeal` releases the superseded round's in-flight seat (was: a permanent
+`StillHandlingDispute`).** `activeDisputes` is incremented once per seat in
+`_startRound` and is the registry's only `_isBusy` source, so it gates
+`requestUnstake` / `withdrawStake` / `reduceStake`. Its two release sites — `_tally`'s
+no-quorum branch and `finalizeDispute` — both read `d.round`, which an appeal has already
+advanced. The appealed round's panel was therefore never released: every arbiter who sat
+on it kept `activeDisputes > 0` for the rest of their registration and could never unstake
+their collateral, over a round that no longer existed. `appeal` now calls
+`_releaseActive` on the superseded round in the same transaction that seats the new one, so
+the seat is handed over atomically rather than leaked. A re-drawn arbiter nets back to
+exactly 1 (their live round's seat).
 
 ### Open
 

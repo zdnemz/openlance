@@ -423,6 +423,72 @@ describe("Escrow — multi-arbiter disputes", () => {
     // a decision" below, which runs that whole path to a settled refund.
   });
 
+  it("an appeal hands the in-flight seat over — no arbiter is left busy forever", async function () {
+    // `activeDisputes` is what the registry reads to gate `requestUnstake` /
+    // `withdrawStake` / `reduceStake`. `appeal` supersedes a resolved round and
+    // seats a fresh one, but the two release sites (`_tally`'s no-quorum branch
+    // and `finalizeDispute`) only ever see `d.round` — by then the APPEAL round.
+    // The appealed round's panel therefore kept its seat permanently: the
+    // collateral of an arbiter who had already voted and been scored was locked
+    // for life by a round that no longer existed. The appeal must release the
+    // superseded panel in the same transaction that seats the new one.
+    const { escrow, registry, arbiters, client } = await setupDispute(6);
+    const roster = arbiters.slice(0, 6);
+    const panel = async (round: number) => {
+      const r = await getRound(escrow, 1n, round);
+      return r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
+    };
+
+    const r0 = await getRound(escrow, 1n, 0);
+    const panel0 = await panel(0);
+    for (const a of panel0) assert.equal(await escrow.read.activeDisputes([a]), 1n, "a seated arbiter holds one in-flight seat");
+
+    await commitRevealAll(escrow, 1n, 0, walletsFor(r0, roster), RELEASE);
+    await escrow.write.resolveDispute([1n], { account: client.account });
+    // The round is resolved but the appeal window is still open, so its panel
+    // stays seated — that is correct, the dispute is not over yet.
+    for (const a of panel0) assert.equal(await escrow.read.activeDisputes([a]), 1n, "a resolved round keeps its panel busy until the dispute is over");
+
+    await escrow.write.appeal([1n], { value: DISPUTE_FEE, account: client.account });
+    const panel1 = await panel(1);
+    for (const a of panel0) {
+      const inBoth = panel1.includes(a);
+      // The appeal round is live, so anyone seated NOW is busy. An arbiter only
+      // in the appealed round is not: that round is gone.
+      assert.equal(await escrow.read.activeDisputes([a]), inBoth ? 1n : 0n, "the appealed panel is released; a re-drawn arbiter still holds its new seat");
+    }
+
+    // ...and the registry agrees: an arbiter the appeal dropped is no longer
+    // "busy", so the gate that would freeze their collateral lets them through.
+    // The appeal round's own panel is still seated, and stays gated.
+    for (const a of panel0.filter((x) => !panel1.includes(x))) {
+      const w = roster.find((x) => x.account.address.toLowerCase() === a)!;
+      await assert.doesNotReject(
+        registry.write.requestUnstake({ account: w.account }),
+        "an arbiter the appeal released must not stay frozen by a dead round",
+      );
+      await registry.write.cancelUnstake({ account: w.account }); // keep the roster intact
+    }
+    for (const a of panel1) {
+      const w = roster.find((x) => x.account.address.toLowerCase() === a)!;
+      await assert.rejects(
+        registry.write.requestUnstake({ account: w.account }),
+        /StillHandlingDispute/,
+        "the live appeal round still holds its panel",
+      );
+    }
+
+    await commitRevealAll(escrow, 1n, 1, walletsFor(await getRound(escrow, 1n, 1), roster), RELEASE);
+    await escrow.write.resolveAppeal([1n], { account: client.account });
+    await passAppealWindow(escrow, 1n, 1);
+    await escrow.write.finalizeDispute([1n], { account: client.account });
+
+    // Every arbiter who ever sat is free again — no leaked seat anywhere.
+    for (const a of new Set([...panel0, ...panel1])) {
+      assert.equal(await escrow.read.activeDisputes([a]), 0n, "a settled dispute leaves no arbiter busy");
+    }
+  });
+
   it("appeal overturns a decision and penalises the original majority", async function () {
     const { escrow, registry, arbiters, client } = await setupDispute(6);
     // Round 0: majority Release.

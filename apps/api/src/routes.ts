@@ -41,6 +41,7 @@ import * as rdisputes from './routes/disputes/route.ts'
 import * as rdisputesId from './routes/disputes/[id]/route.ts'
 import * as rfilesIdRaw from './routes/files/[id]/raw/route.ts'
 import * as rhealth from './routes/health/route.ts'
+import * as rinternalCron from './routes/internal/cron/route.ts'
 import * as rinternalInbound from './routes/internal/inbound/route.ts'
 import * as rjobs from './routes/jobs/route.ts'
 import * as rjobsId from './routes/jobs/[id]/route.ts'
@@ -121,6 +122,7 @@ export const ROUTES: Array<[string, string, RouteHandler]> = [
   ['PUT', '/api/files/:id/raw', rfilesIdRaw.PUT],
   ['GET', '/api/files/:id/raw', rfilesIdRaw.GET],
   ['GET', '/api/health', rhealth.GET],
+  ['GET', '/api/internal/cron', rinternalCron.GET],
   ['POST', '/api/internal/inbound', rinternalInbound.POST],
   ['GET', '/api/jobs', rjobs.GET],
   ['POST', '/api/jobs', rjobs.POST],

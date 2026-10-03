@@ -110,6 +110,24 @@ export const REGISTRY_ABI = [
   },
 ] as const satisfies Abi;
 
+/**
+ * The wallet-owned seat (RoleRegistry). `claim` is the ONE free write per
+ * wallet and it is the only way to obtain a seat; every later change is the
+ * paid `switchRole`. `users.role` in the API is a mirror of `roleOf`.
+ *
+ * `Role` is a Solidity enum, whose ABI type is uint8 — identical selector and
+ * calldata, so no enum components are needed here.
+ * Ordinals: None 0 · Client 1 · Freelancer 2 · Arbiter 3.
+ */
+export const ROLE_REGISTRY_ABI = [
+  { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [{ name: "role", type: "uint8" }], outputs: [] },
+  { type: "function", name: "switchRole", stateMutability: "payable", inputs: [{ name: "newRole", type: "uint8" }], outputs: [] },
+  { type: "function", name: "roleOf", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint8" }] },
+  { type: "function", name: "isClaimed", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "bool" }] },
+  { type: "function", name: "claimedAt", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] },
+  { type: "function", name: "roleChangeFee", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
+] as const satisfies Abi;
+
 /** resolveDispute outcome enum (Escrow.sol) */
 export const DISPUTE_OUTCOME = { release: 0, refund: 1, split: 2 } as const;
 export type DisputeOutcome = keyof typeof DISPUTE_OUTCOME;

@@ -1,12 +1,21 @@
 /**
- * API entrypoint. Run directly — no build step:
+ * Long-running API entrypoint (a VM, a container, `pnpm start`). Run directly
+ * — no build step:
  *
- *   node --env-file=.env.local src/server.ts
+ *   node --env-file=.env.local src/serve.ts
  *
  * Node 24 strips TypeScript types natively, so what runs is what you read.
  * The service is intentionally thin: validate config, start the background
  * workers that used to be kicked off by the first request inside Next, then
  * listen.
+ *
+ * NOT the Vercel entrypoint. Vercel auto-detects `src/server.{ts,js}` and
+ * treats it as a captured `server.listen()` HTTP server, which would bypass the
+ * Hono `fetch` export in `app.ts` and run a listener inside a Function. The
+ * name is deliberately `serve.ts` so it does not collide; the serverless
+ * entrypoint is `app.ts`, and its scheduled jobs come from
+ * `GET /api/internal/cron` (see `modules/cron.ts`) because a frozen Function
+ * cannot keep a `setInterval` alive.
  */
 import { serve } from '@hono/node-server'
 import app from './app.ts'

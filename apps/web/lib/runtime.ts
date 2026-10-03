@@ -23,6 +23,8 @@ interface RuntimeState {
   appealWindowSeconds: number;
   escrow: string | null;
   registry: string | null;
+  /** RoleRegistry proxy — where the wallet's seat lives. Null when none. */
+  roleRegistry: string | null;
   timelock: string | null;
   chainMode: string;
   /** Resolved storage system config (bucket, driver, limits). */
@@ -47,6 +49,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
   appealWindowSeconds: 172800,
   escrow: null,
   registry: null,
+  roleRegistry: null,
   timelock: null,
   chainMode: "…",
   storage: null,
@@ -73,6 +76,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
         appealWindowSeconds: (cfg as { appealWindowSeconds?: number }).appealWindowSeconds ?? 172800,
         escrow: cfg.contracts?.escrow ?? null,
         registry: cfg.contracts?.arbiterRegistry ?? null,
+        roleRegistry: cfg.contracts?.roleRegistry ?? null,
         timelock: cfg.contracts?.timelock ?? null,
         chainMode: cfg.chainMode ?? "…",
         storage: cfg.storage ?? null,

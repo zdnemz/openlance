@@ -80,6 +80,13 @@ const schema = z.object({
   CHAIN_RPC_PUBLIC_URL: z.string().url().optional(),
   ESCROW_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   ARBITER_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+  /**
+   * RoleRegistry proxy — where a wallet's seat actually lives. Optional on
+   * purpose: a deployment without one has no wallet-owned seat, and role falls
+   * back to the DB exactly as it did before the registry existed. Set it and
+   * the chain becomes the authority (`chain/role-registry.ts`).
+   */
+  ROLE_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   /** TimelockController that owns the UUPS proxies (informational). */
   TIMELOCK_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   // NOTE: there is no VAULT_ADDRESS. An earlier revision had one and a comment
@@ -160,6 +167,17 @@ const schema = z.object({
    * HMAC-SHA256 and pass it as `X-OpenLance-Signature: sha256=<hex>`.
    */
   INBOUND_WEBHOOK_SECRET: z.string().min(16).optional(),
+
+  /**
+   * Bearer token for `GET /api/internal/cron`, which runs the chain indexer,
+   * the SLA scan, webhook delivery and the nightly reconciliation.
+   *
+   * Needed wherever the API runs on a serverless host: the in-process
+   * `setInterval` scheduling in `workers/bootstrap.ts` cannot fire once the
+   * function is frozen, so an external scheduler pings this route instead.
+   * Unset → the route 404s, exactly like INBOUND_WEBHOOK_SECRET.
+   */
+  CRON_SECRET: z.string().min(16).optional(),
 
   // ── Rate limits (per minute) ───────────────────────────────────────────
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(20),

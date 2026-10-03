@@ -260,7 +260,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ── mobile top bar ───────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-line bg-ink/80 px-4 backdrop-blur-xl lg:hidden">
+      {/* z-50, not z-40: the notification panel is an absolutely-positioned
+          descendant of this bar, so its own z-50 resolves INSIDE this stacking
+          context and can never lift it above the z-40 bottom nav below — the
+          panel's footer and last rows rendered behind the nav. Raising the
+          ancestor is the only thing that can. The two never overlap. */}
+      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-line bg-ink/80 px-4 backdrop-blur-xl lg:hidden">
         {canGoBack ? (
           <button type="button" onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-dim" aria-label="Back">
             <ArrowLeft className="h-4 w-4" /> <Logo size="sm" withMark={false} />
