@@ -87,11 +87,11 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
  *          `approve` a payment on a milestone that has been to arbitration.
  *
  *      RANDOMNESS CAVEAT: arbiter selection uses `prevrandao` + block metadata.
- *      This is weak (a block producer can bias it) but adequate for the MVP and
- *      testnet; a mainnet deployment should migrate to Chainlink VRF via an
- *      upgrade. The exposure is bounded: a biased producer can only reorder WHICH
- *      eligible arbiters are drawn, and the 2-of-3 commit-reveal quorum plus
- *      staking/slashing still gate the money.
+ *      Every seed input is known when the opener submits, so the OPENER (not
+ *      only a block producer) can simulate the draw and submit — or revert via
+ *      a wrapper / EIP-7702 delegate — until it suits them. Adequate for the
+ *      testnet MVP only; a mainnet deployment must move to Chainlink VRF (or a
+ *      commit-then-draw two-step) via an upgrade before real funds ride it.
  */
 contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient, ERC2771ContextLite {
     // ─────────────────────────────────────────────────────────────────────────
@@ -196,6 +196,13 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     event DisputeFeeUpdated(uint256 oldFee, uint256 newFee);
     /// @notice Protocol-funded arbiter pot per dispute changed (`disputeReward`).
     event DisputeRewardUpdated(uint256 oldReward, uint256 newReward);
+    /// @notice A party proposed the arbiter panel both parties must agree on.
+    event PanelProposed(bytes32 indexed pairKey, address indexed proposer, address[3] panel);
+    /// @notice The counterparty accepted: `openDisputeWith` may seat exactly this panel.
+    event PanelAgreed(bytes32 indexed pairKey, address[3] panel);
+    /// @notice A dispute payout could not be pushed; it is held for `withdrawCredit`.
+    event Credited(address indexed to, uint256 amount);
+    event CreditWithdrawn(address indexed to, uint256 amount);
 
     // ── Admin/ops events ──────────────────────────────────────────────────────
 
@@ -241,12 +248,23 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     error AppealWindowClosed();
     error AppealWindowOpen();
     error AppealAlreadyOpen();
+    error AppealLimitReached();
+    error PanelNotAgreed();
+    error BadPanel();
+    error EmptyCommit();
 
     // ── Constants ─────────────────────────────────────────────────────────────
 
     uint16 public constant MAX_FEE_BPS = 500; // 5% platform fee cap
     uint8 public constant MAX_ARBITERS = 3; // spec §2
     uint8 public constant QUORUM = 2; // spec §2 — minimum reveals to decide
+    /// @notice Appeals per dispute. Each one re-runs commit + reveal + appeal
+    ///         windows, so an uncapped loser could hold a payment for years.
+    uint8 public constant MAX_APPEALS = 2;
+    /// @notice Gas forwarded with a pushed dispute payout. A recipient that
+    ///         reverts or burns gas falls back to `credit` instead of freezing
+    ///         the settlement for everyone else.
+    uint256 private constant PAYOUT_GAS = 50_000;
 
     // ── Storage ───────────────────────────────────────────────────────────────
 
@@ -297,8 +315,21 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     ///      proxy storage (every slot up to here) keeps its meaning across upgrades.
     uint256 public disputeReward;
 
+    /// @notice Dispute payouts a recipient could not take as a push; pulled
+    ///         with `withdrawCredit`. `totalCredit` keeps the solvency sum exact.
+    mapping(address => uint256) public credit;
+    uint256 public totalCredit;
+
+    /// @dev pairKey(client, freelancer) => keccak256(panel) awaiting acceptance,
+    ///      and who proposed it (the other party must accept).
+    mapping(bytes32 => bytes32) private _panelProposal;
+    mapping(bytes32 => address) private _panelProposer;
+    /// @notice pairKey(client, freelancer) => keccak256(panel) both parties
+    ///         agreed to. `openDisputeWith` seats only this panel.
+    mapping(bytes32 => bytes32) public agreedPanel;
+
     /// @dev Reserved storage for future upgrades.
-    uint256[31] private __gap;
+    uint256[26] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -590,7 +621,46 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      *         to a random draw, so a stale lock can never brick dispute opening.
      */
     function openDisputeWith(uint256 milestoneId, address[3] calldata preferred) external payable nonReentrant {
+        Milestone storage m = _m(milestoneId);
+        // The panel is binding, so it must be one BOTH parties signed up to on
+        // chain — never whatever the opener passes (that let a party seat its
+        // own arbiter and decide its own dispute).
+        if (keccak256(abi.encode(preferred)) != agreedPanel[pairKey(m.client, m.freelancer)]) revert PanelNotAgreed();
         _openDispute(milestoneId, [preferred[0], preferred[1], preferred[2]]);
+    }
+
+    /// @notice Order-independent key for a client/freelancer pair.
+    function pairKey(address a, address b) public pure returns (bytes32) {
+        return a < b ? keccak256(abi.encode(a, b)) : keccak256(abi.encode(b, a));
+    }
+
+    /**
+     * @notice Propose the arbiter panel for disputes with `counterparty`. The
+     *         counterparty accepts with `acceptPanel`; until then nothing changes.
+     *         A new proposal replaces any pending one.
+     */
+    function proposePanel(address counterparty, address[3] calldata panel) external {
+        address sender = _msgSender();
+        if (counterparty == address(0) || counterparty == sender || panel[0] == address(0)) revert BadPanel();
+        for (uint8 i = 0; i < MAX_ARBITERS; i++) {
+            if (panel[i] == sender || panel[i] == counterparty) revert BadPanel();
+        }
+        bytes32 key = pairKey(sender, counterparty);
+        _panelProposal[key] = keccak256(abi.encode(panel));
+        _panelProposer[key] = sender;
+        emit PanelProposed(key, sender, panel);
+    }
+
+    /// @notice Accept the panel `proposer` proposed; it becomes the agreed panel.
+    function acceptPanel(address proposer, address[3] calldata panel) external {
+        address sender = _msgSender();
+        bytes32 key = pairKey(sender, proposer);
+        bytes32 h = keccak256(abi.encode(panel));
+        if (proposer == sender || _panelProposer[key] != proposer || _panelProposal[key] != h) revert PanelNotAgreed();
+        agreedPanel[key] = h;
+        delete _panelProposal[key];
+        delete _panelProposer[key];
+        emit PanelAgreed(key, panel);
     }
 
     function _openDispute(uint256 milestoneId, address[3] memory preferred) private {
@@ -712,6 +782,9 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         // meaningful stride (and `len - 1` would be a division by zero), so
         // step by 1 — the loop then visits index 0 on every pass.
         uint256 stride = len == 1 ? 1 : (seed % (len - 1)) + 1;
+        // A stride sharing a factor with `len` revisits a subset (len 4, stride
+        // 2 → two slots) and seats a thinner panel than the roster allows.
+        while (_gcd(stride, len) != 1) stride = stride % (len - 1) + 1;
         uint256 scanned;
 
         while (count < MAX_ARBITERS && scanned < len * POOL_SCAN) {
@@ -730,6 +803,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
             scanned++;
         }
         return count;
+    }
+
+    function _gcd(uint256 a, uint256 b) private pure returns (uint256) {
+        while (b != 0) (a, b) = (b, a % b);
+        return a;
     }
 
     function _alreadyPicked(address[3] memory picked, uint8 count, address candidate) private pure returns (bool) {
@@ -763,6 +841,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         if (!_isSelected(r, arbiter)) revert NotSelectedArbiter();
         if (block.timestamp > r.commitDeadline) revert CommitDeadlinePassed();
         if (r.commits[arbiter] != bytes32(0)) revert AlreadyCommitted();
+        if (commitHash == bytes32(0)) revert EmptyCommit();
 
         r.commits[arbiter] = commitHash;
         r.commitCount += 1;
@@ -813,6 +892,9 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         if (m.status != Status.Disputed) revert NotDisputed();
 
         uint8 round = d.round;
+        // Appeal rounds tally through `resolveAppeal`, which applies the
+        // overturn penalty; tallying them here would skip it.
+        if (round != 0) revert AppealAlreadyOpen();
         Round storage r = rounds_[milestoneId][round];
         if (r.resolved) revert ArbitrationAlreadyResolved();
         if (block.timestamp <= r.revealDeadline && r.revealCount < r.arbiterCount) {
@@ -843,8 +925,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
         // ── Money movement + rewards (the milestone settles exactly once) ─────
         _settleMilestone(milestoneId, m, winner, r);
-        emit DisputeResolved(milestoneId, msg.sender, winner);
-        _distributeRewards(milestoneId, d, r, winner);
+        emit DisputeResolved(milestoneId, _msgSender(), winner);
+        _distributeRewards(milestoneId, d, r, winner, m.amount);
         _releaseActive(r.arbiters, r.arbiterCount);
     }
 
@@ -856,6 +938,24 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     function _tally(uint256 milestoneId, Milestone storage m, Dispute storage d, Round storage r, uint8 round) private {
         r.resolved = true;
         uint8 reveals = r.revealCount;
+
+        // The superseded round's panel stays busy until this round is tallied:
+        // its overturn penalty (resolveAppeal, same tx) must still find it
+        // registered. Releasing at `appeal` let it unstake and walk first.
+        if (round > 0) {
+            Round storage prev = rounds_[milestoneId][round - 1];
+            _releaseActive(prev.arbiters, prev.arbiterCount);
+        }
+
+        // An APPEAL panel that cannot decide leaves the standing quorum ruling
+        // in place (paid by `finalizeDispute`). Falling through to a refund let
+        // a losing client turn a unanimous ruling into a refund by appealing
+        // until a panel stayed silent.
+        if (round > 0 && reveals < _requiredReveals(r)) {
+            r.winningOutcome = d.settledOutcome;
+            emit DisputeFinalized(milestoneId, round, d.settledOutcome, reveals, false);
+            return;
+        }
 
         // ── No-quorum fallback: the panel never decided, so the money goes back
         //    to the client — HERE, in the tally, because nothing else will ────
@@ -875,17 +975,26 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         //    has been in dispute now leaves it only through arbitration.
         if (reveals < _requiredReveals(r)) {
             r.winningOutcome = uint8(Outcome.Refund);
+            // Silence must cost the same as a missed reveal on a decided round,
+            // or a panel can veto by doing nothing.
+            for (uint8 i = 0; i < r.arbiterCount; i++) {
+                address a = r.arbiters[i];
+                if (!r.revealed[a] && _isRegistered(a)) {
+                    arbiterRegistry.applyScoreChange(a, int256(_deltaMissed()), _reasonMissed());
+                    emit ArbiterPenalized(milestoneId, a, _reasonMissed());
+                }
+            }
             _releaseActive(r.arbiters, r.arbiterCount);
             uint256 refund = d.fee;
             m.status = Status.ResolvedRefund;
             _settleBudget(milestoneId, m.amount); // the client's refund is earmarked
-            if (refund > 0) _pay(d.openedBy, refund);
             emit DisputeFinalized(milestoneId, round, uint8(Outcome.Refund), reveals, false);
             // The settlement receipt for this path. There is no `finalize` tx to
             // emit a `Milestone*` event from, so the backend mirrors the status
             // and the settlement hash off this log (same tx either way).
             emit NoQuorumFallback(milestoneId, d.openedBy, refund);
-            _pay(m.client, m.amount);
+            _payOrCredit(d.openedBy, refund);
+            _payOrCredit(m.client, m.amount);
             return;
         }
 
@@ -915,7 +1024,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
             m.status = Status.ResolvedRefund;
             _settleBudget(milestoneId, m.amount);
             emit MilestoneRefunded(milestoneId, m.client, m.amount, true);
-            _pay(m.client, m.amount);
+            _payOrCredit(m.client, m.amount);
         } else {
             m.status = Status.ResolvedSplit;
             uint256 half = m.amount / 2;
@@ -926,7 +1035,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
             _settleBudget(milestoneId, m.amount); // client half now + freelancer half + fee earmarked
             _payArbiterFee(milestoneId, r, winner, fee);
             emit MilestoneSplit(milestoneId, clientAmount, freelancerAmount, fee);
-            _pay(m.client, clientAmount);
+            _payOrCredit(m.client, clientAmount);
         }
     }
 
@@ -959,7 +1068,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
                 if (amount > 0) {
                     used += amount;
                     emit ArbiterRewarded(milestoneId, a, amount);
-                    _pay(a, amount);
+                    _payOrCredit(a, amount);
                 }
             }
         }
@@ -982,7 +1091,7 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
      *      ±score deltas are what keep that from being free money: a lone
      *      arbiter who rules badly is slashed by reputation, not by this split.
      */
-    function _distributeRewards(uint256 milestoneId, Dispute storage d, Round storage r, uint8 winner) private {
+    function _distributeRewards(uint256 milestoneId, Dispute storage d, Round storage r, uint8 winner, uint256 amount) private {
         // Pass 1 — total stake weight of the winning (revealed-majority) set.
         uint256 totalWeight;
         for (uint8 i = 0; i < r.arbiterCount; i++) {
@@ -995,7 +1104,10 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         // protocol's `disputeReward`, drawn from `rewardPool`. The draw is
         // capped at the pool balance, so a single dispute can never drain it
         // and a dry pool simply pays the arbiters from the fee alone.
+        // ...and to a tenth of the disputed amount, so a 1-wei milestone cannot
+        // farm a full subsidy out of the pool.
         uint256 subsidy = rewardPool < disputeReward ? rewardPool : disputeReward;
+        if (subsidy > amount / 10) subsidy = amount / 10;
         if (subsidy > 0) {
             rewardPool -= subsidy;
             emit RewardSubsidized(milestoneId, subsidy);
@@ -1010,11 +1122,11 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
             if (r.revealed[a] && r.votes[a] == winner) {
                 arbiterRegistry.applyScoreChange(a, int256(_deltaMajority()), _reasonMajority());
-                uint256 amount = (pot * r.stakeWeights[a]) / totalWeight;
-                if (amount > 0) {
-                    used += amount;
-                    emit ArbiterRewarded(milestoneId, a, amount);
-                    _pay(a, amount);
+                uint256 share = (pot * r.stakeWeights[a]) / totalWeight;
+                if (share > 0) {
+                    used += share;
+                    emit ArbiterRewarded(milestoneId, a, share);
+                    _payOrCredit(a, share);
                 }
             } else if (!r.revealed[a]) {
                 arbiterRegistry.applyScoreChange(a, int256(_deltaMissed()), _reasonMissed());
@@ -1059,26 +1171,14 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
         Round storage pr = rounds_[milestoneId][prevRound];
         if (!pr.resolved) revert WrongPhase(Phase.Reveal, Phase.Commit);
         if (block.timestamp > pr.revealDeadline + appealWindow) revert AppealWindowClosed();
+        if (d.appealCount >= MAX_APPEALS) revert AppealLimitReached();
 
         uint8 newRound = prevRound + 1;
         d.round = newRound;
         d.appealCount += 1;
-        d.fee = msg.value; // appeal fee becomes the new reward pot
-
-        // Hand the in-flight seat over ATOMICALLY, in the same transaction that
-        // supersedes the round. `_startRound` only ever INCREMENTS a seated
-        // panel's `activeDisputes`, and the two release sites (`_tally`'s
-        // no-quorum branch and `finalizeDispute`) only ever see `d.round` — by
-        // then the appeal round. So an appealed round 0 kept its seat forever:
-        // `activeDisputes[arbiter]` stayed > 0 permanently, the registry's
-        // `_isBusy` read it, and `requestUnstake` / `withdrawStake` /
-        // `reduceStake` reverted `StillHandlingDispute` for the rest of the
-        // arbiter's life — collateral locked by a round that no longer exists.
-        //
-        // Release BEFORE the new panel is seated, so an arbiter re-drawn into
-        // both rounds nets back to exactly 1 (its round-1 seat) instead of
-        // relying on the `> 0` guard to paper over an over-count.
-        _releaseActive(pr.arbiters, pr.arbiterCount);
+        // Every round's fee stays in the pot the final panel is paid from — the
+        // pot used to be overwritten, stranding the earlier fee in the contract.
+        d.fee += msg.value;
 
         emit AppealOpened(milestoneId, newRound, appellant, msg.value);
         address[3] memory none; // appeals re-draw fully at random
@@ -1108,8 +1208,8 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
 
         _tally(milestoneId, m, d, r, round);
 
-        // Only a quorum decision can overturn; a no-quorum appeal falls back and
-        // returns the milestone to Submitted (no overturn to score).
+        // Only a quorum decision can overturn; a no-quorum appeal keeps the
+        // standing ruling (no overturn to score).
         if (m.status == Status.Disputed && r.revealCount >= _requiredReveals(r)) {
             bool overturned = r.winningOutcome != prevOutcome;
             emit AppealResolved(milestoneId, round, overturned);
@@ -1403,6 +1503,34 @@ contract Escrow is Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTran
     /// @dev Floor fee, identical to the backend's feeOf: principal * bps / 10_000.
     function _feeOn(uint256 principal, uint16 bps) private pure returns (uint256) {
         return (principal * bps) / 10_000;
+    }
+
+    /// @dev Dispute payouts: push with a gas cap, and on failure hold the amount
+    ///      for `withdrawCredit`. One recipient that cannot (or will not) take
+    ///      ETH must never freeze a settlement that pays everyone else.
+    function _payOrCredit(address to, uint256 amount) private {
+        if (amount == 0) return;
+        bool success;
+        // Raw call: no return data is copied, so a recipient cannot return-bomb
+        // the settlement either.
+        assembly {
+            success := call(PAYOUT_GAS, to, amount, 0, 0, 0, 0)
+        }
+        if (success) return;
+        credit[to] += amount;
+        totalCredit += amount;
+        emit Credited(to, amount);
+    }
+
+    /// @notice Pull a dispute payout that could not be pushed.
+    function withdrawCredit() external nonReentrant {
+        address to = _msgSender();
+        uint256 amount = credit[to];
+        if (amount == 0) revert NothingToWithdraw();
+        credit[to] = 0;
+        totalCredit -= amount;
+        emit CreditWithdrawn(to, amount);
+        _pay(to, amount);
     }
 
     /// @dev Push payment, always the LAST effect in a payout path (CEI).

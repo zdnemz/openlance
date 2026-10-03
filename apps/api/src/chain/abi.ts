@@ -23,10 +23,10 @@ export const ESCROW_ABI = parseAbi([
   // ── Money lifecycle (frozen) ────────────────────────────────────────────
   'event MilestoneFunded(uint256 indexed milestoneId, bytes32 indexed ref, address indexed client, address freelancer, uint256 amount)',
   'event MilestoneSubmitted(uint256 indexed milestoneId, address indexed freelancer)',
-  'event MilestoneReleased(uint256 indexed milestoneId, address indexed freelancer, uint256 principal, uint256 fee, bool viaDisputeResolution)',
-  'event MilestoneRefunded(uint256 indexed milestoneId, address indexed client, uint256 amount, bool viaDisputeResolution)',
+  'event MilestoneReleased(uint256 indexed milestoneId, address freelancer, uint256 principal, uint256 fee, bool viaDisputeResolution)',
+  'event MilestoneRefunded(uint256 indexed milestoneId, address client, uint256 amount, bool viaDisputeResolution)',
   'event MilestoneSplit(uint256 indexed milestoneId, uint256 clientAmount, uint256 freelancerAmount, uint256 fee)',
-  'event MilestoneCancelled(uint256 indexed milestoneId, address indexed client, uint256 amount)',
+  'event MilestoneCancelled(uint256 indexed milestoneId, address client, uint256 amount)',
   'event FundsWithdrawn(uint256 indexed milestoneId, address indexed freelancer, uint256 amount)',
   'event FeeWithdrawn(address indexed to, uint256 amount)',
   // ── Drawdown model (lock full budget at publish, milestones draw from it) ──

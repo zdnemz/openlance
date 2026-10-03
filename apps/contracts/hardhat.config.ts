@@ -23,7 +23,11 @@ export default defineConfig({
       default: {
         version: "0.8.28",
         settings: {
-          optimizer: { enabled: true, runs: 200 },
+          // Escrow sits near EIP-170's 24,576-byte cap: the IR pipeline at low
+          // runs keeps it deployable (≈23.6 KB; legacy codegen is ≈26.9 KB).
+          // test/audit-regressions.ts fails the build if it ever crosses again.
+          optimizer: { enabled: true, runs: 50 },
+          viaIR: true,
           // Base Sepolia is on the Shanghai/Cancun EVM; cancun is safe and enables
           // transient storage (used by OZ's transient ReentrancyGuard if selected).
           evmVersion: "cancun",
@@ -32,7 +36,8 @@ export default defineConfig({
       production: {
         version: "0.8.28",
         settings: {
-          optimizer: { enabled: true, runs: 800 },
+          optimizer: { enabled: true, runs: 50 }, // see the default profile: EIP-170
+          viaIR: true,
           evmVersion: "cancun",
         },
       },

@@ -75,7 +75,7 @@ describe("UUPS upgrade authorization", () => {
         600n, // appealWindow
         "0x0000000000000000000000000000000000000000", // trustedForwarder
       ], { account: owner }),
-      /InvalidInitialization/,
+      /InvalidInitialization|0xf92ee8a9/, // IR codegen: selector, not name
     );
   });
 
@@ -98,7 +98,7 @@ describe("UUPS upgrade authorization", () => {
         259200n, // unstakeCooldown (3d)
         "0x0000000000000000000000000000000000000000", // trustedForwarder
       ], { account: owner }),
-      /InvalidInitialization/,
+      /InvalidInitialization|0xf92ee8a9/, // IR codegen: selector, not name
     );
   });
 });

@@ -501,17 +501,30 @@ fallback never restores `Disputed`, so an appeal opened on top of that round cou
 be tallied or finalized — `resolveAppeal` and `finalizeDispute` both require `Disputed` —
 yet the appeal fee was accepted and stranded. `appeal` now reverts `NotDisputed`.
 
-**`appeal` releases the superseded round's in-flight seat (was: a permanent
-`StillHandlingDispute`).** `activeDisputes` is incremented once per seat in
-`_startRound` and is the registry's only `_isBusy` source, so it gates
-`requestUnstake` / `withdrawStake` / `reduceStake`. Its two release sites — `_tally`'s
-no-quorum branch and `finalizeDispute` — both read `d.round`, which an appeal has already
-advanced. The appealed round's panel was therefore never released: every arbiter who sat
-on it kept `activeDisputes > 0` for the rest of their registration and could never unstake
-their collateral, over a round that no longer existed. `appeal` now calls
-`_releaseActive` on the superseded round in the same transaction that seats the new one, so
-the seat is handed over atomically rather than leaked. A re-drawn arbiter nets back to
-exactly 1 (their live round's seat).
+**The superseded round's seat is released when the appeal is tallied (was: never,
+then — briefly — at `appeal`).** `activeDisputes` gates `requestUnstake` /
+`withdrawStake` / `reduceStake`. Round N's panel is released inside `_tally` of round
+N+1, in the same transaction as `resolveAppeal`'s overturn penalty, so it can neither
+stay frozen forever nor unstake and walk away before the penalty lands.
+
+**Audit 2026-10-03 (docs/audit/2026-10-03.md).**
+- `openDisputeWith` seats only a panel both parties agreed on-chain:
+  `proposePanel(counterparty, panel)` then `acceptPanel(proposer, panel)` by the other
+  party; `agreedPanel(pairKey(client, freelancer))` holds its hash. One agreement per
+  client/freelancer pair; the latest one wins.
+- A round-0 no-quorum refund now applies the missed-reveal penalty (−15) to every
+  silent arbiter. An appeal round that misses quorum keeps the standing ruling
+  (`d.settledOutcome`, paid by `finalizeDispute`) instead of refunding.
+- `MAX_APPEALS = 2`. Every round's fee accumulates in `d.fee`, the pot the final
+  panel is paid from.
+- Dispute payouts (arbiter fees and rewards, client refunds and split halves) are
+  pushed with a 50k-gas raw call; a recipient that cannot take ETH is credited
+  (`credit`, `totalCredit`, `withdrawCredit`) instead of freezing the settlement.
+- The protocol subsidy is capped at a tenth of the disputed amount.
+- `resolveDispute` tallies round 0 only; appeal rounds go through `resolveAppeal`.
+- The arbiter draw forces a stride coprime with the roster length.
+- `commitVote` refuses an empty hash.
+- Solvency: balance == Σ unsettled + accruedFees + rewardPool + totalCredit + Σ claimable + free budgets.
 
 ### Open
 

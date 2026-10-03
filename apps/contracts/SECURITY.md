@@ -3,7 +3,7 @@
 Scope: `contracts/Escrow.sol`, `contracts/ArbiterRegistry.sol`,
 `contracts/OpenLanceTimelock.sol`, `contracts/IArbiterRegistry.sol`.
 
-Toolchain: Solidity 0.8.28 (optimizer on, `evmVersion = cancun`),
+Toolchain: Solidity 0.8.28 (IR pipeline, optimizer 50 runs, `evmVersion = cancun`),
 Hardhat 3.17, OpenZeppelin Contracts + Contracts-Upgradeable 5.6.1.
 
 ## What was checked
@@ -59,7 +59,7 @@ attacker contract**, none in our production logic:
    including the odd-wei split case that rounds to the client
    (`test/disputes.ts`).
 7. **Soulbound badges.** `ArbiterRegistry._update` reverts on every transfer and
-   burn — the ERC-5194 invariant cannot be bypassed (`test/registry.ts`).
+   burn; `Locked` is emitted at mint (ERC-5192) (`test/audit-regressions.ts`).
 
 ### Multi-arbiter specific
 

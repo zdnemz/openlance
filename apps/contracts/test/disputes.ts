@@ -25,6 +25,13 @@ async function setupDispute(arbitersAvailable = 3) {
   return ctx;
 }
 
+/** Both parties agree a panel on-chain: the client proposes, the freelancer accepts. */
+async function agree(escrow: any, panel: readonly `0x${string}`[]) {
+  const [, client, freelancer] = await viem.getWalletClients();
+  await escrow.write.proposePanel([freelancer!.account.address, panel], { account: client!.account });
+  await escrow.write.acceptPanel([client!.account.address, panel], { account: freelancer!.account });
+}
+
 /** Same roster + funding, without opening — for openDisputeWith tests. */
 async function setupFunded(arbitersAvailable = 3) {
   const ctx = await deployWithEoaOwner();
@@ -58,6 +65,7 @@ describe("Escrow — multi-arbiter disputes", () => {
     const { escrow, arbiters, client } = await setupFunded(4);
     const nom0 = arbiters[0]!.account.address;
     const nom1 = arbiters[1]!.account.address;
+    await agree(escrow, [nom0, nom1, ZERO]);
     await escrow.write.openDisputeWith([1n, [nom0, nom1, ZERO]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
     assert.equal(r.arbiterCount, 2, "panel decides the round — no random third seat");
@@ -75,6 +83,7 @@ describe("Escrow — multi-arbiter disputes", () => {
     // reported bug) and could also outvote the one they actually agreed on.
     const { escrow, arbiters, client } = await setupFunded(4);
     const kept = arbiters[0]!.account.address;
+    await agree(escrow, [kept, ZERO, ZERO]);
     await escrow.write.openDisputeWith([1n, [kept, ZERO, ZERO]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
     assert.equal(r.arbiterCount, 1, "a 1-arbiter panel seats one arbiter, not three");
@@ -88,6 +97,7 @@ describe("Escrow — multi-arbiter disputes", () => {
     // that mutually locked a single arbiter actually gets.
     const { escrow, arbiters, client } = await setupFunded(4);
     const solo = arbiters[0]!;
+    await agree(escrow, [solo.account.address, ZERO, ZERO]);
     await escrow.write.openDisputeWith([1n, [solo.account.address, ZERO, ZERO]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
     assert.equal(r.arbiterCount, 1, "only the locked arbiter sits");
@@ -106,6 +116,7 @@ describe("Escrow — multi-arbiter disputes", () => {
     // and the round still decides on 2 reveals.
     const { escrow, arbiters, client } = await setupFunded(5);
     const nom = arbiters.slice(0, 3).map((a) => a.account.address);
+    await agree(escrow, [nom[0]!, nom[1]!, nom[2]!]);
     await escrow.write.openDisputeWith([1n, [nom[0]!, nom[1]!, nom[2]!]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
     assert.equal(r.arbiterCount, 3, "a full panel seats all three");
@@ -125,6 +136,7 @@ describe("Escrow — multi-arbiter disputes", () => {
     await connection.networkHelpers.time.increase(Number(UNSTAKE_COOLDOWN) + 1);
     await registry.write.requestUnstake({ account: arbiters[0]!.account });
     await registry.write.requestUnstake({ account: arbiters[1]!.account });
+    await agree(escrow, [nom0, nom1, ZERO]);
     await escrow.write.openDisputeWith([1n, [nom0, nom1, ZERO]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
     assert.ok(r.arbiterCount >= 1, "a fully-ineligible panel must still be staffable");
@@ -134,20 +146,40 @@ describe("Escrow — multi-arbiter disputes", () => {
     }
   });
 
-  it("skips ineligible nominees (party, duplicate) and degrades to the remainder", async function () {
-    const { escrow, arbiters, client } = await setupFunded(4);
+  it("refuses a panel naming a party, and seats a duplicated nominee once", async function () {
+    const { escrow, arbiters, client, freelancer } = await setupFunded(4);
     const nom = arbiters[0]!.account.address;
-    // client is a party (skipped), nom appears twice (second copy skipped).
-    await escrow.write.openDisputeWith(
-      [1n, [client.account.address, nom, nom]],
-      { value: DISPUTE_FEE, account: client.account },
+    // A party can never be put on the panel — refused at proposal time.
+    await assert.rejects(
+      escrow.write.proposePanel([freelancer.account.address, [client.account.address, nom, ZERO]], { account: client.account }),
+      /BadPanel/,
     );
+    // A duplicate is seated once and the round degrades to the remainder.
+    await agree(escrow, [nom, nom, ZERO]);
+    await escrow.write.openDisputeWith([1n, [nom, nom, ZERO]], { value: DISPUTE_FEE, account: client.account });
     const r = await getRound(escrow, 1n, 0);
-    assert.equal(r.arbiterCount, 1, "the panel decides the round; only 1 nominee is eligible");
-    const selected = r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
-    assert.ok(!selected.includes(client.account.address.toLowerCase()), "party must never be selected");
-    assert.ok(selected.includes(nom.toLowerCase()), "eligible nominee must be selected");
-    assert.equal(new Set(selected).size, selected.length, "no duplicate selection");
+    assert.equal(r.arbiterCount, 1, "the panel decides the round; only 1 distinct nominee");
+    assert.equal(r.arbiters[0]!.toLowerCase(), nom.toLowerCase());
+  });
+
+  it("refuses a panel the counterparty never agreed to", async function () {
+    // The opener used to seat whatever it passed — its own arbiter included.
+    const { escrow, arbiters, client, freelancer } = await setupFunded(4);
+    const mine = arbiters[3]!.account.address;
+    await assert.rejects(
+      escrow.write.openDisputeWith([1n, [mine, ZERO, ZERO]], { account: client.account }),
+      /PanelNotAgreed/,
+    );
+    // A proposal alone is not an agreement, and the proposer cannot accept it.
+    await escrow.write.proposePanel([freelancer.account.address, [mine, ZERO, ZERO]], { account: client.account });
+    await assert.rejects(
+      escrow.write.acceptPanel([client.account.address, [mine, ZERO, ZERO]], { account: client.account }),
+      /PanelNotAgreed/,
+    );
+    await assert.rejects(
+      escrow.write.openDisputeWith([1n, [mine, ZERO, ZERO]], { account: client.account }),
+      /PanelNotAgreed/,
+    );
   });
 
   it("opens a degraded 1-arbiter round when only one is eligible", async function () {
@@ -423,67 +455,41 @@ describe("Escrow — multi-arbiter disputes", () => {
     // a decision" below, which runs that whole path to a settled refund.
   });
 
-  it("an appeal hands the in-flight seat over — no arbiter is left busy forever", async function () {
-    // `activeDisputes` is what the registry reads to gate `requestUnstake` /
-    // `withdrawStake` / `reduceStake`. `appeal` supersedes a resolved round and
-    // seats a fresh one, but the two release sites (`_tally`'s no-quorum branch
-    // and `finalizeDispute`) only ever see `d.round` — by then the APPEAL round.
-    // The appealed round's panel therefore kept its seat permanently: the
-    // collateral of an arbiter who had already voted and been scored was locked
-    // for life by a round that no longer existed. The appeal must release the
-    // superseded panel in the same transaction that seats the new one.
+  it("the superseded panel is released when the appeal is tallied — never stuck, never early", async function () {
+    // `activeDisputes` gates `requestUnstake` / `withdrawStake` / `reduceStake`.
+    // Round 0's panel must be released (it was once held forever), but not at
+    // `appeal`: the overturn penalty lands at `resolveAppeal`, and an arbiter
+    // freed earlier could unstake and walk away from it.
     const { escrow, registry, arbiters, client } = await setupDispute(6);
     const roster = arbiters.slice(0, 6);
     const panel = async (round: number) => {
       const r = await getRound(escrow, 1n, round);
       return r.arbiters.slice(0, r.arbiterCount).map((a) => a.toLowerCase());
     };
-
-    const r0 = await getRound(escrow, 1n, 0);
     const panel0 = await panel(0);
-    for (const a of panel0) assert.equal(await escrow.read.activeDisputes([a]), 1n, "a seated arbiter holds one in-flight seat");
+    for (const a of panel0) assert.equal(await escrow.read.activeDisputes([a]), 1n);
 
-    await commitRevealAll(escrow, 1n, 0, walletsFor(r0, roster), RELEASE);
+    await commitRevealAll(escrow, 1n, 0, walletsFor(await getRound(escrow, 1n, 0), roster), RELEASE);
     await escrow.write.resolveDispute([1n], { account: client.account });
-    // The round is resolved but the appeal window is still open, so its panel
-    // stays seated — that is correct, the dispute is not over yet.
-    for (const a of panel0) assert.equal(await escrow.read.activeDisputes([a]), 1n, "a resolved round keeps its panel busy until the dispute is over");
-
     await escrow.write.appeal([1n], { value: DISPUTE_FEE, account: client.account });
     const panel1 = await panel(1);
-    for (const a of panel0) {
-      const inBoth = panel1.includes(a);
-      // The appeal round is live, so anyone seated NOW is busy. An arbiter only
-      // in the appealed round is not: that round is gone.
-      assert.equal(await escrow.read.activeDisputes([a]), inBoth ? 1n : 0n, "the appealed panel is released; a re-drawn arbiter still holds its new seat");
-    }
 
-    // ...and the registry agrees: an arbiter the appeal dropped is no longer
-    // "busy", so the gate that would freeze their collateral lets them through.
-    // The appeal round's own panel is still seated, and stays gated.
+    // During the appeal, round 0's panel is still held: nobody leaves early.
     for (const a of panel0.filter((x) => !panel1.includes(x))) {
+      assert.equal(await escrow.read.activeDisputes([a]), 1n, "the appealed panel stays busy until the appeal is tallied");
       const w = roster.find((x) => x.account.address.toLowerCase() === a)!;
-      await assert.doesNotReject(
-        registry.write.requestUnstake({ account: w.account }),
-        "an arbiter the appeal released must not stay frozen by a dead round",
-      );
-      await registry.write.cancelUnstake({ account: w.account }); // keep the roster intact
-    }
-    for (const a of panel1) {
-      const w = roster.find((x) => x.account.address.toLowerCase() === a)!;
-      await assert.rejects(
-        registry.write.requestUnstake({ account: w.account }),
-        /StillHandlingDispute/,
-        "the live appeal round still holds its panel",
-      );
+      await assert.rejects(registry.write.requestUnstake({ account: w.account }), /StillHandlingDispute/);
     }
 
-    await commitRevealAll(escrow, 1n, 1, walletsFor(await getRound(escrow, 1n, 1), roster), RELEASE);
-    await escrow.write.resolveAppeal([1n], { account: client.account });
+    await commitRevealAll(escrow, 1n, 1, walletsFor(await getRound(escrow, 1n, 1), roster), REFUND);
+    await escrow.write.resolveAppeal([1n], { account: client.account }); // overturned
+    for (const a of panel0.filter((x) => !panel1.includes(x))) {
+      assert.equal(await escrow.read.activeDisputes([a]), 0n, "released once the appeal is tallied");
+      assert.equal(await registry.read.trustScoreOf([a]), 75n, "and the overturn penalty reached it first");
+    }
+
     await passAppealWindow(escrow, 1n, 1);
     await escrow.write.finalizeDispute([1n], { account: client.account });
-
-    // Every arbiter who ever sat is free again — no leaked seat anywhere.
     for (const a of new Set([...panel0, ...panel1])) {
       assert.equal(await escrow.read.activeDisputes([a]), 0n, "a settled dispute leaves no arbiter busy");
     }
