@@ -14,7 +14,7 @@ import { requireAuth, requireKyc } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
 import { emitNotification } from './notify.ts'
 import { attachments, projectMilestones, submissionAttachments, submissions } from '../db/schema.ts'
-import { loadMilestone, requireParticipant, ensureMilestoneOnchain } from './helpers.ts'
+import { loadMilestone, requireParticipant, requireParticipantOrArbiter, ensureMilestoneOnchain } from './helpers.ts'
 import { MAX_OWNER_ATTACHMENTS } from '../storage/index.ts'
 
 /** Re-exported for the check script; the invariant lives with the storage policy. */
@@ -111,7 +111,8 @@ export async function requestChanges(request: Request, projectId: string, milest
 
 export async function listSubmissions(request: Request, projectId: string, milestoneId: string) {
   const user = await requireAuth(request)
-  await requireParticipant(projectId, user)
+  // The delivery is the evidence a seated arbiter rules on.
+  await requireParticipantOrArbiter(projectId, user)
   const { milestone, project } = await loadMilestone(milestoneId)
   if (milestone.projectId !== project.id) throw Errors.notFound('Milestone in this project')
   const db = getDb()

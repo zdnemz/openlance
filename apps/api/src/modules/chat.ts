@@ -15,7 +15,7 @@ import { validate } from '../lib/http.ts'
 import { requireAuth, requireKyc } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
 import { attachments, messageReadCursors, messages } from '../db/schema.ts'
-import { requireParticipant } from './helpers.ts'
+import { requireParticipant, requireParticipantOrArbiter } from './helpers.ts'
 
 /**
  * The two participants of a project room. `requireParticipant` has already
@@ -27,7 +27,8 @@ function counterpartyOf(project: { clientId: string; freelancerId: string }, use
 
 export async function listMessages(request: Request, projectId: string) {
   const user = await requireAuth(request)
-  const project = await requireParticipant(projectId, user)
+  // Read-only for seated arbiters: the conversation is dispute evidence.
+  const project = await requireParticipantOrArbiter(projectId, user)
   const url = new URL(request.url)
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 50) || 50, 200)
   const before = url.searchParams.get('before') // message id for cursor pagination

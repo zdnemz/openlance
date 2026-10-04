@@ -31,7 +31,7 @@ import { validate } from '../lib/http.ts'
 import { requireAuth, requireKyc } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
 import { attachments, proposals } from '../db/schema.ts'
-import { requireParticipant, requireProposalReader } from './helpers.ts'
+import { requireParticipant, requireParticipantOrArbiter, requireProposalReader } from './helpers.ts'
 import { isMimeAllowed, storageConfig, storageKey, supabaseAdmin } from '../storage/index.ts'
 
 // ── Supabase Storage driver ─────────────────────────────────────────────────
@@ -172,7 +172,8 @@ export async function attachmentUrl(request: Request, attachmentId: string) {
   const db = getDb()
   const [att] = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1)
   if (!att) throw Errors.notFound('Attachment')
-  if (att.projectId) await requireParticipant(att.projectId, user)
+  // Project files are dispute evidence too, so seated arbiters may read them.
+  if (att.projectId) await requireParticipantOrArbiter(att.projectId, user)
   else await requireProposalReader(att.proposalId!, user)
   if (att.status !== 'confirmed') throw Errors.badRequest('upload_missing', 'Attachment not uploaded yet')
   const cfg = storageConfig()
@@ -189,6 +190,13 @@ export async function putAttachmentRaw(request: Request, attachmentId: string) {
   const [att] = await db.select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1)
   if (!att) throw Errors.notFound('Attachment')
   if (att.uploaderId !== user.id) throw Errors.forbidden('Not your attachment')
+  // Confirmed bytes are evidence: replacing them after the other side (or an
+  // arbiter) looked would rewrite a delivery or a dispute exhibit.
+  if (att.status === 'confirmed') throw Errors.conflict('attachment_confirmed', 'A confirmed file cannot be replaced — upload a new one')
+  // Refuse an oversized body before buffering it.
+  if (Number(request.headers.get('content-length') ?? 0) > storageConfig().maxUploadBytes) {
+    throw Errors.badRequest('too_large', 'File exceeds size limit')
+  }
   const buf = await request.arrayBuffer()
   if (buf.byteLength > storageConfig().maxUploadBytes) throw Errors.badRequest('too_large', 'File exceeds size limit')
   if (buf.byteLength === 0) throw Errors.badRequest('empty_upload', 'No bytes received')
