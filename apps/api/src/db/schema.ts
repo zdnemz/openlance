@@ -66,6 +66,16 @@ const wei = (name: string) => numeric(name, { precision: 78, scale: 0 })
 const nonNeg = (name: string, ...cols: AnyPgColumn[]) =>
   check(name, sql`${sql.join(cols.map((c) => sql`${c} >= 0`), sql` and `)}`)
 
+/*
+ * Every table is `.enableRLS()` with NO policies. The API connects as the table
+ * owner and bypasses RLS; Supabase's Data API (PostgREST) does not. These
+ * tables live in `public`, where Supabase grants `anon`/`authenticated` full
+ * access, and the API's session JWT is signed with the project secret as
+ * `authenticated` — without RLS the whole database was one published anon key
+ * away from read/write over REST. Add a policy only for a table a browser must
+ * read directly.
+ */
+
 // ── Identity ────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -95,7 +105,7 @@ export const users = pgTable('users', {
 }, (t) => [
   nonNeg('users_totals_nonneg', t.totalEarnedWei, t.totalPaidWei),
   check('users_completed_nonneg', sql`${t.completedProjectsAsClient} >= 0 and ${t.completedProjectsAsFreelancer} >= 0`),
-])
+]).enableRLS()
 
 // ── Gasless sponsorship sessions ────────────────────────────────────────────
 /**
@@ -126,7 +136,7 @@ export const sponsorshipSessions = pgTable('sponsorship_sessions', {
 }, (t) => [
   index('sponsorship_sessions_user_idx').on(t.userId),
   index('sponsorship_sessions_expires_idx').on(t.expiresAt),
-])
+]).enableRLS()
 
 // ── Marketplace ─────────────────────────────────────────────────────────────
 export const jobs = pgTable('jobs', {
@@ -164,7 +174,7 @@ export const jobs = pgTable('jobs', {
   // A max below the min is an inverted range, not a budget. Every listing filter
   // (`budget_max >= ?`) assumes max is the upper bound.
   check('jobs_budget_ordered', sql`${t.budgetMaxWei} >= ${t.budgetMinWei}`),
-])
+]).enableRLS()
 
 export const proposals = pgTable('proposals', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -192,7 +202,7 @@ export const proposals = pgTable('proposals', {
   index('proposals_freelancer_idx').on(t.freelancerId),
   nonNeg('proposals_bid_nonneg', t.bidTotalWei),
   check('proposals_delivery_days_positive', sql`${t.deliveryDays} > 0`),
-])
+]).enableRLS()
 
 export const proposalMilestones = pgTable('proposal_milestones', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -205,7 +215,7 @@ export const proposalMilestones = pgTable('proposal_milestones', {
   uniqueIndex('proposal_milestones_position_idx').on(t.proposalId, t.position),
   nonNeg('proposal_milestones_amount_nonneg', t.amountWei),
   check('proposal_milestones_position_nonneg', sql`${t.position} >= 0`),
-])
+]).enableRLS()
 
 // ── Projects (created at award — the off-chain bridge event, PRD F2) ────────
 export const projects = pgTable('projects', {
@@ -227,7 +237,7 @@ export const projects = pgTable('projects', {
   // "my projects" as client and as freelancer — the two home screens.
   index('projects_client_idx').on(t.clientId),
   index('projects_freelancer_idx').on(t.freelancerId),
-])
+]).enableRLS()
 
 /**
  * Per-project milestones. Created from the accepted proposal's breakdown;
@@ -261,7 +271,7 @@ export const projectMilestones = pgTable('project_milestones', {
   uniqueIndex('project_milestones_position_idx').on(t.projectId, t.position),
   nonNeg('project_milestones_amount_nonneg', t.amountWei),
   check('project_milestones_position_nonneg', sql`${t.position} >= 0`),
-])
+]).enableRLS()
 
 // ── Collaboration ───────────────────────────────────────────────────────────
 /** Append-only evidence log: no update, no delete — by design (PRD F6). */
@@ -279,7 +289,7 @@ export const messages = pgTable('messages', {
   index('messages_project_created_idx').on(t.projectId, t.createdAt),
   index('messages_sender_idx').on(t.senderId),
   index('messages_attachment_idx').on(t.attachmentId),
-])
+]).enableRLS()
 
 /**
  * How far each participant has read, one row per (project, viewer). It lives
@@ -298,7 +308,7 @@ export const messageReadCursors = pgTable('message_read_cursors', {
   readThrough: timestamp('read_through', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   primaryKey({ columns: [t.projectId, t.userId] }),
-])
+]).enableRLS()
 
 /**
  * One file store for two owners. A project file (deliverable, submission
@@ -330,7 +340,7 @@ export const attachments = pgTable('attachments', {
   // the project directory itself, where a HEAD "succeeds" and the attachment
   // confirms against nothing. Reject the empty path at the boundary.
   check('attachments_storage_path_present', sql`length(${t.storagePath}) > 0`),
-])
+]).enableRLS()
 
 export const submissions = pgTable('submissions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -338,7 +348,7 @@ export const submissions = pgTable('submissions', {
   authorId: uuid('author_id').notNull().references(() => users.id),
   notes: text('notes').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('submissions_milestone_idx').on(t.milestoneId), index('submissions_author_idx').on(t.authorId)])
+}, (t) => [index('submissions_milestone_idx').on(t.milestoneId), index('submissions_author_idx').on(t.authorId)]).enableRLS()
 
 /**
  * Join table. It had a uniqueIndex but NO primary key, so Postgres had no
@@ -353,7 +363,7 @@ export const submissionAttachments = pgTable('submission_attachments', {
 }, (t) => [
   primaryKey({ columns: [t.submissionId, t.attachmentId] }),
   index('submission_attachments_attachment_idx').on(t.attachmentId),
-])
+]).enableRLS()
 
 // ── Trust layer ─────────────────────────────────────────────────────────────
 /** One review per side per milestone; only accepted after on-chain settlement. */
@@ -375,7 +385,7 @@ export const reviews = pgTable('reviews', {
   // unique index above only serves milestone-scoped lookups.
   index('reviews_reviewer_idx').on(t.reviewerId),
   index('reviews_reviewee_created_idx').on(t.revieweeId, t.createdAt),
-])
+]).enableRLS()
 
 /**
  * Dispute coordination lives off-chain; funds/outcomes live on-chain.
@@ -439,7 +449,7 @@ export const disputes = pgTable('disputes', {
   // negative value is a decode error, and it would silently mis-address the
   // round the appeal/overturn logic reads.
   check('disputes_round_nonneg', sql`${t.round} >= 0`),
-])
+]).enableRLS()
 
 // ── Chain mirror (untrusted cache — PRD F13) ───────────────────────────────
 export const ledgerEvents = pgTable('ledger_events', {
@@ -464,7 +474,7 @@ export const ledgerEvents = pgTable('ledger_events', {
   // block DESC. blockNumber was the only column with no index — the single most
   // selective column in the table, and the one that grows without bound.
   index('ledger_chain_block_idx').on(t.chainId, t.blockNumber),
-])
+]).enableRLS()
 
 /** Indexer checkpoint per contract (last fully ingested block). */
 export const indexerState = pgTable('indexer_state', {
@@ -488,7 +498,7 @@ export const indexerState = pgTable('indexer_state', {
    */
   contractAddress: text('contract_address'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}).enableRLS()
 
 // ── Notifications / webhooks (PRD F9) ───────────────────────────────────────
 /** Transactional outbox: one row per domain event; delivery is a separate concern. */
@@ -505,7 +515,7 @@ export const notificationEvents = pgTable('notification_events', {
   // slaScan de-dupes with `type = ? AND milestone_id = ?` per pending dispute,
   // inside a loop (crons.ts:31) — milestone_id is the selective side.
   index('notification_events_milestone_type_idx').on(t.milestoneId, t.type),
-])
+]).enableRLS()
 
 /**
  * Per-user inbox projection of the outbox. One row per (event, recipient) —
@@ -522,7 +532,7 @@ export const notificationRecipients = pgTable('notification_recipients', {
   uniqueIndex('notification_recipients_event_user_idx').on(t.eventId, t.userId),
   index('notification_recipients_user_created_idx').on(t.userId, t.createdAt),
   index('notification_recipients_user_unread_idx').on(t.userId, t.readAt),
-])
+]).enableRLS()
 
 /**
  * Per-user notification preferences (PRD F9). Absence of a row = default
@@ -536,7 +546,7 @@ export const notificationPreferences = pgTable('notification_preferences', {
   eventType: text('event_type').notNull(),
   muted: boolean('muted').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex('notification_prefs_user_type_idx').on(t.userId, t.eventType)])
+}, (t) => [uniqueIndex('notification_prefs_user_type_idx').on(t.userId, t.eventType)]).enableRLS()
 
 export const webhookSubscriptions = pgTable('webhook_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -551,7 +561,7 @@ export const webhookSubscriptions = pgTable('webhook_subscriptions', {
   // (notify.ts:141) — this is on the hot path of every single emitted event.
   index('webhook_subscriptions_active_idx').on(t.active),
   index('webhook_subscriptions_user_idx').on(t.userId),
-])
+]).enableRLS()
 
 export const webhookDeliveries = pgTable('webhook_deliveries', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -570,7 +580,7 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
   // eventId cascades from notificationEvents; an unindexed FK makes every
   // outbox delete a seq-scan of this table.
   index('webhook_deliveries_event_idx').on(t.eventId),
-])
+]).enableRLS()
 
 /** Nightly mirror-vs-chain reconciliation reports (PRD §7.3 + interviews). */
 export const reconciliationRuns = pgTable('reconciliation_runs', {
@@ -580,7 +590,7 @@ export const reconciliationRuns = pgTable('reconciliation_runs', {
   checked: integer('checked').notNull().default(0),
   drifts: integer('drifts').notNull().default(0),
   report: jsonb('report'),
-})
+}).enableRLS()
 
 // ── Row type exports ────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect
