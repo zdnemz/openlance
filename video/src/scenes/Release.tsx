@@ -20,7 +20,7 @@ export function Release() {
   return (
     <AbsoluteFill>
       <StageLayout title={<StageTitle stage="Stage 3" verb="Release" chip="approve(milestone 1) · fee 2.5%" chipAt={approvedAt} />}>
-        <div style={{ position: "absolute", left: cx - chest / 2, top: 24 }}>
+        <div style={{ position: "absolute", left: cx - chest / 2, top: 72 }}>
           <Sprite name={open ? "chestOpen" : "chest"} size={chest} />
         </div>
         {/* coins burst on stepped arcs, drawn on twos and snapped to the 8px grid */}
@@ -28,24 +28,25 @@ export function Release() {
           Array.from({ length: 12 }, (_, i) => {
             const t = twos(f - payAt);
             if (t > 30) return null;
-            const vx = (hash(i) * 2 - 1) * 20;
-            const vy = -(24 + hash(i + 40) * 16);
+            // low, wide arcs: the tallest peaks ~170px, under the HUD in both cuts
+            const vx = (hash(i) * 2 - 1) * 22;
+            const vy = -(12 + hash(i + 40) * 10);
             const x = snap(vx * t);
-            const y = snap(vy * t + 1.1 * t * t);
+            const y = snap(vy * t + 0.7 * t * t);
             return (
-              <div key={i} style={{ position: "absolute", left: cx - 32 + x, top: 96 + y }}>
+              <div key={i} style={{ position: "absolute", left: cx - 32 + x, top: 152 + y }}>
                 <Sprite name="coin" size={64} />
               </div>
             );
           })}
         {f >= approvedAt && (
-          <div style={{ position: "absolute", left: cx + 72, top: 8, ...popScale(f, approvedAt) }}>
+          <div style={{ position: "absolute", left: cx + 72, top: 48, ...popScale(f, approvedAt) }}>
             <Display size={28} color={C.roseLight} style={{ padding: "14px 18px", border: `4px solid ${C.roseLight}`, background: C.ink }}>
               Approved
             </Display>
           </div>
         )}
-        <div style={{ position: "absolute", left: 0, right: 0, top: 316, display: "flex", flexDirection: "column", alignItems: "center", gap: 20, ...pop(f, payAt + 4) }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 360, display: "flex", flexDirection: "column", alignItems: "center", gap: 20, ...pop(f, payAt + 4) }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 20 }}>
             <span style={{ fontFamily: F.display, fontSize: 56, color: C.released }}>+0.234</span>
             <span style={{ fontFamily: F.display, fontSize: 24, color: C.faint }}>ETH</span>
@@ -53,7 +54,7 @@ export function Release() {
           </div>
           <Badge label="released" color={C.released} size={20} />
         </div>
-        <div style={{ position: "absolute", left: 0, right: 0, top: 540, display: "flex", justifyContent: "center", gap: 56 }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 568, display: "flex", justifyContent: "center", gap: 56 }}>
           <Struck word="Invoices" at={invAt} />
           <Struck word="Chasing" at={chaseAt} />
         </div>

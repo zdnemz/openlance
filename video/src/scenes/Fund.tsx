@@ -1,7 +1,7 @@
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { Sfx } from "../components/Sfx";
 import { INSTRUMENT_W, StageLayout, StageTitle } from "../components/Stage";
-import { blink, countTo, shake, snap, stepIn, twos } from "../motion";
+import { blink, countTo, pop, shake, snap, stepIn, twos } from "../motion";
 import { Badge, Panel, Sprite } from "../pixel";
 import { cue } from "../timeline";
 import { C, F, FRAME } from "../theme";
@@ -10,29 +10,32 @@ import { C, F, FRAME } from "../theme";
 export function Fund() {
   const f = useCurrentFrame();
   const insertAt = cue("fund", "insert");
-  const landAt = cue("fund", "coin") + 10;
+  const dropAt = cue("fund", "coin");
+  const landAt = dropAt + 8;
   const lockAt = cue("fund", "locks");
   const locked = f >= lockAt;
 
-  // the coin falls from above the frame into the lock slot, accelerating, in 8px steps
-  const fall = stepIn(twos(f), insertAt, landAt - insertAt, 6);
-  const coinY = snap(-640 + fall * fall * 640 + 40);
+  // the coin pops in above the lock spinning (a stepped flip), then drops into the slot on "coin"
+  const fall = stepIn(twos(f), dropAt, landAt - dropAt, 4);
+  const coinY = snap(-48 + fall * fall * 144);
+  const spin = f >= dropAt ? 1 : [1, 0.5, 0.125, 0.5][Math.floor(f / 3) % 4]!;
   const value = countTo(f, landAt, 0, 0.24);
   const state = locked ? { label: "funded", color: C.funded } : { label: "pending", color: C.pending };
-  const lockSize = 160;
+  const lockSize = 144;
 
   return (
     <AbsoluteFill>
       <StageLayout title={<StageTitle stage="Stage 1" verb="Fund" chip="fund(milestone 1) · 0.240 ETH" chipAt={landAt} />}>
+        {/* drawn under the lock, so the lock's body swallows the coin as it lands */}
         {f >= insertAt && f < landAt && (
-          <div style={{ position: "absolute", left: (INSTRUMENT_W - 96) / 2, top: coinY }}>
+          <div style={{ position: "absolute", left: (INSTRUMENT_W - 96) / 2, top: coinY, opacity: pop(f, insertAt).opacity, transform: `scaleX(${spin})` }}>
             <Sprite name="coin" size={96} />
           </div>
         )}
-        <div style={{ position: "absolute", left: (INSTRUMENT_W - lockSize) / 2, top: 0, transform: `translateY(${locked ? 0 : -8}px)` }}>
+        <div style={{ position: "absolute", left: (INSTRUMENT_W - lockSize) / 2, top: 64, transform: `translateY(${locked ? 0 : -8}px)` }}>
           <Sprite name={locked ? "lock" : "lockOpen"} size={lockSize} />
         </div>
-        <div style={{ position: "absolute", left: 40, right: 40, top: 200, transform: `translateX(${shake(f, lockAt)}px)` }}>
+        <div style={{ position: "absolute", left: 40, right: 40, top: 240, transform: `translateX(${shake(f, lockAt)}px)` }}>
           <Panel accent style={{ padding: 40 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
               <span style={{ fontFamily: F.body, fontSize: 28, color: C.faint, textTransform: "uppercase" }}>milestone 1 · threat model</span>
