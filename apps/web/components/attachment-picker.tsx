@@ -10,9 +10,7 @@
  * read the same number so a client cannot walk around the limit and then be
  * surprised by a 400.
  */
-import { Paperclip } from "@phosphor-icons/react/dist/csr/Paperclip";
-import { X } from "@phosphor-icons/react/dist/csr/X";
-
+import { Paperclip, X } from "@/components/icons";
 export function AttachmentPicker({
   files,
   onChange,

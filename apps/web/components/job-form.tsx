@@ -8,11 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { CaretDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { Check } from "@phosphor-icons/react/dist/csr/Check";
-import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
-import { X } from "@phosphor-icons/react/dist/csr/X";
+import { ArrowRight, CaretDown, Check, Warning, X } from "@/components/icons";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";

@@ -26,12 +26,7 @@ import {
   AddressAvatar, Chip, EthAmount, ListHead, Skeleton, EmptyState, Copyable, InlineLoading,
 } from "@/components/design";
 import { shortAddress, timeAgo, dateLabel } from "@/lib/format";
-import { Star } from "@phosphor-icons/react/dist/csr/Star";
-import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
-import { PencilSimple } from "@phosphor-icons/react/dist/csr/PencilSimple";
-import { Check } from "@phosphor-icons/react/dist/csr/Check";
-import { X } from "@phosphor-icons/react/dist/csr/X";
-import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
+import { Check, PencilSimple, SealCheck, Star, Trash, X } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

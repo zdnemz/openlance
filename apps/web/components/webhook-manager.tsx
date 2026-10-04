@@ -8,15 +8,7 @@
  */
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus } from "@phosphor-icons/react/dist/csr/Plus";
-import { Trash } from "@phosphor-icons/react/dist/csr/Trash";
-import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { ArrowsClockwise } from "@phosphor-icons/react/dist/csr/ArrowsClockwise";
-import { ArrowsCounterClockwise } from "@phosphor-icons/react/dist/csr/ArrowsCounterClockwise";
-import { CaretDown } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { WarningCircle } from "@phosphor-icons/react/dist/csr/WarningCircle";
-import { Clock } from "@phosphor-icons/react/dist/csr/Clock";
+import { ArrowsClockwise, ArrowsCounterClockwise, CaretDown, CheckCircle, Clock, PaperPlaneTilt, Plus, Trash, WarningCircle } from "@/components/icons";
 import { Copyable, EmptyState, press, Skeleton } from "@/components/design";
 import { get, post, del } from "@/lib/api";
 import { cn } from "@/lib/utils";

@@ -10,10 +10,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { apiUrl } from '@/lib/api'
-import {
-  Activity, ArrowUpRight, Blocks, Boxes, Coins, Database, FileText, Gauge, HardDrive,
-  Layers, Link2, MessageSquare, Radio, ServerCog, ShieldCheck, Star, Users, Wallet, Zap,
-} from 'lucide-react'
+import { Activity, ArrowUpRight, Blocks, Boxes, Coins, Database, FileText, Gauge, HardDrive, Layers, Link2, MessageSquare, Radio, ServerCog, ShieldCheck, Star, Users, Wallet, Zap } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'

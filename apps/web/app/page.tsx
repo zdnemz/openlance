@@ -13,13 +13,7 @@ import { Logo } from "@/components/app-shell";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { StatusDot, AddressAvatar } from "@/components/design";
 import { MagneticLink, SpotCard } from "@/components/motion";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
-import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
-import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
-import { FilePlus } from "@phosphor-icons/react/dist/csr/FilePlus";
-
+import { ArrowRight, CheckCircle, FilePlus, Gavel, HandCoins, LockKeyOpen } from "@/components/icons";
 /* ── motion vocabulary ──────────────────────────────────────────────────── */
 
 const spring = { type: "spring", stiffness: 100, damping: 20 } as const;

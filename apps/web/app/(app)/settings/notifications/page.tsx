@@ -11,12 +11,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
-import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { BellSlash } from "@phosphor-icons/react/dist/csr/BellSlash";
-import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { ToggleLeft } from "@phosphor-icons/react/dist/csr/ToggleLeft";
-import { ToggleRight } from "@phosphor-icons/react/dist/csr/ToggleRight";
+import { Bell, BellSlash, CheckCircle, PaperPlaneTilt, ToggleLeft, ToggleRight } from "@/components/icons";
 import { AddressAvatar, EmptyState, press, Skeleton } from "@/components/design";
 import { WebhookManager } from "@/components/webhook-manager";
 import { useWebhooks, useNotifications, useNotificationPreferences, useInvalidate } from "@/lib/queries";

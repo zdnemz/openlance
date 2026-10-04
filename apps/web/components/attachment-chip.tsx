@@ -9,7 +9,7 @@
  * a plain <a> — both the bid view and the project room open files the same way.
  */
 import { useState } from "react";
-import { Paperclip } from "@phosphor-icons/react/dist/csr/Paperclip";
+import { Paperclip } from "@/components/icons";
 import { get, fileUrl } from "@/lib/api";
 
 export function AttachmentChip({ attachment }: { attachment: { id: string; filename: string; sizeBytes: number } }) {

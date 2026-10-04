@@ -28,10 +28,7 @@ import { claimSeatAction, useChainAction } from "@/lib/chain-actions";
 import { COUNTRIES } from "@/lib/countries";
 import { press } from "@/components/design";
 import type { PublicUser, UserRole } from "@/lib/types";
-import {
-  CheckCircle, Circle, Spinner, SealCheck, ShieldCheck, Check, CaretDown, ArrowLeft,
-  IdentificationCard, IdentificationBadge, Fingerprint, Scan, Globe, User as UserIcon,
-} from "@phosphor-icons/react";
+import { ArrowLeft, CaretDown, Check, CheckCircle, Circle, Fingerprint, Globe, IdentificationBadge, IdentificationCard, Scan, SealCheck, ShieldCheck, Spinner, User as UserIcon } from "@/components/icons";
 import { toast } from "sonner";
 
 export default function OnboardingPage() {

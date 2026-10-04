@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SealCheck, SignOut, UserCircle, Copy, Check, Spinner } from "@phosphor-icons/react";
+import { Check, Copy, SealCheck, SignOut, Spinner, UserCircle } from "@/components/icons";
 import Link from "next/link";
 import { toast } from "sonner";
 

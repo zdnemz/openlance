@@ -7,16 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
-import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
-import { Lightning } from "@phosphor-icons/react/dist/csr/Lightning";
-import { FileText } from "@phosphor-icons/react/dist/csr/FileText";
-import { ShieldWarning } from "@phosphor-icons/react/dist/csr/ShieldWarning";
-import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
-import { Star } from "@phosphor-icons/react/dist/csr/Star";
-import { Handshake } from "@phosphor-icons/react/dist/csr/Handshake";
-import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { GearSix } from "@phosphor-icons/react/dist/csr/GearSix";
+import { Bell, CheckCircle, Coins, FileText, GearSix, Handshake, Lightning, Scales, ShieldWarning, Star } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { useNotifications, useInvalidate } from "@/lib/queries";
 import { useSession } from "@/lib/session";

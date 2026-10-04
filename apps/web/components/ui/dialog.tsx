@@ -2,8 +2,7 @@
 
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { X as XIcon } from "@phosphor-icons/react/dist/csr/X"
-
+import { X as XIcon } from "@/components/icons";
 import { cn } from "@/lib/utils"
 
 function Dialog({

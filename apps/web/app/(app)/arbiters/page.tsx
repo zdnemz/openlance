@@ -23,11 +23,9 @@ import { useChainAction, proposePanelAction, acceptPanelAction } from "@/lib/cha
 import { Button } from "@/components/ui/button";
 import { AddressText, ListHead } from "@/components/design";
 import { toast } from "sonner";
-import { Check } from "@phosphor-icons/react/dist/csr/Check";
+import { Check, Scales, SealCheck } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
-import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
-import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
 import type { ArbiterView, ProjectView } from "@/lib/types";
 
 /**

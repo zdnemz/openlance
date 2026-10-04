@@ -14,7 +14,7 @@ import { useSession } from "@/lib/session";
 import { ListHead, Skeleton, EmptyState, StatusBadge } from "@/components/design";
 import { PageHeader } from "@/components/page-header";
 import { timeAgo } from "@/lib/format";
-import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
+import { Gavel } from "@/components/icons";
 import { DisputePanel } from "@/components/dispute-panel";
 import type { DisputeView } from "@/lib/types";
 

@@ -11,11 +11,7 @@ import { ListHead, EthAmount, HashText, press, Skeleton, StatusBadge } from "@/c
 import { formatEth, timeAgo, toWei } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ShieldStar } from "@phosphor-icons/react/dist/csr/ShieldStar";
-import { ArrowsClockwise } from "@phosphor-icons/react/dist/csr/ArrowsClockwise";
-import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
-import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
-
+import { ArrowsClockwise, CheckCircle, Coins, ShieldStar } from "@/components/icons";
 interface ReconciliationRun {
   id: string;
   startedAt: string;

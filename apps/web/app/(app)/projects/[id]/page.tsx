@@ -41,22 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SurplusPanel } from "@/components/surplus-panel";
 import { DisputePanel } from "@/components/dispute-panel";
-import { LockKeyOpen } from "@phosphor-icons/react/dist/csr/LockKeyOpen";
-import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { CheckCircle } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { ArrowClockwise } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
-import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
-import { Star } from "@phosphor-icons/react/dist/csr/Star";
-import { ChatCircleDots } from "@phosphor-icons/react/dist/csr/ChatCircleDots";
-import { Check } from "@phosphor-icons/react/dist/csr/Check";
-import { Checks } from "@phosphor-icons/react/dist/csr/Checks";
-import { Pulse } from "@phosphor-icons/react/dist/csr/Pulse";
-import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
-import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
-import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
-import { HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
-
+import { ArrowClockwise, ChatCircleDots, Check, CheckCircle, Checks, Coins, Gavel, HandCoins, LockKeyOpen, PaperPlaneTilt, Pulse, Scales, SealCheck, Star, Warning } from "@/components/icons";
 export default function ProjectRoomPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = use(params);
   const session = useSession();

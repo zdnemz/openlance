@@ -18,9 +18,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
-import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
-import { ArrowSquareOut } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { ArrowSquareOut, Scales, SealCheck } from "@/components/icons";
 import { formatEth, formatEthSummary, shortAddress } from "@/lib/format";
 import { TIER_NAMES } from "@/lib/roles";
 import type { ArbiterView } from "@/lib/types";

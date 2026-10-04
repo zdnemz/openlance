@@ -10,7 +10,7 @@
  * the join form — same layout, no dead space.
  */
 import Link from "next/link";
-import { ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowLeft } from "@/components/icons";
 import { ArbiterStakeHub } from "@/components/arbiter-stake-panel";
 import { RoleGate } from "@/components/role-gate";
 import { PageHeader } from "@/components/page-header";
