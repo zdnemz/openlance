@@ -34,7 +34,8 @@
     "db:flush": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/db-flush.ts",
     "check:db": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-db-integrity.ts",
     "check:sponsorable": "node --experimental-strip-types scripts/check-sponsorable.ts",
-    "check:funding-match": "node --experimental-strip-types scripts/check-funding-match.ts"
+    "check:funding-match": "node --experimental-strip-types scripts/check-funding-match.ts",
+    "check:webhook-url": "node --experimental-strip-types scripts/check-webhook-url.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",

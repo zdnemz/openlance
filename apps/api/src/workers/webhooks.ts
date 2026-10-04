@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm'
 import { env } from '../config.ts'
 import { getDb } from '../db/index.ts'
 import { logger } from '../lib/logger.ts'
-import { isSuccessfulStatus, retryDelayMs, shouldRetry, signPayload } from '../domain/webhooks.ts'
+import { assertPublicUrl, isSuccessfulStatus, retryDelayMs, shouldRetry, signPayload } from '../domain/webhooks.ts'
 import { webhookDeliveries, webhookSubscriptions } from '../db/schema.ts'
 import type { DeliveryOutcome } from '../lib/queue.ts'
 
@@ -31,6 +31,7 @@ export async function attemptDelivery(deliveryId: string): Promise<DeliveryOutco
   const attempts = delivery.attempts + 1
 
   try {
+    await assertPublicUrl(sub.url, env.NODE_ENV === 'development')
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), env.WEBHOOK_TIMEOUT_MS)
     const res = await fetch(sub.url, {
@@ -43,6 +44,8 @@ export async function attemptDelivery(deliveryId: string): Promise<DeliveryOutco
       },
       body,
       signal: controller.signal,
+      // A redirect could bounce a public URL to an internal one.
+      redirect: 'manual',
     })
     clearTimeout(timer)
 

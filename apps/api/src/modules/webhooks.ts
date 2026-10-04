@@ -8,6 +8,8 @@ import { requireAuth, requireKyc } from '../auth/middleware.ts'
 import { Errors } from '../lib/errors.ts'
 import { getQueues } from '../lib/queue.ts'
 import { NOTIFICATION_TYPES } from '../domain/notifications.ts'
+import { assertPublicUrl } from '../domain/webhooks.ts'
+import { env } from '../config.ts'
 import type { WebhookEnvelope } from '../domain/notifications.ts'
 import { notificationEvents, webhookDeliveries, webhookSubscriptions } from '../db/schema.ts'
 
@@ -37,6 +39,7 @@ export async function listWebhooks(request: Request) {
     bucket[r.status] = r.n
     bucket.total += r.n
   }
+  // Owner-only list; the manager shows the signing secret from it.
   return subs.map((s) => ({ ...s, stats: bySub.get(s.id)! }))
 }
 
@@ -46,6 +49,9 @@ export async function createWebhook(request: Request) {
     url: z.string().url().refine((u) => u.startsWith('http://') || u.startsWith('https://'), 'http(s) URL required'),
     eventTypes: z.array(z.enum(NOTIFICATION_TYPES)).max(20).default([]), // empty = all events
   }).strict())
+  // Deliveries run from inside our network: an internal URL is an SSRF probe.
+  await assertPublicUrl(body.url, env.NODE_ENV === 'development')
+    .catch((err: Error) => { throw Errors.badRequest('webhook_url_not_public', err.message) })
   const secret = randomBytes(24).toString('hex')
   const db = getDb()
   const [sub] = await db.insert(webhookSubscriptions).values({
@@ -67,7 +73,7 @@ export async function deleteWebhook(request: Request, webhookId: string) {
   return { deleted: true }
 }
 
-/** Rotate the HMAC secret; the new value is returned exactly once. */
+/** Rotate the HMAC secret; the new value comes back to the owner. */
 export async function rotateSecret(request: Request, webhookId: string) {
   const user = await requireKyc(request)
   const db = getDb()
