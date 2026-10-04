@@ -9,7 +9,7 @@
  *   node scripts/audio.mjs samples <id,id,...> one test read per voice → out/samples
  *   node scripts/audio.mjs tts | sfx | beds    generate one group (skips existing files)
  *   node scripts/audio.mjs all                 tts + sfx + beds + manifest
- *   node scripts/audio.mjs manifest            rebuild the manifest from files on disk
+ *   node scripts/audio.mjs manifest            re-shape the reads + rebuild the manifest (no API calls)
  *
  * --force regenerates files that already exist. Requests run one at a time:
  * lower plans reject concurrent generations. The key comes from
@@ -105,27 +105,88 @@ async function tts(text, voiceId) {
 async function genVoiceover() {
   if (!script.voice.voiceId || script.voice.voiceId === "TBD") throw new Error("Pick a voice first: set voice.voiceId in script.json");
   for (const line of script.lines) {
-    const rel = `audio/vo/${line.id}.mp3`;
+    const rel = `audio/vo/${line.id}.raw.mp3`;
     if (!force && existsSync(join(PUBLIC, rel))) continue;
     process.stdout.write(`tts  ${line.id} … `);
     const r = await tts(line.text, script.voice.voiceId);
-    const abs = save(rel, Buffer.from(r.audio_base64, "base64"));
-    normalise(abs, -16);
-    save(`audio/vo/${line.id}.alignment.json`, JSON.stringify(r.alignment ?? r.normalized_alignment));
+    save(rel, Buffer.from(r.audio_base64, "base64"));
+    save(`audio/vo/${line.id}.raw.json`, JSON.stringify(r.alignment ?? r.normalized_alignment));
     console.log("ok");
+  }
+}
+
+/**
+ * Tighten each raw read without another API call: clip the lead-in, cap the
+ * pauses between words at voice.maxPause, then speed up by voice.tempo (pitch
+ * kept). The character alignment goes through the same cuts and tempo, so
+ * captions and cues stay on the word. Writes vo/<id>.mp3 + <id>.alignment.json.
+ */
+function shapeVoiceover() {
+  const { tempo = 1, maxPause = Infinity, lead = 0.15 } = script.voice.shape ?? {};
+  for (const line of script.lines) {
+    const raw = join(PUBLIC, `audio/vo/${line.id}.raw.mp3`);
+    const rawAl = join(PUBLIC, `audio/vo/${line.id}.raw.json`);
+    if (!existsSync(raw) || !existsSync(rawAl)) continue;
+    const al = JSON.parse(readFileSync(rawAl, "utf8"));
+    const out = join(PUBLIC, `audio/vo/${line.id}.mp3`);
+    if (!hasFfmpeg) {
+      writeFileSync(out, readFileSync(raw));
+      writeFileSync(join(PUBLIC, `audio/vo/${line.id}.alignment.json`), JSON.stringify(al));
+      continue;
+    }
+    const words = alignedWords(al);
+    const end = Math.min(probeDuration(raw) ?? Infinity, words.at(-1).end + lead);
+    const cuts = [];
+    if (words[0].start > lead) cuts.push([0, words[0].start - lead]);
+    for (let i = 1; i < words.length; i++) {
+      const gap = words[i].start - words[i - 1].end;
+      if (gap > maxPause) cuts.push([words[i - 1].end + maxPause / 2, words[i].start - maxPause / 2]);
+    }
+    // keep = [0, end] minus the cuts
+    const keep = [];
+    let t = 0;
+    for (const [a, b] of cuts) {
+      if (a > t) keep.push([t, a]);
+      t = b;
+    }
+    if (end > t) keep.push([t, end]);
+    const map = (x) => {
+      const removed = cuts.reduce((acc, [a, b]) => acc + Math.min(Math.max(x - a, 0), b - a), 0);
+      return round((Math.min(x, end) - removed) / tempo);
+    };
+    const graph =
+      keep.map(([a, b], i) => `[0:a]atrim=start=${a.toFixed(4)}:end=${b.toFixed(4)},asetpts=PTS-STARTPTS[k${i}]`).join(";") +
+      `;${keep.map((_, i) => `[k${i}]`).join("")}concat=n=${keep.length}:v=0:a=1,atempo=${tempo},loudnorm=I=-16:TP=-1.5:LRA=11[out]`;
+    execFileSync("ffmpeg", ["-y", "-v", "error", "-i", raw, "-filter_complex", graph, "-map", "[out]", "-ar", "44100", "-b:a", "160k", out]);
+    writeFileSync(
+      join(PUBLIC, `audio/vo/${line.id}.alignment.json`),
+      JSON.stringify({
+        characters: al.characters,
+        character_start_times_seconds: al.character_start_times_seconds.map(map),
+        character_end_times_seconds: al.character_end_times_seconds.map(map),
+      }),
+    );
+    const before = probeDuration(raw);
+    console.log(`shape ${line.id.padEnd(8)} ${before?.toFixed(2)}s → ${probeDuration(out)?.toFixed(2)}s (${cuts.length} cuts, ×${tempo})`);
   }
 }
 
 async function genSound(rel, { prompt, duration, loop }, lufs) {
   if (!force && existsSync(join(PUBLIC, rel))) return;
   process.stdout.write(`sfx  ${rel} … `);
-  const buf = await call(`/v1/sound-generation?output_format=${FORMAT}`, {
-    method: "POST",
-    raw: true,
-    body: { text: prompt, duration_seconds: duration, prompt_influence: 0.6, model_id: "eleven_text_to_sound_v2", ...(loop ? { loop: true } : {}) },
-  });
-  normalise(save(rel, buf), lufs);
-  console.log("ok");
+  try {
+    const buf = await call(`/v1/sound-generation?output_format=${FORMAT}`, {
+      method: "POST",
+      raw: true,
+      // the API takes 0.5–30s
+      body: { text: prompt, duration_seconds: Math.min(30, Math.max(0.5, duration)), prompt_influence: 0.6, model_id: "eleven_text_to_sound_v2", ...(loop ? { loop: true } : {}) },
+    });
+    normalise(save(rel, buf), lufs);
+    console.log("ok");
+  } catch (e) {
+    // one bad prompt shouldn't cost the rest of the batch; re-run to retry the gaps
+    console.log(`failed: ${e.message.slice(0, 200)}`);
+  }
 }
 
 async function genSfx() {
@@ -238,8 +299,13 @@ function writeManifest() {
 /* ── voices ─────────────────────────────────────────────────────────── */
 
 async function status() {
-  const s = await call("/v1/user/subscription");
-  console.log(`tier ${s.tier} · ${s.character_count}/${s.character_limit} credits used · resets ${new Date(s.next_character_count_reset_unix * 1000).toISOString().slice(0, 10)}`);
+  try {
+    const s = await call("/v1/user/subscription");
+    console.log(`tier ${s.tier} · ${s.character_count}/${s.character_limit} credits used · resets ${new Date(s.next_character_count_reset_unix * 1000).toISOString().slice(0, 10)}`);
+  } catch (e) {
+    // scoped keys can generate audio without being allowed to read the account
+    console.log(String(e.message).includes("missing_permissions") ? "this key can't read the subscription (user_read scope); generation may still work" : e.message);
+  }
 }
 
 async function voices(query = "announcer") {
@@ -256,9 +322,14 @@ async function samples(ids) {
   mkdirSync(join(ROOT, "out", "samples"), { recursive: true });
   for (const id of ids) {
     process.stdout.write(`sample ${id} … `);
-    const r = await tts(text, id);
-    writeFileSync(join(ROOT, "out", "samples", `${id}.mp3`), Buffer.from(r.audio_base64, "base64"));
-    console.log("ok");
+    try {
+      const r = await tts(text, id);
+      writeFileSync(join(ROOT, "out", "samples", `${id}.mp3`), Buffer.from(r.audio_base64, "base64"));
+      console.log("ok");
+    } catch (e) {
+      // e.g. library voices are paid-plan only over the API; keep auditioning the rest
+      console.log(`failed: ${e.message.slice(0, 160)}`);
+    }
   }
 }
 
@@ -268,11 +339,12 @@ const run = {
   status,
   voices: () => voices(args[0]),
   samples: () => samples((args[0] ?? "").split(",").filter(Boolean)),
-  tts: async () => (await genVoiceover(), writeManifest()),
+  tts: async () => (await genVoiceover(), shapeVoiceover(), writeManifest()),
   sfx: async () => (await genSfx(), writeManifest()),
   beds: async () => (await genBeds(), writeManifest()),
-  all: async () => (await genVoiceover(), await genSfx(), await genBeds(), writeManifest()),
-  manifest: writeManifest,
+  all: async () => (await genVoiceover(), await genSfx(), await genBeds(), shapeVoiceover(), writeManifest()),
+  // local only: re-shape the raw reads (tempo, pauses) and rebuild the manifest
+  manifest: () => (shapeVoiceover(), writeManifest()),
 }[cmd];
 
 if (!run) {
