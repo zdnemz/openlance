@@ -172,6 +172,16 @@ async function verifyDeposit(txHash: string, poster: string, budgetWei: string, 
   const decoded = (() => { try { return decodeFunctionData({ abi: ESCROW_ABI, data: tx.input }) } catch { return null } })()
   if (!decoded || decoded.functionName !== 'lockBudget') throw Errors.badRequest('Deposit transaction must call lockBudget')
   if (String(decoded.args?.[0] ?? '').toLowerCase() !== jobRef.toLowerCase()) throw Errors.badRequest('Deposit must lock this job\'s budget')
+  // The transaction proves a lock HAPPENED, not that it is still there: after
+  // unlockBudget the same hash re-published an unfunded job. Read the lock now.
+  const read = <T>(functionName: 'budgetLocker' | 'lockedBudget' | 'paidOutBudget' | 'reservedBudget') =>
+    client.readContract({ address: env.ESCROW_ADDRESS as `0x${string}`, abi: ESCROW_ABI, functionName, args: [jobRef as `0x${string}`] } as never) as Promise<T>
+  const [locker, locked, paidOut, reserved] = await Promise.all([
+    read<string>('budgetLocker'), read<bigint>('lockedBudget'), read<bigint>('paidOutBudget'), read<bigint>('reservedBudget'),
+  ])
+  if (locker.toLowerCase() !== poster.toLowerCase() || locked - paidOut - reserved < BigInt(budgetWei)) {
+    throw Errors.conflict('deposit_not_live', 'This job\'s budget is no longer locked in escrow — lock it again to publish')
+  }
 }
 
 // ── Edit (poster only, while draft) ─────────────────────────────────────────

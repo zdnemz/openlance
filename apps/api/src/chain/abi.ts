@@ -77,7 +77,8 @@ export const ESCROW_ABI = parseAbi([
   'function unlockBudget(bytes32 jobRef, uint256 amount)',
   'function lockedBudget(bytes32 jobRef) view returns (uint256)',
   'function reservedBudget(bytes32 jobRef) view returns (uint256)',
-  'function paidOutBudget(bytes32 jobRef) view returns (uint256)',])
+  'function paidOutBudget(bytes32 jobRef) view returns (uint256)',
+  'function budgetLocker(bytes32 jobRef) view returns (address)',])
 
 /** Dispute resolution outcomes — must match the contract enum. */
 export const RESOLUTION_OUTCOMES = ['release', 'refund', 'split'] as const
