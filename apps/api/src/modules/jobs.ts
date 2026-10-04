@@ -149,37 +149,60 @@ export async function publishJob(request: Request, jobId: string) {
 }
 
 /**
- * The publish gate: in real mode the deposit must be a successful
- * `lockBudget(jobRef)` call on the escrow contract, carrying exactly the budget
- * from the poster, for THIS job — the funds then back every milestone via
- * fundFromCredit (drawdown model). Mock mode (no chain to read) accepts the
- * hash shape alone; real mode without an escrow address is a hard error.
+ * Whether the escrow's own record covers a publish: the last lock under this
+ * jobRef was placed by the poster, and what is left in it covers the ceiling.
+ * Address case is ignored.
+ *
+ * Only the locker can add to a key — `Escrow.lockBudget` re-checks
+ * `budgetLocker[jobRef] == _msgSender()` before a re-lock, and `unlockBudget`
+ * refuses anyone else — so the recorded locker is who funded this job, and it
+ * is recorded ERC-2771 aware (see verifyDeposit).
+ */
+export function depositCovers(locker: string, poster: string, freeWei: bigint, ceilingWei: bigint): boolean {
+  return locker.toLowerCase() === poster.toLowerCase() && freeWei >= ceilingWei
+}
+
+/**
+ * The publish gate: in real mode the budget must be locked in the escrow under
+ * THIS job's ref, by the poster, for the whole ceiling — the funds then back
+ * every milestone via fundFromCredit (drawdown model). Mock mode (no chain to
+ * read) accepts the hash shape alone; real mode without an escrow address is a
+ * hard error.
+ *
+ * The proof is the ESCROW's record, never the shape of the submitted
+ * transaction. Escrow is ERC-2771 aware (ERC2771ContextLite), so a sponsored
+ * deposit arrives as `forwarder.execute(...)` — tx.from is the relayer, tx.to is
+ * the forwarder — and a smart account's deposit is submitted by a bundler. The
+ * contract recorded the wallet that authorized it as `budgetLocker` either way,
+ * so comparing `tx.from` to the poster rejected the poster's own deposit with
+ * "Deposit must come from the poster wallet". The hash is still checked to BE a
+ * lock, because it is stored as the audit pointer: the receipt has to carry the
+ * escrow's own BudgetLocked.
  */
 async function verifyDeposit(txHash: string, poster: string, budgetWei: string, jobRef: string) {
   if (env.chainMode !== 'real' || !env.CHAIN_RPC_URL) return
-  if (!env.ESCROW_ADDRESS) throw Errors.precondition('escrow_unconfigured', 'Escrow contract is not configured')
-  const { createPublicClient, http, decodeFunctionData } = await import('viem')
+  const escrow = env.ESCROW_ADDRESS
+  if (!escrow) throw Errors.precondition('escrow_unconfigured', 'Escrow contract is not configured')
+  const { createPublicClient, http, decodeEventLog } = await import('viem')
   const { ESCROW_ABI } = await import('../chain/abi.ts')
   const client = createPublicClient({ transport: http(env.CHAIN_RPC_URL) })
-  const [tx, receipt] = await Promise.all([
-    client.getTransaction({ hash: txHash as `0x${string}` }).catch(() => null),
-    client.getTransactionReceipt({ hash: txHash as `0x${string}` }).catch(() => null),
-  ])
-  if (!tx || !receipt || receipt.status !== 'success') throw Errors.badRequest('Deposit transaction not found or failed')
-  if (tx.from.toLowerCase() !== poster.toLowerCase()) throw Errors.badRequest('Deposit must come from the poster wallet')
-  if ((tx.to ?? '').toLowerCase() !== env.ESCROW_ADDRESS.toLowerCase()) throw Errors.badRequest('Deposit must go to the escrow contract')
-  if (tx.value.toString() !== budgetWei) throw Errors.badRequest('Deposit must equal the budget')
-  const decoded = (() => { try { return decodeFunctionData({ abi: ESCROW_ABI, data: tx.input }) } catch { return null } })()
-  if (!decoded || decoded.functionName !== 'lockBudget') throw Errors.badRequest('Deposit transaction must call lockBudget')
-  if (String(decoded.args?.[0] ?? '').toLowerCase() !== jobRef.toLowerCase()) throw Errors.badRequest('Deposit must lock this job\'s budget')
+  const receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` }).catch(() => null)
+  if (!receipt || receipt.status !== 'success') throw Errors.badRequest('Deposit transaction not found or failed')
+  const lockedHere = receipt.logs.some((log) => {
+    if (log.address.toLowerCase() !== escrow.toLowerCase()) return false
+    try {
+      return decodeEventLog({ abi: ESCROW_ABI, data: log.data, topics: log.topics }).eventName === 'BudgetLocked'
+    } catch { return false }
+  })
+  if (!lockedHere) throw Errors.badRequest('Deposit transaction did not lock a budget in the escrow')
   // The transaction proves a lock HAPPENED, not that it is still there: after
   // unlockBudget the same hash re-published an unfunded job. Read the lock now.
   const read = <T>(functionName: 'budgetLocker' | 'lockedBudget' | 'paidOutBudget' | 'reservedBudget') =>
-    client.readContract({ address: env.ESCROW_ADDRESS as `0x${string}`, abi: ESCROW_ABI, functionName, args: [jobRef as `0x${string}`] } as never) as Promise<T>
+    client.readContract({ address: escrow as `0x${string}`, abi: ESCROW_ABI, functionName, args: [jobRef as `0x${string}`] } as never) as Promise<T>
   const [locker, locked, paidOut, reserved] = await Promise.all([
     read<string>('budgetLocker'), read<bigint>('lockedBudget'), read<bigint>('paidOutBudget'), read<bigint>('reservedBudget'),
   ])
-  if (locker.toLowerCase() !== poster.toLowerCase() || locked - paidOut - reserved < BigInt(budgetWei)) {
+  if (!depositCovers(locker, poster, locked - paidOut - reserved, BigInt(budgetWei))) {
     throw Errors.conflict('deposit_not_live', 'This job\'s budget is no longer locked in escrow — lock it again to publish')
   }
 }

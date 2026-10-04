@@ -38,6 +38,7 @@
     "check:db": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/check-db-integrity.ts",
     "check:sponsorable": "node --experimental-strip-types scripts/check-sponsorable.ts",
     "check:funding-match": "node --experimental-strip-types scripts/check-funding-match.ts",
+    "check:deposit-gate": "node --experimental-strip-types scripts/check-deposit-gate.ts",
     "check:webhook-url": "node --experimental-strip-types scripts/check-webhook-url.ts"
   },
   "dependencies": {
