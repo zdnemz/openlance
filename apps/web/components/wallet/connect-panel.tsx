@@ -6,7 +6,7 @@
  * (env CHAIN_ID via runtime) → SIWE sign-in. No personas, no dev keys.
  */
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { press } from "@/components/design";
+import { Button } from "@/components/ui/button";
 import { useWallet, hasInjected } from "@/lib/wallet";
 import { useRuntime } from "@/lib/runtime";
 import { loginWithWallet, disconnectAndLogout } from "@/lib/siwe";
@@ -59,32 +59,31 @@ export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-raised max-w-md gap-0 border-line p-0">
-        <DialogHeader className="space-y-2 px-7 pb-5 pt-7">
-          <DialogTitle className="text-xl tracking-tight">Connect your wallet</DialogTitle>
-          <DialogDescription className="text-sm leading-relaxed text-dim">
+      <DialogContent className="max-w-md gap-0 p-0">
+        <DialogHeader className="space-y-3 px-6 pb-5 pt-6">
+          <DialogTitle>Connect your wallet</DialogTitle>
+          <DialogDescription className="text-dim">
             Real wallet, real keys. Your browser wallet signs a SIWE message — no passwords, no custodial accounts.
             New here? After connecting you pick a role (client / freelancer / arbiter) and verify identity.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="px-4 pb-4">
-          <button
-            type="button"
+        <div className="px-6 pb-6">
+          <Button
+            size="lg"
             disabled={!injectedAvailable || signingIn || !runtimeLoaded}
             onClick={() => void connectReal()}
-            className={`flex w-full items-center justify-center gap-3 px-5 py-4 text-sm font-medium text-white ${press} ${              injectedAvailable && runtimeLoaded ? "bg-rose-accent hover:bg-rose-bright" : "cursor-not-allowed bg-white/[0.06] text-faint"
-            }`}
+            className="w-full"
           >
-            {signingIn ? <Spinner className="h-4 w-4 animate-spin" /> : injectedAvailable ? <Wallet weight="bold" className="h-4 w-4" /> : <Plugs className="h-4 w-4" />}
+            {signingIn ? <Spinner className="h-5 w-5 animate-spin" /> : injectedAvailable ? <Wallet weight="bold" className="h-5 w-5" /> : <Plugs className="h-5 w-5" />}
             {signingIn
               ? "Waiting for signature…"
               : !runtimeLoaded
                 ? "Reading chain config…"
                 : injectedAvailable ? "Connect browser wallet" : "No browser wallet detected"}
-          </button>
-          <p className="mt-3 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-faint">
-            <Info className="mt-px h-3 w-3 shrink-0" />
+          </Button>
+          <p className="mt-4 flex items-start gap-2 text-[14px] leading-relaxed text-faint">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />
             {injectedAvailable
               ? runtimeLoaded
                 ? `We will ask your wallet to switch to chain ${chainId} if needed, then request one signature (SIWE). Testnet only — no real funds.`
@@ -97,7 +96,7 @@ export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChan
               onClick={() => {
                 void disconnectAndLogout().then(() => onOpenChange(false));
               }}
-              className="num mt-3 w-full text-center text-[11px] text-faint underline-offset-4 hover:text-dim hover:underline"
+              className="mt-4 min-h-11 w-full cursor-pointer text-center text-[14px] text-faint underline decoration-2 underline-offset-4 hover:text-foreground"
             >
               disconnect current wallet
             </button>

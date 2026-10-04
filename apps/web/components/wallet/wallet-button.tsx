@@ -8,7 +8,8 @@ import { useSession } from "@/lib/session";
 import { loginWithWallet, disconnectAndLogout } from "@/lib/siwe";
 import { ConnectPanel } from "@/components/wallet/connect-panel";
 import { ROLE_HOME } from "@/lib/role-routes";
-import { AddressAvatar, press } from "@/components/design";
+import { AddressAvatar } from "@/components/design";
+import { Button } from "@/components/ui/button";
 import { shortAddress } from "@/lib/format";
 import {
   DropdownMenu,
@@ -81,20 +82,16 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
   // server-rendered markup matches the first client render.
   if (!hydrated) {
     return (
-      <span className="inline-flex h-[38px] w-[128px] animate-pulse border border-line bg-white/[0.03]" aria-hidden />
+      <span className="inline-flex h-11 w-[150px] animate-pulse border-2 border-line bg-ink-raised" aria-hidden />
     );
   }
 
   if (!address) {
     return (
       <>
-        <button
-          type="button"
-          onClick={() => setPanelOpen(true)}
-          className={`inline-flex items-center gap-2 bg-rose-accent px-4 py-2 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}
-        >
+        <Button size="sm" onClick={() => setPanelOpen(true)}>
           Connect wallet
-        </button>
+        </Button>
         <ConnectPanel open={panelOpen} onOpenChange={setPanelOpen} />
       </>
     );
@@ -103,18 +100,13 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
   if (!signedIn) {
     return (
       <div className="flex items-center gap-2">
-        <span className="num hidden border border-line bg-white/[0.03] px-3 py-2 text-xs text-dim sm:block">
+        <span className="num hidden border-2 border-line bg-ink-raised px-3 py-2 text-xs text-dim sm:block">
           {shortAddress(address, 4)}
         </span>
-        <button
-          type="button"
-          onClick={signIn}
-          disabled={signing}
-          className={`inline-flex items-center gap-2 bg-rose-accent px-4 py-2 text-[13px] font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
-        >
-          {signing ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <SealCheck weight="bold" className="h-3.5 w-3.5" />}
+        <Button size="sm" onClick={signIn} disabled={signing}>
+          {signing ? <Spinner className="h-4 w-4 animate-spin" /> : <SealCheck weight="bold" className="h-4 w-4" />}
           Prove ownership
-        </button>
+        </Button>
       </div>
     );
   }
@@ -122,7 +114,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       {!compact && balance && (
-        <span className="num hidden border border-line bg-white/[0.03] px-3 py-2 text-xs text-dim md:block">
+        <span className="num hidden border-2 border-line bg-ink-raised px-3 py-2 text-xs text-dim md:block">
           {balance} ETH
         </span>
       )}
@@ -130,17 +122,17 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className={`flex items-center gap-2.5 border border-line bg-white/[0.04] py-1.5 pl-1.5 pr-3.5 text-left hover:border-line-strong ${press}`}
+            className="pixel-press flex min-h-11 cursor-pointer items-center gap-2.5 border-2 border-line-strong bg-ink-raised py-0.5 pl-0.5 pr-3 text-left transition-colors hover:border-rose-light"
           >
-            <AddressAvatar address={address} size={28} />
+            <AddressAvatar address={address} size={36} />
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[13px] font-medium leading-tight">
+                  <span className="truncate text-[14px] font-medium leading-tight">
                     {session.user?.displayName ?? shortAddress(address, 4)}
                   </span>
-                  {session.user?.kycStatus === "verified" && <SealCheck weight="fill" className="h-3 w-3 shrink-0 text-state-released" />}
+                  {session.user?.kycStatus === "verified" && <SealCheck weight="fill" className="h-4 w-4 shrink-0 text-state-released" />}
                 </span>
-                <span className="num block text-[11px] leading-tight text-faint">
+                <span className="num block text-[13px] leading-tight text-faint">
                   {/* Role only — the seal above already says verified, and the
                       unverified states have their own prompts (onboarding). */}
                   {session.user ? session.user.role : shortAddress(address, 4)}
@@ -148,10 +140,10 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
               </span>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="glass-raised w-56 border-line">
-          <DropdownMenuLabel className="num text-[11px] text-faint">
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuLabel className="num font-normal text-faint">
             <button
-              className="flex w-full items-center gap-1.5 text-left hover:text-foreground"
+              className="flex min-h-8 w-full cursor-pointer items-center gap-2 text-left font-sans text-[14px] normal-case hover:text-foreground"
               onClick={() => {
                 // A permission-denied clipboard rejects with no handler, so the
                 // promise escaped unhandled — and the check-mark still appeared,
@@ -164,13 +156,13 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
               }}
             >
               {shortAddress(address)}
-              {copied ? <Check className="h-3 w-3 text-state-released" /> : <Copy className="h-3 w-3 opacity-50" />}
+              {copied ? <Check className="h-4 w-4 text-state-released" /> : <Copy className="h-4 w-4 opacity-60" />}
             </button>
           </DropdownMenuLabel>
-          <DropdownMenuSeparator className="bg-white/[0.06]" />
+          <DropdownMenuSeparator />
           <DropdownMenuItem asChild className="gap-2 text-sm">
             <Link href="/profile/me">
-              <UserCircle className="h-4 w-4" /> My profile
+              <UserCircle className="h-5 w-5" /> My profile
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -180,7 +172,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
               toast("Signed out");
             }}
           >
-            <SignOut className="h-4 w-4" /> Disconnect
+            <SignOut className="h-5 w-5" /> Disconnect
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
