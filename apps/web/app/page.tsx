@@ -81,10 +81,11 @@ const EscrowCard = memo(function EscrowCard() {
       {/* ledger rows — dashed rules, no nested boxes */}
       <div className="mt-5 divide-y-2 divide-dashed divide-line border-y-2 border-dashed border-line">
         {FLOW.map((f, i) => (
-          <div key={f.state} className={cn("flex items-center gap-3 py-3", i > step && "opacity-45")}>
-            <Sprite name={f.sprite} size={32} className={i === step ? "" : "grayscale"} />
+          <div key={f.state} className="flex items-center gap-3 py-3">
+            {/* Upcoming steps dim the sprite only: fading text would drop it under AA contrast. */}
+            <Sprite name={f.sprite} size={32} className={i > step ? "opacity-40 grayscale" : ""} />
             <span className="min-w-0">
-              <span className={cn("block text-[15px] leading-snug", i === step ? "text-foreground" : "text-dim")}>{f.line}</span>
+              <span className={cn("block text-[15px] leading-snug", i === step ? "text-foreground" : "text-faint")}>{f.line}</span>
               <span className="block truncate text-[13px] text-faint">{f.sub}</span>
             </span>
           </div>

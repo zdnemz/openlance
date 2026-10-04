@@ -54,8 +54,8 @@ The contract is the source of truth: the off-chain layer is a mirror, and every 
 ## Brand Commitments
 
 - Name: OpenLance. Voice: precise, dry, engineering-forward; controls name their action; no marketing fluff.
-- Dark premium interior; the landing may be cinematic, the app interior stays calm.
-- Typography committed 2026-09-19 (impeccable refactor): Instrument Serif (display), Schibsted Grotesk (UI), IBM Plex Mono (ledger data) — replaces Geist, then Instrument Sans (both detector-flagged as AI-convergent). One accent, structure over glow.
+- Pixel-art interior on dark ink; the landing may move (stepped, scroll-driven), the app interior stays calm.
+- Visual identity committed 2026-10-04 (pixel-art refactor): Press Start 2P (display, labels, controls), Pixelify Sans (UI and body), IBM Plex Mono (amounts, hashes, refs) — replaces Instrument Serif / Schibsted Grotesk. One accent, hard edges, stepped motion. See DESIGN.md.
 
 ## Evidence on Hand
 
@@ -70,4 +70,4 @@ The contract is the source of truth: the off-chain layer is a mirror, and every 
 
 ## Accessibility & Inclusion
 
-WCAG AA contrast on all ink surfaces (detector-enforced); prefers-reduced-motion honored for all perpetual and entrance motion; visible focus rings in rose; 11px floor for functional text.
+WCAG AA contrast on all ink surfaces (axe-checked); prefers-reduced-motion honored for all perpetual and entrance motion; visible 2px rose focus frames; 13px floor for functional text, 44px minimum control height.

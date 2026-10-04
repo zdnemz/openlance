@@ -10,7 +10,7 @@ import type { InboxItem } from "@/lib/types";
 export interface NotifMeta {
   /** Short human label for the event type. */
   label: string;
-  /** Icon key consumed by the bell (mapped to a Phosphor icon there). */
+  /** Icon key consumed by the bell (mapped to a pixel icon there). */
   icon: NotifIcon;
   tone: "money" | "dispute" | "review" | "proposal" | "system";
 }

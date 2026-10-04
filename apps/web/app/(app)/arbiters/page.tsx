@@ -132,7 +132,7 @@ export default function ArbitersPage() {
                   <span
                     aria-hidden
                     className={`display w-12 shrink-0 select-none text-[18px] leading-none ${
-                      i === 0 ? "text-rose-bright/60" : "ghost-num"
+                      i === 0 ? "text-rose-light" : "text-faint"
                     }`}
                   >
                     {String(i + 1).padStart(2, "0")}

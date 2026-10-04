@@ -425,7 +425,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
             <input
               aria-invalid={!!fullName && !nameOk} aria-describedby={fullName && !nameOk ? "kyc-name-hint" : undefined}
               value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ada Okafor" autoComplete="name"
-              className="h-11 w-full border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
+              className="h-11 w-full border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors placeholder:text-faint focus:border-rose-accent/50"
             />
             {fullName && !nameOk && <span id="kyc-name-hint" className="mt-1 block text-[13px] text-state-funded">Use at least 2 characters.</span>}
           </label>
@@ -459,7 +459,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
               aria-label="Document number"
               aria-invalid={!!idNumber && !idOk} aria-describedby={idNumber && !idOk ? "kyc-id-hint" : undefined}
               value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="e.g. A1234567" inputMode="text" autoComplete="off"
-              className="mt-2 h-11 w-full border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
+              className="mt-2 h-11 w-full border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors placeholder:text-faint focus:border-rose-accent/50"
             />
             {idNumber && !idOk && <span id="kyc-id-hint" className="mt-1 block text-[13px] text-state-funded">Document number needs 4+ characters.</span>}
           </fieldset>
@@ -540,7 +540,7 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
         className="flex h-11 w-full items-center gap-2 border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50 disabled:opacity-60"
       >
         <Globe className="h-3.5 w-3.5 shrink-0 text-faint" />
-        <span className={`flex-1 truncate text-left ${value ? "" : "text-faint/60"}`}>{value || "Select country"}</span>
+        <span className={`flex-1 truncate text-left ${value ? "" : "text-faint"}`}>{value || "Select country"}</span>
         <CaretDown className={`h-3.5 w-3.5 shrink-0 text-faint transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -548,7 +548,7 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
           <input
             value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search countries…" autoFocus
             aria-label="Search countries"
-            className="w-full border-b-2 border-line bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-faint/60"
+            className="w-full border-b-2 border-line bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-faint"
           />
           {/* `role="option"` sat on the inner <button> while the <li> carried no
               role, so the listbox reported ZERO options and this step was

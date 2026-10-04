@@ -246,18 +246,6 @@
   -webkit-text-stroke: 2px rgba(255, 255, 255, 0.1);
 }
 
-/* scanlines — a faint CRT hint, used on a single hero surface only */
-@utility scanlines {
-  position: relative;
-}
-.scanlines::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
-}
-
 /*
   Pixel button — a notched 2px frame drawn outside the box (so the corners are
   cut, one pixel step), a bevel, and a 4px slab underneath. Colors come from
