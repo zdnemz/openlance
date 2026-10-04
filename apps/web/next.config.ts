@@ -1,7 +1,27 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+/**
+ * Where the API lives, for the build (lib/api-base.ts reads the result).
+ *
+ * `NEXT_PUBLIC_API_BASE` is inlined at build time, and lib/api-base.ts falls
+ * back to `http://localhost:4000` when it is unset — right for `pnpm dev` and
+ * self-hosting, fatal on Vercel, where an unset variable would bake localhost
+ * into the browser bundle. On Vercel the API is a service of the same project
+ * on the same domain (`/api/*` is rewritten to it), so the default there is the
+ * empty string: same origin, relative `/api/...` URLs.
+ *
+ * Only a missing variable is defaulted, and only on Vercel. An explicit value —
+ * including an explicit empty one — is left to Next's own inlining, and every
+ * non-Vercel build (dev, CI, Caddy / standalone) is untouched.
+ */
+const sameOriginApiOnVercel: Pick<NextConfig, "env"> =
+  process.env.VERCEL && process.env.NEXT_PUBLIC_API_BASE === undefined
+    ? { env: { NEXT_PUBLIC_API_BASE: "" } }
+    : {};
+
 const nextConfig: NextConfig = {
+  ...sameOriginApiOnVercel,
   // `standalone` is the self-hosted server bundle (see scripts/finalize-standalone.mjs).
   // Vercel builds and hosts its own output, so it is left off there.
   output: process.env.VERCEL ? undefined : "standalone",

@@ -18,18 +18,30 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   LOG_PRETTY: bool(true),
-  /** Public origin of the frontend (SIWE domain check + CORS). */
+  /**
+   * Public origin of the frontend (SIWE domain check + CORS). The SIWE domain
+   * is this URL's host, so it must equal the host users actually browse — on a
+   * single-origin deployment (Vercel services) that is the one public domain.
+   */
   APP_URI: z.string().url().default('http://localhost:3000'),
-  /** Public origin of this API (used to build absolute upload URLs). */
+  /**
+   * Public origin of this API (used to build absolute upload URLs). Same value
+   * as APP_URI on a single-origin deployment, where `/api/*` shares the host.
+   */
   API_URI: z.string().url().default('http://localhost:4000'),
   /**
    * Domain for the gate cookies (`el_onboarded`, `el_role`).
    *
-   * The browser calls this API cross-origin, but those cookies are read by the
-   * *web* app's edge proxy. Cookies ignore ports, so on localhost (:3000 /
-   * :4000) host-only works. In production the two origins differ by host, so
-   * set the shared registrable domain — e.g. COOKIE_DOMAIN=.example.com — or
-   * every visitor is stuck on the onboarding page.
+   * Those cookies are stamped here but read by the *web* app's edge proxy.
+   * Cookies ignore ports, so on localhost (:3000 / :4000) host-only works, and
+   * so does a single-origin deployment (Vercel services): leave this UNSET and
+   * the cookies are host-only on the one public host, which is exactly where
+   * the proxy reads them. Only when the web and API origins differ by host in
+   * production (api.example.com + example.com) set the shared registrable
+   * domain — e.g. COOKIE_DOMAIN=.example.com — or every visitor is stuck on the
+   * onboarding page. A value that does not domain-match the public host (such
+   * as `.vercel.app`, a public suffix) is rejected by the browser and has the
+   * same effect, so never set it on a single-origin deployment.
    */
   COOKIE_DOMAIN: z.string().optional(),
 
@@ -60,7 +72,13 @@ const schema = z.object({
   /** Comma-separated MIME allowlist; empty → built-in default list. */
   STORAGE_ALLOWED_MIME: z.string().default(''),
   STORAGE_LOCAL_DIR: z.string().default('./data/uploads'),
-  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
+  /**
+   * Largest accepted upload. 25 MiB by default; 4 MiB on Vercel, whose Functions
+   * reject request bodies over ~4.5 MB before this code runs (uploads stream
+   * through `PUT /api/files/:id/raw`), so a bigger limit there is a promise the
+   * platform breaks. An explicit value always wins.
+   */
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default((process.env.VERCEL ? 4 : 25) * 1024 * 1024),
   SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().default(120),
 
   // ── Chain ───────────────────────────────────────────────────────────────

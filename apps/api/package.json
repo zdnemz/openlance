@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "OpenLance API \u2014 Hono service: auth, escrow orchestration, chain indexer, webhooks",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "NODE_ENV=development node --env-file-if-exists=.env.local --watch src/serve.ts",
     "start": "NODE_ENV=production node --env-file-if-exists=.env.local src/serve.ts",

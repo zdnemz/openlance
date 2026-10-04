@@ -24,6 +24,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "check:routes": "pnpm --filter @openlance/api check:routes",
+    "check:vercel": "node scripts/check-vercel.mjs",
     "gen:routes": "pnpm --filter @openlance/api gen:routes",
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @openlance/api db:migrate",

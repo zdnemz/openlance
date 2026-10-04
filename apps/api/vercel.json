@@ -1,9 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "hono",
-  "functions": {
-    "src/app.ts": {
-      "maxDuration": 60
-    }
-  }
-}

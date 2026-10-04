@@ -1,24 +1,25 @@
 /**
  * OpenLance API client.
  *
- * The API is a separate service (apps/api, default :4000), so calls are
- * cross-origin in development and need CORS. `NEXT_PUBLIC_API_BASE` is the
- * public origin of that service; leave it empty only when something proxies
- * `/api` back to the API service on the same origin.
+ * The API is a separate service (apps/api, default :4000). Where it lives is
+ * decided once, in lib/api-base.ts: its own origin (`pnpm dev`, Caddy), which
+ * makes every call cross-origin and needs CORS, or the SAME origin as these
+ * pages (the Vercel services deployment routes `/api/*` to the API), where the
+ * base is empty and every URL here is the relative `/api/...`.
  *
- * `credentials: "include"` is load-bearing: the gate cookies
+ * `credentials: "include"` is load-bearing cross-origin: the gate cookies
  * (`el_onboarded`, `el_role`) are stamped by the API and read by this app's
- * edge proxy, and a cross-origin response drops Set-Cookie without it.
- * Auth itself is a Bearer token, not a cookie.
+ * proxy, and a cross-origin response drops Set-Cookie without it. Same-origin
+ * it is a harmless default. Auth itself is a Bearer token, not a cookie.
  */
 import { useSession } from "@/lib/session";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
+import { API_BASE } from "@/lib/api-base";
 
 /**
- * Absolute URL of a public API path, for the surfaces that need `fetch`
- * directly (the backend console reads raw endpoints, streams nothing, and wants
- * the Response rather than the parsed envelope). Same origin `get`/`post` use.
+ * URL of a public API path, for the surfaces that need `fetch` directly (the
+ * backend console reads raw endpoints, streams nothing, and wants the Response
+ * rather than the parsed envelope). The one `get`/`post` use: absolute against
+ * a separate API origin, root-relative (`/api/...`) when the API is same-origin.
  */
 export function apiUrl(path: string): string {
   return buildUrl(path);
@@ -52,6 +53,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
     cache: "no-store",
     // Required cross-origin: without it the browser discards the API's
     // Set-Cookie headers and the onboarding/role gate never sees its cookies.
+    // Harmless when the API is same-origin.
     credentials: "include",
   });
   const json = (await res.json().catch(() => ({}))) as { data?: T; error?: { code: string; message: string; details?: unknown } };
@@ -101,7 +103,9 @@ export async function putBytes(url: string, body: Blob, contentType: string): Pr
  * The API builds absolute URLs from API_URI (e.g. http://localhost:4000/api/
  * files/…). Rewriting those to API_BASE + path keeps the request on the public
  * API origin — which is where the signed-URL signature is checked — and avoids
- * a cross-origin redirect through the web app.
+ * a cross-origin redirect through the web app. Same-origin (empty base) the
+ * result is the relative `/api/files/…`, so a wrong API_URI cannot leak a
+ * dead host into the browser.
  *
  * Only `/api/*` is rewritten. The supabase driver hands back a signed URL on
  * the Supabase origin (`https://<ref>.supabase.co/storage/v1/object/sign/…`)

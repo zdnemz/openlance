@@ -14,9 +14,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { encodeFunctionData, decodeFunctionResult, serializeTypedData, type Abi } from "viem";
 import { useRuntime } from "@/lib/runtime";
-
-/** Public origin of the API service (apps/api). */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
+import { API_BASE, absoluteApiUrl } from "@/lib/api-base";
 
 export const FALLBACK_CHAIN_ID = 31337;
 
@@ -52,7 +50,7 @@ function chainParams(chainId: number, rpcUrl?: string) {
     chainId: `0x${chainId.toString(16)}`,
     chainName: "Anvil Devnet",
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    rpcUrls: [rpcUrl || relayRpcUrl()],
+    rpcUrls: [rpcUrl || absoluteRelayRpcUrl()],
     blockExplorerUrls: [],
   };
 }
@@ -132,6 +130,17 @@ export async function ensureChain(expectedChainId: number, rpcUrl?: string): Pro
  */
 export function relayRpcUrl(): string {
   return `${API_BASE}/api/rpc`;
+}
+
+/**
+ * `relayRpcUrl()` as an ABSOLUTE URL, for handing to a wallet. A same-origin API
+ * (empty base) makes the relay the relative `/api/rpc`: right for this page's
+ * own `fetch`, but `wallet_addEthereumChain` needs a full http(s) URL and would
+ * register the relative one as a dead endpoint. Browser-only — it is reached
+ * from `ensureChain`, which has already checked for `window`.
+ */
+function absoluteRelayRpcUrl(): string {
+  return absoluteApiUrl("/api/rpc", () => window.location.origin);
 }
 
 export async function rpc<T = unknown>(method: string, params: unknown[]): Promise<T> {
