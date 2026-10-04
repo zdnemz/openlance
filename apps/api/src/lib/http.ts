@@ -111,6 +111,20 @@ export function created<T>(data: T): Response {
   return ok(data, 201)
 }
 
+/**
+ * The `cause` chain of an error, innermost last. Drizzle wraps a driver failure
+ * in "Failed query: ..." and the real reason (bad password, missing relation,
+ * SSL, timeout) lives only on `cause`, so without this the log names the SQL
+ * and never says why it failed. Message and Postgres code only, never params.
+ */
+function causeChain(err: Error): Array<{ name: string; code?: unknown; message: string }> {
+  const out: Array<{ name: string; code?: unknown; message: string }> = []
+  for (let c: unknown = err.cause, i = 0; c instanceof Error && i < 4; c = c.cause, i++) {
+    out.push({ name: c.name, code: (c as { code?: unknown }).code, message: c.message })
+  }
+  return out
+}
+
 export function fail(err: unknown, requestId?: string): Response {
   if (err instanceof AppError) {
     return Response.json(
@@ -120,7 +134,7 @@ export function fail(err: unknown, requestId?: string): Response {
   }
   logger.error('unhandled error', {
     requestId,
-    err: err instanceof Error ? { message: err.message, stack: err.stack?.split('\n').slice(0, 4).join(' | ') } : String(err),
+    err: err instanceof Error ? { message: err.message, stack: err.stack?.split('\n').slice(0, 4).join(' | '), causes: causeChain(err) } : String(err),
   })
   return Response.json({ error: { code: 'internal_error', message: 'Internal server error' } }, { status: 500 })
 }
