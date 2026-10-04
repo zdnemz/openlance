@@ -1,0 +1,8 @@
+# The promo is its own pnpm root, deliberately outside the app workspace
+# (../pnpm-workspace.yaml covers apps/* only): Remotion and its Chrome
+# compositor stay out of the web/api installs and the Vercel builds.
+packages: []
+
+# esbuild is Remotion's bundler; its postinstall only verifies the native binary.
+allowBuilds:
+  esbuild: true
