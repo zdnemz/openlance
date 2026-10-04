@@ -29,6 +29,11 @@ export type OnchainRole = 'client' | 'freelancer' | 'arbiter'
 /** IRoleRegistry.Role ordinals — the ABI type of an enum is its uint8. */
 const ROLE_BY_ORDINAL = [null, 'client', 'freelancer', 'arbiter'] as const
 
+/** Role enum ordinal → seat; None (0) and unknown ordinals → null. */
+export function roleFromOrdinal(ordinal: number): OnchainRole | null {
+  return ROLE_BY_ORDINAL[ordinal] ?? null
+}
+
 export const ROLE_ORDINAL: Record<OnchainRole, number> = { client: 1, freelancer: 2, arbiter: 3 }
 
 const ROLE_REGISTRY_READ_ABI = [

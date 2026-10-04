@@ -29,6 +29,7 @@ export type ChainEventName =
   | 'UnstakeRequested' | 'UnstakeCancelled' | 'TierThresholdsUpdated'
   | 'MinStakeUpdated' | 'MinScoreToWithdrawUpdated' | 'MinStakeDurationUpdated'
   | 'UnstakeCooldownUpdated' | 'EscrowSet'
+  | 'RoleClaimed' | 'RoleSwitched' // RoleRegistry: the seat users.role mirrors
 
 /** Legal (from, event) → to. Everything else is drift. */
 const TRANSITIONS: Partial<Record<ChainEventName, Partial<Record<MilestoneStatus, MilestoneStatus>>>> = {

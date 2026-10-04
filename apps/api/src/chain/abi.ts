@@ -44,6 +44,9 @@ export const ESCROW_ABI = parseAbi([
   'event NoQuorumFallback(uint256 indexed milestoneId, address indexed opener, uint256 refunded)',
   'event AppealOpened(uint256 indexed milestoneId, uint8 indexed newRound, address indexed by, uint256 appealFee)',
   'event AppealResolved(uint256 indexed milestoneId, uint8 round, bool overturned)',
+  // ── RoleRegistry: the wallet's seat (Role enum = uint8) ────────────────
+  'event RoleClaimed(address indexed account, uint8 role)',
+  'event RoleSwitched(address indexed account, uint8 fromRole, uint8 toRole, uint256 fee)',
   // ── Registry events mirrored here for a single indexer surface ──────────
   'event ArbiterRegistered(address indexed arbiter, uint256 sbtTokenId)',
   'event ArbiterDeregistered(address indexed arbiter)',

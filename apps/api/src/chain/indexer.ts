@@ -32,6 +32,7 @@ import {
 import { writeOutbox } from '../modules/notify.ts'
 import { UNPUBLISHED } from '../modules/jobs.ts'
 import { projectWallets } from '../modules/helpers.ts'
+import { roleFromOrdinal } from './role-registry.ts'
 
 const log = logger.child({ component: 'indexer' })
 
@@ -157,8 +158,22 @@ async function applyEvent(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<P
     case 'TierThresholdsUpdated': return applyTierThresholds(tx, evt)
     case 'MinStakeDurationUpdated': return applyMinStakeDuration(tx, evt)
     case 'UnstakeCooldownUpdated': return applyUnstakeCooldown(tx, evt)
+    case 'RoleClaimed': return applySeat(tx, str(evt.args.account), Number(evt.args.role))
+    case 'RoleSwitched': return applySeat(tx, str(evt.args.account), Number(evt.args.toRole))
     default: return null
   }
+}
+
+/**
+ * Mirror a RoleRegistry claim or paid switch into users.role. Sign-in re-reads
+ * the seat too, but a paid switchRole used to reach the mirror only at the
+ * next login — every API role check ran on the old seat until then.
+ */
+async function applySeat(tx: Tx, account: string, ordinal: number): Promise<PlannedNotification | null> {
+  const role = roleFromOrdinal(ordinal)
+  if (!role) return null
+  await tx.update(users).set({ role, updatedAt: new Date() }).where(eq(users.walletAddress, account.toLowerCase()))
+  return null
 }
 
 async function loadMilestoneByOnchainId(tx: Tx, onchainId: number) {

@@ -133,7 +133,9 @@ export class RealChainAdapter implements ChainAdapter {
   async fetchLogs(fromBlock: number, toBlock: number): Promise<RawChainLog[]> {
     const { client } = await this.viem()
     const { ESCROW_ABI } = await import('./abi.ts')
-    const sources = [this.escrowAddress, this.registryAddress]
+    // The role registry too: users.role is a mirror of its claim/switch events.
+    const sources = [this.escrowAddress, this.registryAddress, env.ROLE_REGISTRY_ADDRESS?.toLowerCase()]
+      .filter((a): a is string => !!a)
     const out: RawChainLog[] = []
     const blockTimes = new Map<bigint, Date>()
     for (const source of sources) {
