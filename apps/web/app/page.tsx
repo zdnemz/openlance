@@ -7,7 +7,7 @@
  * in response to the reader's scroll, never on its own clock.
  */
 import Link from "next/link";
-import { motion, useScroll, useTransform, MotionConfig, type Variants } from "framer-motion";
+import { motion, useScroll, useTransform, useReducedMotion, MotionConfig, type Variants } from "framer-motion";
 import { useRef, memo, useEffect, useState } from "react";
 import { Logo } from "@/components/app-shell";
 import { WalletButton } from "@/components/wallet/wallet-button";
@@ -39,10 +39,14 @@ const FLOW = [
 
 const EscrowCard = memo(function EscrowCard() {
   const [step, setStep] = useState(0);
+  // Auto-advancing content needs a way to stop (WCAG 2.2.2): reduced motion
+  // holds the card on its first state.
+  const reduce = useReducedMotion();
   useEffect(() => {
+    if (reduce) return;
     const t = setInterval(() => setStep((s) => (s + 1) % FLOW.length), 2600);
     return () => clearInterval(t);
-  }, []);
+  }, [reduce]);
   const current = FLOW[step]!;
 
   return (

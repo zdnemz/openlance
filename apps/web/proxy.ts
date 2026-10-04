@@ -1,12 +1,10 @@
 /**
  * Next.js proxy (formerly middleware) — all route guards live here.
  *
- * 1. Onboarding gate: EVERY page except `/onboarding` itself requires the
- *    `el_onboarded=1` cookie (stamped by the auth lifecycle routes when KYC
- *    is verified — see gate cookies in apps/api/src/lib/http.ts). This includes
- *    the public landing page `/`: a brand-new visitor can reach nothing but
- *    /onboarding until they have onboarded. Unfinished users bounce to
- *    /onboarding before any page code runs.
+ * 1. Onboarding gate: every page except `/onboarding` and the public landing
+ *    `/` requires the `el_onboarded=1` cookie (stamped by the auth lifecycle
+ *    routes when KYC is verified — see gate cookies in apps/api/src/lib/http.ts).
+ *    Unfinished users bounce to /onboarding before any page code runs.
  * 2. Landing bounce: onboarded users never see `/` again — they are sent to
  *    their seat home (/dashboard).
  * 3. Seat gate (strict): onboarded users carry a plain `el_role` hint
@@ -89,10 +87,10 @@ export async function proxy(request: NextRequest) {
       return onboarded ? redirectTo(request, ROLE_HOME) : NextResponse.next()
     }
 
-    // Hard onboarding gate — EVERY route, `/` included, needs the cookie.
-    // A visitor who hasn't onboarded (signed in or not) can only see
-    // /onboarding.
-    if (!onboarded) return redirectTo(request, ONBOARDING_PATH)
+    // Onboarding gate: every app route needs the cookie. The public landing is
+    // the one exception — gating it too meant nobody, ever, saw the page that
+    // explains the product.
+    if (!onboarded) return p === '/' ? NextResponse.next() : redirectTo(request, ONBOARDING_PATH)
 
     // Onboarded users leave the public landing page for their seat home.
     if (p === '/') return redirectTo(request, ROLE_HOME)

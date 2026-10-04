@@ -419,10 +419,11 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium text-dim"><UserIcon className="h-3.5 w-3.5 text-faint" />Full name</span>
             <input
+              aria-invalid={!!fullName && !nameOk} aria-describedby={fullName && !nameOk ? "kyc-name-hint" : undefined}
               value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ada Okafor" autoComplete="name"
               className="h-11 w-full rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
             />
-            {fullName && !nameOk && <span className="mt-1 block text-[11.5px] text-amber-300">Use at least 2 characters.</span>}
+            {fullName && !nameOk && <span id="kyc-name-hint" className="mt-1 block text-[11.5px] text-amber-300">Use at least 2 characters.</span>}
           </label>
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium text-dim"><Globe className="h-3.5 w-3.5 text-faint" />Country of residence</span>
@@ -451,10 +452,12 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
               })}
             </div>
             <input
+              aria-label="Document number"
+              aria-invalid={!!idNumber && !idOk} aria-describedby={idNumber && !idOk ? "kyc-id-hint" : undefined}
               value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="e.g. A1234567" inputMode="text" autoComplete="off"
               className="mt-2 h-11 w-full rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
             />
-            {idNumber && !idOk && <span className="mt-1 block text-[11.5px] text-amber-300">Document number needs 4+ characters.</span>}
+            {idNumber && !idOk && <span id="kyc-id-hint" className="mt-1 block text-[11.5px] text-amber-300">Document number needs 4+ characters.</span>}
           </fieldset>
         )}
 

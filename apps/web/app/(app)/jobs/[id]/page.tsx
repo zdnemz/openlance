@@ -24,7 +24,7 @@ import { ESCROW_ABI } from "@/lib/contracts";
 import { toast } from "sonner";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { Check } from "@phosphor-icons/react/dist/csr/Check";
-import { Stack } from "@phosphor-icons/react/dist/csr/Stack";
+import { X } from "@phosphor-icons/react/dist/csr/X";
 import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
 import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Lock } from "@phosphor-icons/react/dist/csr/Lock";
@@ -698,6 +698,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
             <div key={i} className="space-y-2 rounded-2xl border border-line bg-white/[0.02] p-4">
               <div className="flex gap-3">
                 <Input
+                  aria-label={`Milestone ${i + 1} title`}
                   value={m.title} onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
                   placeholder={`Milestone ${i + 1} title`} className="h-9 border-line bg-white/[0.03] text-[13px]"
                 />
@@ -712,11 +713,12 @@ function ProposeForm({ jobId }: { jobId: string }) {
                     onClick={() => setMilestones(milestones.filter((_, j) => j !== i))}
                     className="grid size-9 shrink-0 place-items-center rounded-lg text-faint hover:text-destructive"
                   >
-                    <Stack className="h-4 w-4" />
+                    <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
               <Textarea
+                aria-label={`Milestone ${i + 1} deliverable`}
                 value={m.description} rows={2}
                 onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
                 placeholder="What gets delivered, and what the reviewer checks"

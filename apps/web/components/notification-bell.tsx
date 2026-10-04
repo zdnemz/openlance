@@ -108,12 +108,14 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
     };
   }, [open]);
 
-  // Mark everything read the first time the panel is opened.
+  // Mark read what the panel actually shows — it lists 8, and marking the
+  // whole inbox read hid everything past the eighth.
   const openPanel = async () => {
     setOpen((v) => !v);
-    if (!token || unread === 0) return;
+    const shown = items.filter((n) => !n.readAt).map((n) => n.id);
+    if (!token || shown.length === 0) return;
     try {
-      await post("/notifications/read", {});
+      await post("/notifications/read", { ids: shown });
       invalidate.notifications();
     } catch {
       /* a failed read receipt must not block the panel */
