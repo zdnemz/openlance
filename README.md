@@ -31,11 +31,10 @@ browser ──► apps/web :3000 ──fetch──► apps/api :4000 ── Supa
   is a standalone Hono service on `:4000` that the browser calls directly. The
   API answers its own CORS preflights and owns auth, the database, and the
   chain indexer. There is no BFF in between.
-- **Personas**: the connect panel offers five anvil deterministic accounts
-  (public test keys) that sign locally in the browser — one click = wallet +
-  SIWE session. A real browser wallet (MetaMask) rides the same surface via
-  the injected provider; it needs the anvil network added locally
-  (chain 31337, RPC `<API_BASE>/api/rpc`).
+- **Wallets**: users connect an injected browser wallet (MetaMask etc.); the
+  panel switches or adds the env chain and asks for one SIWE signature. The
+  anvil persona keys are gone. Locally the chain is 31337, RPC
+  `<API_BASE>/api/rpc` (read methods and raw sends only).
 - **State split enforced in the UI**: money-relevant views poll the API
   mirror, and every wallet action waits through three honest phases —
   *signing → mining → indexer mirroring* — before declaring success.
@@ -120,7 +119,8 @@ Relevant files: `apps/contracts/contracts/SponsorshipForwarder.sol`,
 
 ```
 apps/api/             the API service (Hono, :4000) — runs on plain Node, no build
-  src/server.ts       entrypoint: validate config, boot workers, listen
+  src/serve.ts        long-lived entrypoint: validate config, boot workers, listen
+  src/app.ts          also the serverless entrypoint (Vercel); crons via GET /api/internal/cron
   src/app.ts          Hono app: CORS, 404, the route table
   src/routes.ts       generated from routes/ — the index of the API surface
   src/routes/**       one module per path, `route()` wrapped (same contract as before)

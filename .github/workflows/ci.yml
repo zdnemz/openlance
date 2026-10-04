@@ -39,6 +39,18 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Contract tests
+        # 130+ tests incl. the audit regressions and the EIP-170 size guard.
+        run: pnpm --filter @openlance/contracts test
+
+      - name: API invariant checks (no database)
+        run: |
+          pnpm --filter @openlance/api check:funding-match
+          pnpm --filter @openlance/api check:sponsorable
+          pnpm --filter @openlance/api check:webhook-url
+          pnpm --filter @openlance/api check:cron
+          pnpm --filter @openlance/api check:kv
+
       - name: Lint
         run: pnpm lint
 

@@ -8,10 +8,20 @@ const nextConfig: NextConfig = {
   // rooted at the repo, so the server entry is
   // `.next/standalone/apps/web/server.js` and deps resolve.
   outputFileTracingRoot: path.join(__dirname, "..", ".."),
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   reactStrictMode: false,
+  // The signing and approval screens must not be frameable (clickjacking).
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+      ],
+    }];
+  },
 };
 
 export default nextConfig;
