@@ -100,35 +100,35 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
       onSubmit={(e) => { e.preventDefault(); void submit(); }}
     >
       <div className="space-y-2">
-        <label htmlFor="job-title" className="text-[13px] font-medium">Title</label>
+        <label htmlFor="job-title" className="text-[14px] font-medium">Title</label>
         <Input
           id="job-title"
           value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })}
           placeholder="Invariant fuzz audit for a cross-chain bridge (Foundry)"
-          className="h-11 border-line bg-white/[0.03] text-sm"
+          className="h-11 border-line bg-ink-raised text-sm"
         />
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="job-brief" className="text-[13px] font-medium">The brief</label>
+        <label htmlFor="job-brief" className="text-[14px] font-medium">The brief</label>
         <Textarea
           id="job-brief"
           value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })}
           rows={7}
           placeholder="Context, scope, acceptance criteria, what the reviewer checks when a milestone lands. Markdown-ish paragraphs work well."
         />
-        <p className="text-[12px] text-faint">Minimum 20 characters. This is what proposals will be written against.</p>
+        <p className="text-[13px] text-faint">Minimum 20 characters. This is what proposals will be written against.</p>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-2">
-          <span className="text-[13px] font-medium" id="job-category-label">Category</span>
+          <span className="text-[14px] font-medium" id="job-category-label">Category</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-labelledby="job-category-label"
-                className="flex h-11 w-full items-center justify-between border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
+                className="flex h-11 w-full items-center justify-between border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
               >
                 <span>{d.category === CUSTOM_CATEGORY ? "Custom…" : d.category}</span>
                 <CaretDown className="h-4 w-4 shrink-0 text-faint" />
@@ -158,32 +158,32 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
               aria-label="Custom category"
               value={d.customCategory} onChange={(e) => setD({ ...d, customCategory: e.target.value })}
               placeholder="e.g. zero-knowledge"
-              className="h-11 border-line bg-white/[0.03] text-sm"
+              className="h-11 border-line bg-ink-raised text-sm"
             />
           )}
         </div>
         <div className="space-y-2">
-          <label htmlFor="job-budget" className="text-[13px] font-medium">Max budget (ETH)</label>
+          <label htmlFor="job-budget" className="text-[14px] font-medium">Max budget (ETH)</label>
           {/* inputMode decimal: without it a phone raises the full keyboard for a number. */}
-          <Input id="job-budget" inputMode="decimal" value={d.budget} onChange={(e) => setD({ ...d, budget: e.target.value })} className="num h-11 border-line bg-white/[0.03] text-sm" />
-          <p className="text-[12px] text-faint">The ceiling on any bid — and what you lock in escrow to publish. You pay the bid you accept; the rest is withdrawable.</p>
+          <Input id="job-budget" inputMode="decimal" value={d.budget} onChange={(e) => setD({ ...d, budget: e.target.value })} className="num h-11 border-line bg-ink-raised text-sm" />
+          <p className="text-[13px] text-faint">The ceiling on any bid — and what you lock in escrow to publish. You pay the bid you accept; the rest is withdrawable.</p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <span className="text-[13px] font-medium" id="job-skills-label">Skills</span>
+        <span className="text-[14px] font-medium" id="job-skills-label">Skills</span>
         <SkillPicker
           value={d.skills}
           onChange={(skills) => setD({ ...d, skills })}
           onError={setError}
         />
-        <p className="text-[12px] text-faint">Up to 15 — presets or your own, comma-free.</p>
+        <p className="text-[13px] text-faint">Up to 15 — presets or your own, comma-free.</p>
       </div>
 
       {/* role="alert": the only feedback a failed submit produces, and a screen
           reader has no other way to learn it happened. */}
       {error && (
-        <p role="alert" className="flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+        <p role="alert" className="flex items-start gap-2 border-2 border-destructive/30 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
           <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
         </p>
       )}
@@ -191,7 +191,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
       <Button
         type="submit"
         disabled={submitting}
-        className="w-full bg-rose-accent py-3.5 text-sm font-medium hover:bg-rose-bright"
+        className="w-full"
       >
         {submitting
           ? "Saving…"
@@ -199,7 +199,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
             ? <span className="flex items-center gap-2">Save changes <ArrowRight className="h-4 w-4" weight="bold" /></span>
             : <span className="flex items-center gap-2">Save draft <ArrowRight className="h-4 w-4" weight="bold" /></span>}
       </Button>
-      <p className="text-center text-[12px] text-faint">
+      <p className="text-center text-[13px] text-faint">
         Freelancers shape the milestone breakdown themselves — you review the bids. Nothing moves on-chain until you
         lock the budget to publish.
       </p>
@@ -242,13 +242,13 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-11 w-full items-center justify-between gap-3 border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
+            className="flex h-11 w-full items-center justify-between gap-3 border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
           >
             <span className={`min-w-0 truncate ${tokens.length ? "" : "text-faint"}`}>
               {tokens.length ? preview : "Select skills…"}
             </span>
             <span className="flex shrink-0 items-center gap-2">
-              {tokens.length > 0 && <span className="num text-[11px] text-faint">{tokens.length}/15</span>}
+              {tokens.length > 0 && <span className="num text-[13px] text-faint">{tokens.length}/15</span>}
               <CaretDown className="h-4 w-4 text-faint" />
             </span>
           </button>
@@ -263,15 +263,15 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
               {tokens.includes(s) && <Check className="h-3.5 w-3.5 text-rose-bright" weight="bold" />}
             </DropdownMenuItem>
           ))}
-          <DropdownMenuSeparator className="bg-white/[0.06]" />
+          <DropdownMenuSeparator className="bg-ink-hover" />
           <div className="flex items-center gap-1.5 p-1">
             <Input
               value={custom} onChange={(e) => setCustom(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
               placeholder="Custom skill…"
-              className="h-9 flex-1 border-line bg-white/[0.03] text-[13px]"
+              className="h-9 flex-1 border-line bg-ink-raised text-[14px]"
             />
-            <Button type="button" onClick={addCustom} disabled={!custom.trim()} className="h-9 shrink-0 bg-white/10 px-3.5 text-[13px] hover:bg-white/20">
+            <Button variant="outline" type="button" onClick={addCustom} disabled={!custom.trim()} className="shrink-0">
               Add
             </Button>
           </div>

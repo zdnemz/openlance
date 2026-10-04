@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiUrl } from '@/lib/api'
 import { Activity, ArrowUpRight, Blocks, Boxes, Coins, Database, FileText, Gauge, HardDrive, Layers, Link2, MessageSquare, Radio, ServerCog, ShieldCheck, Star, Users, Wallet, Zap } from '@/components/icons'
+import { PixelMark } from '@/components/pixel-art'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -55,16 +56,17 @@ const ETH = (wei: string) => {
 const short = (s: string, n = 10) => s ? `${s.slice(0, n)}…${s.slice(-4)}` : ''
 const shortAddr = (a: string) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : ''
 
+const tone = (c: string) => `border-state-${c} bg-state-${c}/10 text-state-${c}`
 const CHAIN_STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  pending_funding: { label: 'Pending funding', className: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/25' },
-  funded: { label: 'Funded', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25' },
-  submitted: { label: 'Submitted', className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400 border-teal-500/25' },
-  released: { label: 'Released', className: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-600/30' },
-  disputed: { label: 'Disputed', className: 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/25' },
-  resolved_release: { label: 'Resolved · release', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25' },
-  resolved_refund: { label: 'Resolved · refund', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25' },
-  resolved_split: { label: 'Resolved · split', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25' },
-  cancelled: { label: 'Cancelled', className: 'bg-zinc-500/15 text-zinc-500 dark:text-zinc-400 border-zinc-500/25' },
+  pending_funding: { label: 'Pending funding', className: tone('pending') },
+  funded: { label: 'Funded', className: tone('funded') },
+  submitted: { label: 'Submitted', className: tone('submitted') },
+  released: { label: 'Released', className: tone('released') },
+  disputed: { label: 'Disputed', className: tone('disputed') },
+  resolved_release: { label: 'Resolved · release', className: tone('released') },
+  resolved_refund: { label: 'Resolved · refund', className: tone('refund') },
+  resolved_split: { label: 'Resolved · split', className: tone('split') },
+  cancelled: { label: 'Cancelled', className: tone('refund') },
 }
 
 const EVENT_ICON: Record<string, typeof Coins> = {
@@ -76,10 +78,10 @@ const EVENT_ICON: Record<string, typeof Coins> = {
 
 function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium ${ok
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-      : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400'}`}>
-      <span className={`size-1.5 ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`} aria-hidden />
+    <span className={`inline-flex items-center gap-2 border-2 px-2.5 py-1 text-[13px] font-semibold uppercase tracking-wide ${ok
+      ? 'border-state-released bg-state-released/10 text-state-released'
+      : 'border-rose-accent bg-rose-accent/10 text-rose-light'}`}>
+      <span className={`size-2 ${ok ? 'bg-state-released' : 'bg-rose-accent'}`} aria-hidden />
       {label}
     </span>
   )
@@ -89,11 +91,11 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: typeof Users; label
   return (
     <Card className="gap-2 p-4">
       <div className="flex items-center justify-between text-muted-foreground">
-        <span className="text-xs font-medium tracking-wide uppercase">{label}</span>
-        <Icon className="size-4" aria-hidden />
+        <span className="text-[13px] font-semibold tracking-wide uppercase">{label}</span>
+        <Icon className="size-5" aria-hidden />
       </div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      {sub ? <div className="text-xs text-muted-foreground">{sub}</div> : null}
+      <div className="display text-[18px] leading-none">{value}</div>
+      {sub ? <div className="text-[13px] text-muted-foreground">{sub}</div> : null}
     </Card>
   )
 }
@@ -170,12 +172,10 @@ export default function BackendConsole() {
         <header className="space-y-4">
           <div className="flex flex-wrap items-center gap-3 justify-between">
             <div className="flex items-center gap-3">
-              <div className="size-10 bg-emerald-600/15 border border-emerald-600/25 grid place-items-center">
-                <ShieldCheck className="size-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
-              </div>
+              <PixelMark size={40} />
               <div>
-                <h1 className="text-xl font-semibold tracking-tight">OpenLance · Backend Console</h1>
-                <p className="text-sm text-muted-foreground">Milestone escrow marketplace — backend-first build (Hono · Supabase-compatible Postgres · Redis · viem)</p>
+                <h1 className="display text-[14px] leading-snug md:text-[16px]">OpenLance · Backend Console</h1>
+                <p className="text-[15px] text-muted-foreground">Milestone escrow marketplace — backend-first build (Hono · Supabase-compatible Postgres · Redis · viem)</p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -190,23 +190,23 @@ export default function BackendConsole() {
           </div>
 
           {data ? (
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><Database className="size-3.5" aria-hidden />{data.config.dbDriver === 'postgres' ? 'Postgres (DATABASE_URL)' : 'DB unconfigured'}</span>
+            <div className="flex flex-wrap gap-2 text-[13px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5"><Database className="size-4" aria-hidden />{data.config.dbDriver === 'postgres' ? 'Postgres (DATABASE_URL)' : 'DB unconfigured'}</span>
               <Separator orientation="vertical" className="h-3.5" />
-              <span className="inline-flex items-center gap-1.5"><Zap className="size-3.5" aria-hidden />queue: {data.config.queueMode}</span>
+              <span className="inline-flex items-center gap-1.5"><Zap className="size-4" aria-hidden />queue: {data.config.queueMode}</span>
               <Separator orientation="vertical" className="h-3.5" />
-              <span className="inline-flex items-center gap-1.5"><HardDrive className="size-3.5" aria-hidden />storage: {data.config.storageDriver}</span>
+              <span className="inline-flex items-center gap-1.5"><HardDrive className="size-4" aria-hidden />storage: {data.config.storageDriver}</span>
               <Separator orientation="vertical" className="h-3.5" />
-              <span className="inline-flex items-center gap-1.5"><Link2 className="size-3.5" aria-hidden />chainId {data.config.chainId}</span>
+              <span className="inline-flex items-center gap-1.5"><Link2 className="size-4" aria-hidden />chainId {data.config.chainId}</span>
               <Separator orientation="vertical" className="h-3.5" />
               <span className="inline-flex items-center gap-1.5 font-mono">{short(data.config.contracts.escrow, 12)}</span>
             </div>
           ) : null}
 
           {loaded && error ? (
-            <Card className="border-rose-500/30 bg-rose-500/5">
-              <CardContent className="p-4 text-sm text-rose-700 dark:text-rose-400">
-                API unreachable ({error}). The API is a separate service — start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5">pnpm --filter @openlance/api dev</code>, check that <code className="font-mono text-xs bg-muted px-1.5 py-0.5">NEXT_PUBLIC_API_BASE</code> points at it and that <code className="font-mono text-xs bg-muted px-1.5 py-0.5">DATABASE_URL</code> is set, then this console refreshes automatically.
+            <Card className="!border-rose-accent">
+              <CardContent className="p-4 text-[15px] text-rose-light">
+                API unreachable ({error}). The API is a separate service — start it with <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">pnpm --filter @openlance/api dev</code>, check that <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">NEXT_PUBLIC_API_BASE</code> points at it and that <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">DATABASE_URL</code> is set, then this console refreshes automatically.
               </CardContent>
             </Card>
           ) : null}
@@ -234,7 +234,7 @@ export default function BackendConsole() {
           <section aria-label="Demo project" className="lg:col-span-3 space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Gauge className="size-4 text-emerald-600" aria-hidden />Demo project</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-[12px]"><Gauge className="size-6 text-state-released" aria-hidden />Demo project</CardTitle>
                 <CardDescription>
                   {data?.demoProject
                     ? <>Client <strong>{data.demoProject.client?.displayName ?? shortAddr(data.demoProject.client?.walletAddress ?? '')}</strong> × freelancer <strong>{data.demoProject.freelancer?.displayName ?? shortAddr(data.demoProject.freelancer?.walletAddress ?? '')}</strong> — status <Badge variant="secondary" className="ml-1">{data.demoProject.status}</Badge></>
@@ -247,19 +247,19 @@ export default function BackendConsole() {
                     {data.demoProject.milestones.map((m) => {
                       const st = CHAIN_STATUS_STYLES[m.chainStatus] ?? { label: m.chainStatus, className: 'bg-muted text-muted-foreground border-border' }
                       return (
-                        <li key={m.position} className="border p-3 flex flex-wrap items-center justify-between gap-2">
+                        <li key={m.position} className="border-2 border-line p-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="grid place-items-center size-6 bg-muted text-xs font-semibold">{m.position}</span>
+                              <span className="grid place-items-center size-7 border-2 border-line-strong bg-muted text-[13px] font-semibold">{m.position}</span>
                               <span className="font-medium truncate">{m.title}</span>
                             </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
+                            <div className="mt-1 text-[13px] text-muted-foreground">
                               {ETH(m.amountWei)} ETH{m.settlementTxHash ? <> · settled <span className="font-mono">{short(m.settlementTxHash, 8)}</span></> : null}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             {m.softStatus === 'changes_requested' ? <Badge variant="outline">changes requested</Badge> : null}
-                            <span className={`inline-flex items-center border px-2 py-0.5 text-xs font-medium ${st.className}`}>{st.label}</span>
+                            <span className={`inline-flex items-center border-2 px-2 py-0.5 text-[12px] font-semibold uppercase ${st.className}`}>{st.label}</span>
                           </div>
                         </li>
                       )
@@ -274,12 +274,12 @@ export default function BackendConsole() {
             {/* ── Ledger ── */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Activity className="size-4 text-emerald-600" aria-hidden />On-chain ledger <span className="text-muted-foreground font-normal text-sm">(event-sourced cache)</span></CardTitle>
+                <CardTitle className="flex items-center gap-2 text-[12px]"><Activity className="size-6 text-state-released" aria-hidden />On-chain ledger <span className="text-muted-foreground font-normal text-[14px] normal-case">(event-sourced cache)</span></CardTitle>
                 <CardDescription>Every money movement, derived from chain events. Each row links to the explorer tx.</CardDescription>
               </CardHeader>
               <CardContent>
                 {data ? (
-                  <div className="max-h-96 overflow-y-auto border">
+                  <div className="max-h-96 overflow-y-auto border-2 border-line">
                     <Table>
                       <TableHeader className="sticky top-0 bg-muted/95">
                         <TableRow>
@@ -298,10 +298,10 @@ export default function BackendConsole() {
                           return (
                             <TableRow key={e.id}>
                               <TableCell><Icon className="size-3.5 text-muted-foreground" aria-hidden /></TableCell>
-                              <TableCell className="font-medium font-mono text-xs">{e.eventType}</TableCell>
+                              <TableCell className="font-medium font-mono text-[13px]">{e.eventType}</TableCell>
                               <TableCell className="text-right tabular-nums text-muted-foreground">{e.blockNumber.toLocaleString()}</TableCell>
-                              <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">{short(e.txHash, 10)}</TableCell>
-                              <TableCell className="hidden md:table-cell text-right text-xs text-muted-foreground">{new Date(e.blockTime).toLocaleTimeString()}</TableCell>
+                              <TableCell className="hidden sm:table-cell font-mono text-[13px] text-muted-foreground">{short(e.txHash, 10)}</TableCell>
+                              <TableCell className="hidden md:table-cell text-right text-[13px] text-muted-foreground">{new Date(e.blockTime).toLocaleTimeString()}</TableCell>
                             </TableRow>
                           )
                         })}
@@ -319,27 +319,27 @@ export default function BackendConsole() {
           <section aria-label="Trust layer" className="lg:col-span-2 space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-emerald-600" aria-hidden />Arbiter registry <span className="text-muted-foreground font-normal text-sm">(SBT)</span></CardTitle>
+                <CardTitle className="flex items-center gap-2 text-[12px]"><ShieldCheck className="size-6 text-state-released" aria-hidden />Arbiter registry <span className="text-muted-foreground font-normal text-[14px] normal-case">(SBT)</span></CardTitle>
                 <CardDescription>ERC-5194 soulbound trust, 0–100: +5 majority vote, −10 minority, −15 missed deadline, −25 overturned. A pure function of resolution history.</CardDescription>
               </CardHeader>
               <CardContent>
                 {data ? (
                   data.arbiters.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">No arbiters registered yet.</p>
+                    <p className="text-[15px] text-muted-foreground py-4 text-center">No arbiters registered yet.</p>
                   ) : (
                     <ul className="space-y-3">
                       {data.arbiters.map((a) => (
-                        <li key={a.address} className="flex items-center justify-between gap-2 border p-3">
+                        <li key={a.address} className="flex items-center justify-between gap-2 border-2 border-line p-3">
                           <div className="min-w-0">
-                            <div className="font-mono text-xs truncate">{shortAddr(a.address)}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
+                            <div className="font-mono text-[13px] truncate">{shortAddr(a.address)}</div>
+                            <div className="text-[13px] text-muted-foreground mt-0.5">
                               SBT #{a.sbtTokenId ?? '—'} · {a.resolutions} resolution{a.resolutions === 1 ? '' : 's'}
-                              {a.resolutionsLate > 0 ? <span className="text-rose-600 dark:text-rose-400"> · {a.resolutionsLate} late</span> : null}
+                              {a.resolutionsLate > 0 ? <span className="text-state-disputed"> · {a.resolutionsLate} late</span> : null}
                             </div>
                           </div>
                           <div className="flex flex-col items-end">
-                            <span className="text-lg font-semibold tabular-nums leading-none">{a.trustScore}</span>
-                            <span className={`text-[11px] ${a.registered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{a.registered ? 'active' : 'deregistered'}</span>
+                            <span className="display text-[16px] leading-none">{a.trustScore}</span>
+                            <span className={`text-[13px] ${a.registered ? 'text-state-released' : 'text-muted-foreground'}`}>{a.registered ? 'active' : 'deregistered'}</span>
                           </div>
                         </li>
                       ))}
@@ -352,7 +352,7 @@ export default function BackendConsole() {
             {data ? (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Milestone states</CardTitle>
+                  <CardTitle>Milestone states</CardTitle>
                   <CardDescription>Histogram across all project milestones.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -360,10 +360,10 @@ export default function BackendConsole() {
                     const st = CHAIN_STATUS_STYLES[k] ?? { label: k, className: 'bg-muted text-muted-foreground border-border' }
                     const max = Math.max(...Object.values(data.milestoneHistogram), 1)
                     return (
-                      <div key={k} className="flex items-center gap-3 text-xs">
+                      <div key={k} className="flex items-center gap-3 text-[13px]">
                         <span className="w-32 shrink-0 text-muted-foreground">{st.label}</span>
-                        <div className="h-2 flex-1 bg-muted overflow-hidden">
-                          <div className="h-full bg-emerald-600/70" style={{ width: `${(v / max) * 100}%` }} />
+                        <div className="h-3 flex-1 border-2 border-line bg-muted overflow-hidden">
+                          <div className="h-full bg-state-released" style={{ width: `${(v / max) * 100}%` }} />
                         </div>
                         <span className="w-6 text-right tabular-nums font-medium">{v}</span>
                       </div>
@@ -380,18 +380,18 @@ export default function BackendConsole() {
         <section aria-label="API reference">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base"><ServerCog className="size-4 text-emerald-600" aria-hidden />API surface <span className="text-muted-foreground font-normal text-sm">— what the frontend will build against</span></CardTitle>
+              <CardTitle className="flex items-center gap-2 text-[12px]"><ServerCog className="size-6 text-state-released" aria-hidden />API surface <span className="text-muted-foreground font-normal text-[14px] normal-case">— what the frontend will build against</span></CardTitle>
               <CardDescription>
-                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5">src/app/api/**</code>.
+                Full walkthrough in <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">src/app/api/**</code>.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
               {API_GROUPS.map((g) => (
                 <div key={g.title} className="space-y-2">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold"><g.icon className="size-4 text-emerald-600" aria-hidden />{g.title}</h3>
+                  <h3 className="flex items-center gap-2 font-display text-[11px] leading-snug"><g.icon className="size-6 text-state-released" aria-hidden />{g.title}</h3>
                   <ul className="space-y-2">
                     {g.rows.map(([route, desc]) => (
-                      <li key={route} className="text-xs leading-relaxed">
+                      <li key={route} className="text-[13px] leading-relaxed">
                         <code className="font-mono bg-muted px-1.5 py-0.5">{route}</code>
                         <span className="text-muted-foreground"> — {desc}</span>
                       </li>
@@ -404,8 +404,8 @@ export default function BackendConsole() {
         </section>
       </main>
 
-      <footer className="mt-auto border-t bg-muted/30">
-        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+      <footer className="mt-auto border-t-2 border-line-strong bg-ink-raised">
+        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 text-[13px] text-muted-foreground flex flex-wrap items-center justify-between gap-2">
           <span>OpenLance — portfolio build, testnet only. On-chain = money + commitments + trust; off-chain = content + velocity.</span>
           <span className="font-mono">Next.js route handlers · /api</span>
         </div>

@@ -64,16 +64,16 @@ export function SurplusPanel({ jobId, jobRef }: { jobId: string; jobRef: string 
   return (
     <section className="glass p-6">
       <ListHead>Free budget</ListHead>
-      <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
+      <p className="mt-2.5 text-[14px] leading-relaxed text-dim">
         What the locked budget has left after the awarded milestones — an under-ceiling award hands its surplus back
         automatically, and this is the manual retry when that return was declined.
       </p>
       <div className="mt-4 flex items-center justify-between">
         <EthAmount wei={free.toString()} className="text-lg font-medium text-rose-bright" />
-        <Button
+        <Button variant="outline"
           disabled={withdrawing}
           onClick={withdraw}
-          className="bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20"
+          
         >
           {withdrawing ? "Withdrawing…" : "Withdraw"}
         </Button>

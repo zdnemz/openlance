@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArbiterPickerDialog } from "@/components/arbiter-picker-dialog";
 import { ArbiterBubbles } from "@/components/arbiter-bubble";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SurplusPanel } from "@/components/surplus-panel";
 import { DisputePanel } from "@/components/dispute-panel";
@@ -73,11 +73,11 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
         title="Project not found, or it is not yours to see"
         body="Projects are visible to their participants and assigned arbiters only. Sign in with a participating client/freelancer wallet — or the seated/selected arbiter wallet — to open this room."
         action={backToJob ? (
-          <Link href={`/jobs/${backToJob}?stay=1`} className="mt-1 inline-block bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20">
+          <Link href={`/jobs/${backToJob}?stay=1`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1 inline-block")}>
             Back to job posting
           </Link>
         ) : backToDisputes ? (
-          <Link href="/disputes" className="mt-1 inline-block bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20">
+          <Link href="/disputes" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1 inline-block")}>
             Back to disputes
           </Link>
         ) : undefined}
@@ -93,8 +93,8 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
       <ProjectHeader id={id} />
       <ArbiterPanel id={id} />
       {!isClient && !isFreelancer && (
-        <div className="glass flex items-center gap-3 px-5 py-4 text-[13px] text-dim">
-          <Warning className="h-4 w-4 shrink-0 text-amber-300" />
+        <div className="glass flex items-center gap-3 px-5 py-4 text-[14px] text-dim">
+          <Warning className="h-4 w-4 shrink-0 text-state-funded" />
           You are viewing as a non-participant; sign in as <AddressText value={project.client.walletAddress} className="text-foreground" /> (client) or{" "}
           <AddressText value={project.freelancer.walletAddress} className="text-foreground" /> (freelancer) to act on this project.
         </div>
@@ -104,14 +104,14 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
           renders nothing once the award handed the surplus back. */}
       {isClient && job && <SurplusPanel jobId={job.id} jobRef={job.jobRef} />}
       <Tabs defaultValue="milestones" className="gap-6">
-        <TabsList className="h-auto gap-7 border-b border-line bg-transparent p-0 pb-px">
-          <TabsTrigger value="milestones" className="px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
+        <TabsList className="w-full overflow-x-auto sm:w-fit">
+          <TabsTrigger value="milestones">
             Milestones
           </TabsTrigger>
-          <TabsTrigger value="chat" className="px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
+          <TabsTrigger value="chat">
             Chat
           </TabsTrigger>
-          <TabsTrigger value="activity" className="px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
+          <TabsTrigger value="activity">
             On-chain activity
           </TabsTrigger>
         </TabsList>
@@ -155,7 +155,7 @@ function ProjectHeader({ id }: { id: string }) {
             <StatusBadge status={project.status === "active" ? "funded" : project.status} />
             {dispute && <StatusBadge status="disputed" />}
           </div>
-          <h1 className="display mt-3 max-w-[36ch] text-[27px] leading-[1.1] md:text-[32px]">
+          <h1 className="display mt-5 max-w-[36ch] text-[16px] leading-[1.6] sm:text-[20px] md:text-[24px]">
             {jobLoading && !jobTitle ? <Skeleton className="inline-block h-9 w-72 align-middle" /> : heading}
           </h1>
           <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
@@ -166,12 +166,12 @@ function ProjectHeader({ id }: { id: string }) {
         </div>
         <div className="grid grid-cols-2 gap-x-10 gap-y-5 text-right sm:flex sm:gap-10">
           <div>
-            <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">in escrow</div>
-            <EthAmount wei={escrowedWei} className="mt-1.5 block text-xl font-medium text-amber-300" />
+            <div className="num text-[13px] uppercase tracking-[0.16em] text-faint">in escrow</div>
+            <EthAmount pixel wei={escrowedWei} className="mt-2 block text-[16px] leading-none text-state-funded" />
           </div>
           <div>
-            <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">released</div>
-            <EthAmount wei={releasedWei} className="mt-1.5 block text-xl font-medium text-state-released" />
+            <div className="num text-[13px] uppercase tracking-[0.16em] text-faint">released</div>
+            <EthAmount pixel wei={releasedWei} className="mt-2 block text-[16px] leading-none text-state-released" />
           </div>
         </div>
       </div>
@@ -184,8 +184,8 @@ function Party({ label, who }: { label: string; who: { id: string; walletAddress
     <Link href={`/profile/${who.walletAddress}`} className="flex items-center gap-2.5 text-dim transition-colors hover:text-foreground">
       <AddressAvatar address={who.walletAddress} size={30} />
       <span>
-        <span className="block text-[13px] leading-tight text-foreground">{who.displayName ?? shortAddress(who.walletAddress)}</span>
-        <span className="num block text-[11px] leading-tight text-faint">{label}</span>
+        <span className="block text-[14px] leading-tight text-foreground">{who.displayName ?? shortAddress(who.walletAddress)}</span>
+        <span className="num block text-[13px] leading-tight text-faint">{label}</span>
       </span>
     </Link>
   );
@@ -269,13 +269,13 @@ function ArbiterPanel({ id }: { id: string }) {
       {locked.length > 0 ? (
         <div className="mt-3 space-y-3">
           <ArbiterBubbles addresses={locked} tone="locked" />
-          <p className="text-[12px] text-faint">They are the panel, and nobody outside this list is ever asked. Fewer than 3 seats a degraded round that decides on those votes alone.</p>
+          <p className="text-[13px] text-faint">They are the panel, and nobody outside this list is ever asked. Fewer than 3 seats a degraded round that decides on those votes alone.</p>
         </div>
       ) : (
         <div className="mt-3 space-y-3">
           {proposal && (
-            <div className="border border-line bg-white/[0.02] p-4">
-              <div className="num text-[11px] uppercase tracking-wider text-faint">{mine ? "your proposal — waiting on counterparty" : "counterparty proposal"}</div>
+            <div className="border-2 border-line bg-ink-raised p-4">
+              <div className="num text-[13px] uppercase tracking-wider text-faint">{mine ? "your proposal — waiting on counterparty" : "counterparty proposal"}</div>
               {/* Bubbles: click one for the reputation detail + approve/reject. */}
               <div className="mt-2.5">
                 <ArbiterBubbles
@@ -284,21 +284,21 @@ function ArbiterPanel({ id }: { id: string }) {
                 />
               </div>
               {!mine && isParty && (
-                <p className="mt-2.5 text-[11.5px] text-faint">Open a bubble to review, then approve &amp; lock or reject the whole proposal.</p>
+                <p className="mt-2.5 text-[13px] text-faint">Open a bubble to review, then approve &amp; lock or reject the whole proposal.</p>
               )}
             </div>
           )}
           {isParty && (
-            <Button
+            <Button variant="outline"
               disabled={busy}
               onClick={() => setPickerOpen(true)}
-              className="bg-white/10 px-5 py-2.5 text-[12.5px] font-medium hover:bg-white/20"
+              
             >
               {proposal ? "Replace proposal" : "Add arbiters"}
             </Button>
           )}
           {!isParty && !proposal && (
-            <p className="text-[12px] text-faint">No arbiters picked yet — the parties agree {MIN_ARBITERS}–{MAX_ARBITERS} after award.</p>
+            <p className="text-[13px] text-faint">No arbiters picked yet — the parties agree {MIN_ARBITERS}–{MAX_ARBITERS} after award.</p>
           )}
         </div>
       )}
@@ -324,7 +324,7 @@ function MilestonesTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-      <div className="min-w-0 divide-y divide-white/[0.05] overflow-hidden border border-line">
+      <div className="min-w-0 divide-y-2 divide-line overflow-hidden border-2 border-line">
         {milestones.map((m) => (
           <MilestoneCard key={m.id} milestone={m} selected={selected?.id === m.id} onSelect={() => setSelectedId(m.id)} />
         ))}
@@ -340,26 +340,26 @@ function MilestoneCard({ milestone: m, selected, onSelect }: { milestone: Projec
       type="button"
       onClick={onSelect}
       className={`w-full px-6 py-5 text-left transition-colors ${press} ${
-        selected ? "bg-rose-soft" : "bg-white/[0.012] hover:bg-white/[0.035]"
+        selected ? "bg-rose-soft" : "bg-ink-raised hover:bg-ink-hover"
       }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
-            <span className="num text-[11px] text-faint">{String(m.position).padStart(2, "0")}</span>
+            <span className="num text-[13px] text-faint">{String(m.position).padStart(2, "0")}</span>
             <StatusBadge status={m.chainStatus} />
             {m.softStatus === "changes_requested" && (
-              <span className="num border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-300">changes requested</span>
+              <span className="num border-2 border-state-funded/50 bg-state-funded/10 px-2 py-0.5 text-[13px] text-state-funded">changes requested</span>
             )}
           </div>
-          <div className="mt-2.5 text-[16px] font-medium tracking-tight">{m.title}</div>
+          <div className="mt-2.5 text-[16px] font-medium">{m.title}</div>
         </div>
         <div className="shrink-0 text-right">
           <EthAmount wei={m.amountWei} className="text-base font-medium" />
-          {m.onchainId !== null && <div className="num mt-1 text-[11px] text-faint">on-chain #{m.onchainId}</div>}
+          {m.onchainId !== null && <div className="num mt-1 text-[13px] text-faint">on-chain #{m.onchainId}</div>}
         </div>
       </div>
-      <p className="mt-2.5 line-clamp-2 text-[13px] leading-relaxed text-faint">{m.description}</p>
+      <p className="mt-2.5 line-clamp-2 text-[14px] leading-relaxed text-faint">{m.description}</p>
     </button>
   );
 }
@@ -541,20 +541,20 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         <ListHead>Milestone {m.position}</ListHead>
         <StatusBadge status={m.chainStatus} />
       </div>
-      <h3 className="mt-3 text-[17px] font-medium tracking-tight">{m.title}</h3>
-      <p className="mt-2 text-[13px] leading-relaxed text-faint">{m.description}</p>
+      <h3 className="mt-3 text-[17px] font-medium">{m.title}</h3>
+      <p className="mt-2 text-[14px] leading-relaxed text-faint">{m.description}</p>
 
-      <div className="mt-5 grid grid-cols-3 gap-4 border-y border-line py-4">
+      <div className="mt-5 grid grid-cols-3 gap-4 border-y-2 border-line py-4">
         <div>
-          <div className="num text-[11px] uppercase tracking-wider text-faint">value</div>
+          <div className="num text-[13px] uppercase tracking-wider text-faint">value</div>
           <EthAmount wei={m.amountWei} className="mt-1 block text-sm font-medium" />
         </div>
         <div>
-          <div className="num text-[11px] uppercase tracking-wider text-faint">fee on release</div>
+          <div className="num text-[13px] uppercase tracking-wider text-faint">fee on release</div>
           <span className="num mt-1 block text-sm text-dim">{formatEth(fee)} ETH</span>
         </div>
         <div>
-          <div className="num text-[11px] uppercase tracking-wider text-faint">payout</div>
+          <div className="num text-[13px] uppercase tracking-wider text-faint">payout</div>
           <EthAmount wei={toWei(m.amountWei) - fee} className="mt-1 block text-sm text-state-released" />
         </div>
       </div>
@@ -575,7 +575,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
               <Button
                 disabled={active || fundState !== "idle"}
                 onClick={() => fundAllMilestones()}
-                className="w-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
+                className="w-full text-ink [--pb:#f59e0b] [--pf:#fde68a] [--ps:#78350f]"
               >
                 <PhaseLabel phase={chain.phase} idle={`Fund ${formatEth(outstandingWei)} ETH (all milestones)`} />
               </Button>
@@ -600,13 +600,13 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
             }
           >
             {fundState === "landed" && (
-              <p className="num border border-state-released/30 bg-state-released/[0.06] px-4 py-3 text-[12px] text-state-released">
+              <p className="num border-2 border-state-released/30 bg-state-released/[0.06] px-4 py-3 text-[13px] text-state-released">
                 Funding landed on-chain — waiting for the indexer to mirror it.
               </p>
             )}
             {changesRequested && m.softStatusNote && (
-              <p className="border border-amber-400/30 bg-amber-400/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-amber-200">
-                <span className="num block text-[11px] uppercase tracking-wider text-amber-300/80">Client asks for</span>
+              <p className="border-2 border-state-funded/50 bg-state-funded/10 px-4 py-3 text-[14px] leading-relaxed text-state-funded">
+                <span className="num block text-[13px] uppercase tracking-wider text-state-funded">Client asks for</span>
                 {m.softStatusNote}
               </p>
             )}
@@ -619,18 +619,18 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                       ? "What changed since the last delivery, and what the client should look at now."
                       : "Delivery notes: what shipped, where to look, what to check before approving."
                   }
-                  className="text-[13px]"
+                  className="text-[14px]"
                 />
                 <SubmissionFiles files={files} onChange={setFiles} max={maxAttachments} />
                 {submitError && (
-                  <p className="flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+                  <p className="flex items-start gap-2 border-2 border-destructive/30 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
                     <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {submitError}
                   </p>
                 )}
                 <Button
                   disabled={active || notes.trim().length < 1}
                   onClick={() => offscreenSubmit()}
-                  className="w-full bg-state-submitted py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                  className="w-full bg-state-submitted py-3 text-[14px] font-medium text-ink hover:brightness-110"
                 >
                   <PhaseLabel
                     phase={chain.phase}
@@ -674,7 +674,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                         successMessage: "Approved: payout is claimable for the freelancer",
                       })
                     }
-                    className="w-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                    className="w-full bg-state-released py-3 text-[14px] font-medium text-ink hover:brightness-110"
                   >
                     <PhaseLabel phase={chain.phase} idle={`Approve · ${formatEth(toWei(m.amountWei) - fee)} ETH claimable`} />
                   </Button>
@@ -683,7 +683,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                       <Textarea
                         value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={3}
                         placeholder="What needs to change. This is the note the freelancer revises against — say it precisely."
-                        className="text-[13px]"
+                        className="text-[14px]"
                       />
                       <Button
                         variant="ghost"
@@ -698,7 +698,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                             toast.error(e instanceof Error ? e.message : "Could not request changes");
                           }
                         }}
-                        className="w-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+                        className="w-full border-2 border-line py-2.5 text-[14px] text-dim hover:text-foreground"
                       >
                         <ArrowClockwise className="mr-2 h-3.5 w-3.5" /> Request changes (off-chain)
                       </Button>
@@ -734,7 +734,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     successMessage: "Withdrawn: payout is in your wallet",
                   })
                 }
-                className="w-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                className="w-full bg-state-released py-3 text-[14px] font-medium text-ink hover:brightness-110"
               >
                 <PhaseLabel phase={chain.phase} idle={`Withdraw ${formatEth(toWei(m.amountWei) - fee)} ETH`} />
               </Button>
@@ -743,21 +743,21 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
         )}
 
         {m.withdrawTxHash && (
-          <div className="mt-1 flex items-center justify-between border-t border-line pt-3.5">
-            <span className="num text-[11px] uppercase tracking-wider text-faint">withdrawal tx</span>
-            <HashText value={m.withdrawTxHash} size={8} className="text-[12px] text-state-released" />
+          <div className="mt-1 flex items-center justify-between border-t-2 border-line pt-3.5">
+            <span className="num text-[13px] uppercase tracking-wider text-faint">withdrawal tx</span>
+            <HashText value={m.withdrawTxHash} size={8} className="text-[13px] text-state-released" />
           </div>
         )}
 
         {["funded", "submitted"].includes(m.chainStatus) && (isClient || isFreelancer) && (
-          <details className="group border-t border-line pt-4">
-            <summary className="flex cursor-pointer list-none items-center gap-2.5 text-[13px] text-dim transition-colors hover:text-foreground">
+          <details className="group border-t-2 border-line pt-4">
+            <summary className="flex cursor-pointer list-none items-center gap-2.5 text-[14px] text-dim transition-colors hover:text-foreground">
               <Gavel className="h-4 w-4 text-state-disputed" />
               {m.chainStatus === "disputed" ? "Dispute path" : "Can't agree? Open the arbiter path"}
-              <span className="ml-auto text-[11px] text-faint group-open:hidden">expand</span>
+              <span className="ml-auto text-[13px] text-faint group-open:hidden">expand</span>
             </summary>
             <div className="mt-4 space-y-3">
-              <p className="text-[12.5px] leading-relaxed text-faint">
+              <p className="text-[14px] leading-relaxed text-faint">
                 The dispute record (reason) is written off-chain, then your wallet locks the milestone on-chain
                 {feeWei > 0n ? " and pays the dispute fee" : " — opening is free"}. {preferredArg ? "Your mutually-locked arbiters seat first; " : ""}Any remaining seats
                 draw at random from eligible arbiters who vote commit-reveal; a majority decides.
@@ -765,15 +765,15 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
               <Textarea
                 value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
                 placeholder="What exactly is disputed: scope, quality, timeline. This becomes evidence."
-                className="text-[13px]"
+                className="text-[14px]"
               />
-              <p className="num text-[11px] text-faint">
+              <p className="num text-[13px] text-faint">
                 {feeWei > 0n
                   ? `dispute fee ${formatEth(disputeFeeWei)} ETH · paid to the majority arbiters on resolution`
                   : "free to open · the protocol's reward pool pays the arbiters"}
               </p>
               {quorumRisk && (
-                <p className="num border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
+                <p className="num border-2 border-state-funded/50 bg-state-funded/10 px-4 py-3 text-[13px] text-state-funded">
                   {eligibleSeats === 0
                     ? `No eligible arbiter outside the parties right now — opening reverts on-chain until one registers (needs at least 1${QUORUM > 1 ? `, ${QUORUM} for a full panel` : ""}).`
                     : `Only ${eligibleSeats} eligible arbiter${eligibleSeats === 1 ? "" : "s"} outside the parties — this round is a degraded panel, decided by a single vote instead of ${QUORUM}-of-3.`}
@@ -791,7 +791,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     ),
                   )
                 }
-                className="w-full border border-state-disputed/40 bg-state-disputed/10 py-2.5 text-[12.5px] font-medium text-state-disputed hover:bg-state-disputed/20"
+                className="w-full border-2 border-state-disputed/40 bg-state-disputed/10 py-2.5 text-[14px] font-medium text-state-disputed hover:bg-state-disputed/20"
               >
                 <PhaseLabel phase={chain.phase} idle={`Write record + openDispute()${feeWei > 0n ? ` · ${formatEth(disputeFeeWei)} ETH` : " · free"}`} />
               </Button>
@@ -827,20 +827,20 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
           >
             {!myReview && (isClient || isFreelancer) && projectComplete && <ReviewForm projectId={projectId} milestoneId={m.id} />}
             {!myReview && !projectComplete && (
-              <p className="text-[12.5px] text-amber-300">
+              <p className="text-[14px] text-state-funded">
                 {project.milestones.filter((x) => !COMPLETE_STATES.includes(x.chainStatus)).length} milestone(s) still open —
                 finish them all to unlock reviews.
               </p>
             )}
             {myReview && (
-              <div className="border-y border-line py-4">
+              <div className="border-y-2 border-line py-4">
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
-                    <Star key={n} weight={n <= myReview.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= myReview.rating ? "text-amber-300" : "text-faint"}`} />
+                    <Star key={n} weight={n <= myReview.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= myReview.rating ? "text-state-funded" : "text-faint"}`} />
                   ))}
-                  {myReview.txHash && <span className="num ml-2 text-[11px] text-faint">tx {myReview.txHash.slice(0, 10)}…</span>}
+                  {myReview.txHash && <span className="num ml-2 text-[13px] text-faint">tx {myReview.txHash.slice(0, 10)}…</span>}
                 </div>
-                {myReview.body && <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-dim">{myReview.body}</p>}
+                {myReview.body && <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-dim">{myReview.body}</p>}
               </div>
             )}
           </ActionBlock>
@@ -849,19 +849,19 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
 
       {/* submissions + settlement evidence */}
       {submissions && submissions.length > 0 && (
-        <div className="mt-6 border-t border-line pt-5">
+        <div className="mt-6 border-t-2 border-line pt-5">
           <ListHead>Submissions</ListHead>
-          <div className="mt-3 divide-y divide-white/[0.06] border-y border-line">
+          <div className="mt-3 divide-y-2 divide-line border-y-2 border-line">
             {submissions.map((s, i) => (
               <div key={s.id} className="py-3.5">
-                <div className="num text-[11px] text-faint">
+                <div className="num text-[13px] text-faint">
                   {timeAgo(s.createdAt)}
                   {/* Revisions are the deliveries after a request-changes. The
                       newest is first, so the top entry is the live one and a
                       later "changes requested" note explains the one below. */}
-                  {i === 0 && changesRequested && <span className="text-amber-300"> · awaiting revision</span>}
+                  {i === 0 && changesRequested && <span className="text-state-funded"> · awaiting revision</span>}
                 </div>
-                <p className="mt-1.5 max-w-[62ch] text-[12.5px] leading-relaxed text-dim">{s.notes}</p>
+                <p className="mt-1.5 max-w-[62ch] text-[14px] leading-relaxed text-dim">{s.notes}</p>
                 {s.attachments.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {s.attachments.map((a) => <AttachmentChip key={a.id} attachment={a} />)}
@@ -874,14 +874,14 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
       )}
 
       {m.settlementTxHash && (
-        <div className="mt-5 flex items-center justify-between border-t border-line pt-3.5">
-          <span className="num text-[11px] uppercase tracking-wider text-faint">settlement tx</span>
-          <HashText value={m.settlementTxHash} size={8} className="text-[12px] text-state-released" />
+        <div className="mt-5 flex items-center justify-between border-t-2 border-line pt-3.5">
+          <span className="num text-[13px] uppercase tracking-wider text-faint">settlement tx</span>
+          <HashText value={m.settlementTxHash} size={8} className="text-[13px] text-state-released" />
         </div>
       )}
 
       {chain.error && (
-        <p className="mt-4 flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12px] text-destructive">
+        <p className="mt-4 flex items-start gap-2 border-2 border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] text-destructive">
           <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {chain.error}
         </p>
       )}
@@ -969,16 +969,16 @@ function ReviewForm({ projectId, milestoneId }: { projectId: string; milestoneId
       <div className="flex items-center gap-1.5">
         {[1, 2, 3, 4, 5].map((n) => (
           <button key={n} type="button" onClick={() => setRating(n)} aria-label={`${n} stars`} className={press}>
-            <Star weight={n <= rating ? "fill" : "regular"} className={`h-5 w-5 ${n <= rating ? "text-amber-300" : "text-faint"}`} />
+            <Star weight={n <= rating ? "fill" : "regular"} className={`h-5 w-5 ${n <= rating ? "text-state-funded" : "text-faint"}`} />
           </button>
         ))}
       </div>
       <Textarea
         value={body} onChange={(e) => setBody(e.target.value)} rows={2}
         placeholder="How did this milestone actually go?"
-        className="text-[13px]"
+        className="text-[14px]"
       />
-      <Button
+      <Button variant="outline"
         disabled={submitting}
         onClick={async () => {
           setSubmitting(true);
@@ -993,7 +993,7 @@ function ReviewForm({ projectId, milestoneId }: { projectId: string; milestoneId
             setSubmitting(false);
           }
         }}
-        className="w-full bg-white/10 py-2.5 text-[12.5px] font-medium text-foreground hover:bg-white/20"
+        className="w-full"
       >
         Publish review
       </Button>
@@ -1024,17 +1024,17 @@ function MessageBubble({
   return (
     <li className={cn("flex", mine ? "justify-end" : "justify-start", runStart ? "mt-3 first:mt-0" : "mt-1")}>
       <div className={cn("max-w-[min(560px,78%)]", mine && "text-right")}>
-        {runStart && !mine && <p className="mb-1 px-1 text-[11px] text-faint">{senderName}</p>}
+        {runStart && !mine && <p className="mb-1 px-1 text-[13px] text-faint">{senderName}</p>}
         <div
           className={cn(
-            "inline-block px-3.5 py-2 text-left text-[13.5px] leading-relaxed",
+            "inline-block px-3.5 py-2 text-left text-[15px] leading-relaxed",
             mine
-              ? "border border-rose-accent/25 bg-rose-soft text-foreground"
-              : "border border-line-strong bg-white/[0.045] text-dim",
+              ? "border-2 border-rose-accent/25 bg-rose-soft text-foreground"
+              : "border-2 border-line-strong bg-ink-raised text-dim",
           )}
         >
           {msg.body}
-          <span className="num ml-2 inline-flex items-center gap-1 align-middle text-[11px] text-faint">
+          <span className="num ml-2 inline-flex items-center gap-1 align-middle text-[13px] text-faint">
             {clockTime(msg.createdAt)}
             {mine && (
               msg.readByOther
@@ -1124,10 +1124,10 @@ function ChatTab({ projectId }: { projectId: string }) {
 
   return (
     <div ref={paneRef} className="glass flex flex-col overflow-hidden" style={{ height: paneHeight ?? 560 }}>
-      <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-6 py-3.5">
+      <div className="flex shrink-0 items-center gap-2.5 border-b-2 border-line px-6 py-3.5">
         <ChatCircleDots className="h-4 w-4 text-faint" />
-        <span className="text-[13px] text-dim">Project chat</span>
-        <span className="num ml-auto text-[11px] text-faint">append-only · reads are a cursor, not an edit</span>
+        <span className="text-[14px] text-dim">Project chat</span>
+        <span className="num ml-auto text-[13px] text-faint">append-only · reads are a cursor, not an edit</span>
       </div>
       <div
         ref={threadRef}
@@ -1155,7 +1155,7 @@ function ChatTab({ projectId }: { projectId: string }) {
       </div>
       {canPostHere ? (
         <form
-          className="flex shrink-0 items-end gap-3 border-t border-line px-4 py-3.5 sm:px-5"
+          className="flex shrink-0 items-end gap-3 border-t-2 border-line px-4 py-3.5 sm:px-5"
           onSubmit={async (e) => {
             e.preventDefault();
             if (!draft.trim() || sending) return;
@@ -1191,14 +1191,14 @@ function ChatTab({ projectId }: { projectId: string }) {
             rows={1}
             placeholder="Message the counterparty"
             aria-label="Message the counterparty"
-            className="max-h-[140px] flex-1 resize-none border border-line bg-white/[0.03] px-4 py-3 text-sm leading-snug outline-none placeholder:text-faint focus:border-rose-accent/50"
+            className="max-h-[140px] flex-1 resize-none border-2 border-line bg-ink-raised px-4 py-3 text-sm leading-snug outline-none placeholder:text-faint focus:border-rose-accent/50"
           />
-          <Button type="submit" disabled={!draft.trim() || sending} aria-label="Send" className={cn("h-10 w-10 shrink-0 bg-rose-accent p-0 hover:bg-rose-bright", press)}>
-            <PaperPlaneTilt className="h-4 w-4" />
+          <Button type="submit" size="icon" disabled={!draft.trim() || sending} aria-label="Send" className="shrink-0">
+            <PaperPlaneTilt className="h-5 w-5" />
           </Button>
         </form>
       ) : (
-        <div className="shrink-0 border-t border-line px-6 py-4 text-[12px] text-faint">Participants only.</div>
+        <div className="shrink-0 border-t-2 border-line px-6 py-4 text-[13px] text-faint">Participants only.</div>
       )}
     </div>
   );
@@ -1212,15 +1212,15 @@ function ActivityTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="glass overflow-hidden">
-      <div className="flex items-center gap-2.5 border-b border-line px-6 py-4">
+      <div className="flex items-center gap-2.5 border-b-2 border-line px-6 py-4">
         <Pulse className="h-4 w-4 text-faint" />
-        <span className="text-[13px] text-dim">On-chain events for this project</span>
-        <span className="num ml-auto text-[11px] text-faint">event-sourced cache · links carry real tx hashes</span>
+        <span className="text-[14px] text-dim">On-chain events for this project</span>
+        <span className="num ml-auto text-[13px] text-faint">event-sourced cache · links carry real tx hashes</span>
       </div>
       {!ledger?.items.length ? (
         <p className="px-6 py-14 text-center text-sm text-faint">No chain events yet — fund a milestone to see the indexer work.</p>
       ) : (
-        <div className="divide-y divide-white/[0.04]">
+        <div className="divide-y-2 divide-line">
           {ledger.items.map((e) => {
             const payloadAmount = (e.payload as Record<string, string>)?.amount;
             const payloadFee = (e.payload as Record<string, string>)?.fee;
@@ -1228,15 +1228,15 @@ function ActivityTab({ projectId }: { projectId: string }) {
               <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-6 py-4">
                 <span className="h-1.5 w-1.5 shrink-0" style={{ background: ledgerDotColor(e.eventType) }} />
                 <span className="min-w-0 flex-1">
-                  <span className="text-[13.5px] text-foreground">{e.eventType}</span>
+                  <span className="text-[15px] text-foreground">{e.eventType}</span>
                   {e.milestoneOnchainId !== null && (
-                    <span className="num ml-2 text-[11px] text-faint">milestone #{e.milestoneOnchainId}</span>
+                    <span className="num ml-2 text-[13px] text-faint">milestone #{e.milestoneOnchainId}</span>
                   )}
-                  {payloadAmount && <span className="num ml-2 text-[11px] text-dim">{formatEth(payloadAmount)} ETH</span>}
-                  {payloadFee && toWei(payloadFee) > 0n && <span className="num ml-2 text-[11px] text-state-split">fee {formatEth(payloadFee)}</span>}
+                  {payloadAmount && <span className="num ml-2 text-[13px] text-dim">{formatEth(payloadAmount)} ETH</span>}
+                  {payloadFee && toWei(payloadFee) > 0n && <span className="num ml-2 text-[13px] text-state-split">fee {formatEth(payloadFee)}</span>}
                 </span>
-                <span className="num text-[11px] text-faint">block {e.blockNumber}</span>
-                <HashText value={e.txHash} size={5} className="text-[11.5px]" />
+                <span className="num text-[13px] text-faint">block {e.blockNumber}</span>
+                <HashText value={e.txHash} size={5} className="text-[13px]" />
               </div>
             );
           })}
@@ -1250,15 +1250,15 @@ function ActivityTab({ projectId }: { projectId: string }) {
 
 function ActionBlock({ icon, title, body, children }: { icon: React.ReactNode; title: string; body?: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <div className="border-t border-line pt-5">
+    <div className="border-t-2 border-line pt-5">
       <div className="flex items-center gap-2.5">
         <span className="text-rose-bright">{icon}</span>
-        <span className="text-[13.5px] font-medium">{title}</span>
+        <span className="text-[15px] font-medium">{title}</span>
       </div>
       {typeof body === "string" ? (
-        <p className="mt-2 text-[12.5px] leading-relaxed text-faint">{body}</p>
+        <p className="mt-2 text-[14px] leading-relaxed text-faint">{body}</p>
       ) : body ? (
-        <div className="mt-2 text-[12.5px] leading-relaxed text-faint">{body}</div>
+        <div className="mt-2 text-[14px] leading-relaxed text-faint">{body}</div>
       ) : null}
       {children && <div className="mt-4">{children}</div>}
     </div>
@@ -1279,7 +1279,7 @@ function PhaseLabel({ phase, idle }: { phase: string; idle: string }) {
         >
           {phase === "signing" && <Coins className="h-3.5 w-3.5 animate-pulse" />}
           {phase === "mining" && <ArrowClockwise className="h-3.5 w-3.5 animate-spin" />}
-          {phase === "indexing" && <SealCheck className="h-3.5 w-3.5 animate-pulse text-amber-300" />}
+          {phase === "indexing" && <SealCheck className="h-3.5 w-3.5 animate-pulse text-state-funded" />}
           {phase === "idle" || phase === "done" ? idle : phase === "signing" ? "Waiting for signature…" : phase === "mining" ? "Mining…" : "Indexer mirroring…"}
         </motion.span>
       </AnimatePresence>

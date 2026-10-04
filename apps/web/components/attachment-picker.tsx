@@ -29,13 +29,13 @@ export function AttachmentPicker({
   const full = files.length >= max;
   return (
     <div className="space-y-2">
-      <span className="text-[13px] font-medium" id={`${label}-count`}>
+      <span className="text-[14px] font-medium" id={`${label}-count`}>
         {label} <span className="num text-faint">({files.length}/{max})</span>
       </span>
       <label
-        className={`flex items-center gap-2.5 border border-dashed px-4 py-3.5 text-[13px] transition-colors ${
+        className={`flex items-center gap-2.5 border-2 border-dashed px-4 py-3.5 text-[14px] transition-colors ${
           full
-            ? "cursor-not-allowed border-line/50 text-faint"
+            ? "cursor-not-allowed border-line text-faint"
             : "cursor-pointer border-line text-dim hover:border-line-strong hover:text-foreground"
         }`}
       >
@@ -60,7 +60,7 @@ export function AttachmentPicker({
           {files.map((f, i) => (
             <span
               key={`${f.name}-${i}`}
-              className="inline-flex max-w-[14rem] items-center gap-2 border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim"
+              className="inline-flex max-w-[14rem] items-center gap-2 border-2 border-line bg-ink-raised px-3 py-1.5 text-[13px] text-dim"
             >
               <span className="truncate">{f.name}</span>
               <button
@@ -75,7 +75,7 @@ export function AttachmentPicker({
           ))}
         </div>
       )}
-      <p className="text-[11px] text-faint">{hint}</p>
+      <p className="text-[13px] text-faint">{hint}</p>
     </div>
   );
 }

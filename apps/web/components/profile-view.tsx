@@ -109,35 +109,35 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
             <AddressAvatar address={address} size={72} />
             <div>
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-2xl font-semibold tracking-tight">{user.displayName ?? shortAddress(address)}</h1>
+                <h1 className="display text-[18px] leading-snug md:text-[22px]">{user.displayName ?? shortAddress(address)}</h1>
                 <Chip>{roleLabel(user.role)}</Chip>
-                {user.kycStatus === "verified" && <span className="num flex items-center gap-1 bg-state-released/10 px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-state-released"><SealCheck weight="fill" className="h-3 w-3" /> verified</span>}
+                {user.kycStatus === "verified" && <span className="num flex items-center gap-1 bg-state-released/10 px-2.5 py-0.5 text-[13px] uppercase tracking-wider text-state-released"><SealCheck weight="fill" className="h-3 w-3" /> verified</span>}
                 {arbitersLoading && <InlineLoading label="arbiter…" />}
                 {!isArbiterSeat && arbiter?.registered && (
-                  <span className="flex items-center gap-1.5 bg-state-split/10 px-2.5 py-0.5 text-[11px] text-state-split">
+                  <span className="flex items-center gap-1.5 bg-state-split/10 px-2.5 py-0.5 text-[13px] text-state-split">
                     <SealCheck weight="fill" className="h-3.5 w-3.5" /> arbiter · trust {arbiter.trustScore}
                   </span>
                 )}
               </div>
-              <Copyable text={address} className="mt-1.5 text-[13px]">
+              <Copyable text={address} className="mt-1.5 text-[14px]">
                 <span className="num text-dim">{shortAddress(address, 6)}</span>
               </Copyable>
-              <div className="num mt-2 flex items-center gap-3 text-[11px] text-faint">
+              <div className="num mt-2 flex items-center gap-3 text-[13px] text-faint">
                 <span>joined {dateLabel(user.createdAt)}</span>
                 {user.kycStatus !== "verified" && <span>kyc {user.kycStatus}</span>}
               </div>
             </div>
           </div>
           {allowEdit && isMe && !editing && (
-            <Button variant="ghost" onClick={() => setEditing(true)} className="border border-line px-4 text-[12.5px] text-dim hover:text-foreground">
+            <Button variant="ghost" onClick={() => setEditing(true)} className="border-2 border-line px-4 text-[14px] text-dim hover:text-foreground">
               <PencilSimple className="mr-2 h-3.5 w-3.5" /> Edit profile
             </Button>
           )}
         </div>
 
-        {user.bio && !editing && <p className="mt-5 max-w-[58ch] text-[14px] leading-relaxed text-dim">{user.bio}</p>}
+        {user.bio && !editing && <p className="mt-5 max-w-[58ch] text-[15px] leading-relaxed text-dim">{user.bio}</p>}
         {user.links && Object.keys(user.links).length > 0 && !editing && (
-          <div className="num mt-4 flex flex-wrap gap-5 text-[12px]">
+          <div className="num mt-4 flex flex-wrap gap-5 text-[13px]">
             {Object.entries(user.links).map(([k, v]) => (
               <a key={k} href={v} target="_blank" rel="noreferrer" className="text-rose-bright hover:underline">{k}</a>
             ))}
@@ -158,7 +158,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
             stats={stats}
           />
         ) : stats.length > 0 && (
-          <div className={`mt-7 grid grid-cols-2 gap-x-8 gap-y-6 border-t border-line pt-6 ${stats.length > 2 ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
+          <div className={`mt-7 grid grid-cols-2 gap-x-8 gap-y-6 border-t-2 border-line pt-6 ${stats.length > 2 ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
             {stats.map((s) => <Stat key={s.label} {...s} />)}
           </div>
         )}
@@ -167,11 +167,11 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
       {/* reviews */}
       {showReviews && (
         <section>
-          <div className="flex items-baseline justify-between">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <ListHead>Reviews received</ListHead>
             {avgRating !== null && (
-              <span className="num flex items-center gap-1.5 text-[12px] text-dim">
-                <Star weight="fill" className="h-3.5 w-3.5 text-amber-300" />
+              <span className="num flex items-center gap-1.5 text-[13px] text-dim">
+                <Star weight="fill" className="h-3.5 w-3.5 text-state-funded" />
                 {avgRating.toFixed(1)} · {reviews?.length} reviews
               </span>
             )}
@@ -179,20 +179,20 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
           {!reviews?.length ? (
             <EmptyState className="mt-4" title="No reviews yet" body="Reviews unlock after on-chain settlement — one per side per milestone, bound to the settlement tx." />
           ) : (
-            <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
+            <div className="mt-4 divide-y-2 divide-line overflow-hidden border-2 border-line">
               {reviews.map((r) => (
-                <div key={r.id} className="bg-white/[0.012] px-6 py-5">
+                <div key={r.id} className="bg-ink-raised px-6 py-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
                       {[1, 2, 3, 4, 5].map((n) => (
-                        <Star key={n} weight={n <= r.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= r.rating ? "text-amber-300" : "text-faint"}`} />
+                        <Star key={n} weight={n <= r.rating ? "fill" : "regular"} className={`h-3.5 w-3.5 ${n <= r.rating ? "text-state-funded" : "text-faint"}`} />
                       ))}
                     </div>
-                    <span className="num text-[11px] text-faint">
+                    <span className="num text-[13px] text-faint">
                       {timeAgo(r.createdAt)}{r.txHash && <> · tx {r.txHash.slice(0, 8)}…</>}
                     </span>
                   </div>
-                  {r.body && <p className="mt-2.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{r.body}</p>}
+                  {r.body && <p className="mt-2.5 max-w-[62ch] text-[15px] leading-relaxed text-dim">{r.body}</p>}
                 </div>
               ))}
             </div>
@@ -213,7 +213,7 @@ function ArbiterStanding({ arbiter, loading, minStakeWei, stats }: { arbiter: Ar
   if (loading) return <Skeleton className="mt-7 h-24 w-full" />;
   if (!arbiter?.registered) {
     return (
-      <div className="mt-7 border-t border-line pt-6">
+      <div className="mt-7 border-t-2 border-line pt-6">
         <EmptyState
           title="No registry standing yet"
           body="Arbiters earn trust by staking collateral and ruling on disputes. Until then there is nothing on-chain to show — and nothing to show as a zero."
@@ -224,12 +224,12 @@ function ArbiterStanding({ arbiter, loading, minStakeWei, stats }: { arbiter: Ar
   }
   const st = arbiterStanding(arbiter, minStakeWei);
   return (
-    <div className="mt-7 border-t border-line pt-6">
+    <div className="mt-7 border-t-2 border-line pt-6">
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <span className="text-[11px] uppercase tracking-[0.14em] text-faint">registry standing</span>
-        <span className="px-2.5 py-0.5 text-[11px]" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 9%, transparent)` }}>{st.label}</span>
-        {arbiter.registeredAt && <span className="num text-[11px] text-faint">registered {dateLabel(arbiter.registeredAt)}</span>}
-        <Link href="/arbiters" className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">roster →</Link>
+        <span className="text-[13px] uppercase tracking-[0.14em] text-faint">registry standing</span>
+        <span className="px-2.5 py-0.5 text-[13px]" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 9%, transparent)` }}>{st.label}</span>
+        {arbiter.registeredAt && <span className="num text-[13px] text-faint">registered {dateLabel(arbiter.registeredAt)}</span>}
+        <Link href="/arbiters" className="num ml-auto text-[13px] text-faint underline-offset-4 hover:text-state-split hover:underline">roster →</Link>
       </div>
       <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
         {stats.map((s) => <Stat key={s.label} {...s} />)}
@@ -241,8 +241,8 @@ function ArbiterStanding({ arbiter, loading, minStakeWei, stats }: { arbiter: Ar
 function Stat({ label, value, tone = "text-foreground" }: { label: string; value: React.ReactNode; tone?: string }) {
   return (
     <div>
-      <div className="num text-[11px] uppercase tracking-[0.14em] text-faint">{label}</div>
-      <div className={`mt-1.5 text-xl font-medium tracking-tight ${tone}`}>{value}</div>
+      <div className="num text-[13px] uppercase tracking-[0.14em] text-faint">{label}</div>
+      <div className={`display mt-3 text-[16px] leading-none ${tone}`}>{value}</div>
     </div>
   );
 }
@@ -294,23 +294,23 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
     if (f === "name") {
       return (
         <div className="space-y-2">
-          <label htmlFor="profile-name" className="text-[13px] font-medium">{copy.name}</label>
-          <Input id="profile-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
+          <label htmlFor="profile-name" className="text-[14px] font-medium">{copy.name}</label>
+          <Input id="profile-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10 border-line bg-ink-raised text-sm" />
         </div>
       );
     }
     if (f === "skills") {
       return (
         <div className="space-y-2">
-          <label htmlFor="profile-skills" className="text-[13px] font-medium">{copy.skills} (comma-separated)</label>
-          <Input id="profile-skills" value={skills} onChange={(e) => setSkills(e.target.value)} className="h-10 border-line bg-white/[0.03] text-sm" />
+          <label htmlFor="profile-skills" className="text-[14px] font-medium">{copy.skills} (comma-separated)</label>
+          <Input id="profile-skills" value={skills} onChange={(e) => setSkills(e.target.value)} className="h-10 border-line bg-ink-raised text-sm" />
         </div>
       );
     }
     if (f === "bio") {
       return (
         <div className="space-y-2">
-          <label htmlFor="profile-bio" className="text-[13px] font-medium">{copy.bio}</label>
+          <label htmlFor="profile-bio" className="text-[14px] font-medium">{copy.bio}</label>
           <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
         </div>
       );
@@ -318,17 +318,17 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-medium" id="profile-links-label">{copy.links}</span>
+          <span className="text-[14px] font-medium" id="profile-links-label">{copy.links}</span>
           <button
             type="button"
             onClick={() => setLinks((rows) => [...rows, { k: "", v: "" }])}
-            className="num text-[11.5px] text-rose-bright hover:underline"
+            className="num text-[13px] text-rose-bright hover:underline"
           >
             + add
           </button>
         </div>
         {links.length === 0 ? (
-          <p className="num text-[11.5px] text-faint">None yet — the card renders these as labelled links.</p>
+          <p className="num text-[13px] text-faint">None yet — the card renders these as labelled links.</p>
         ) : (
           <div className="space-y-2">
             {links.map((r, i) => (
@@ -338,14 +338,14 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
                   onChange={(e) => setLink(i, { k: e.target.value })}
                   placeholder="label"
                   aria-label={`${copy.links} label ${i + 1}`}
-                  className="h-10 w-32 shrink-0 border-line bg-white/[0.03] text-sm"
+                  className="h-10 w-32 shrink-0 border-line bg-ink-raised text-sm"
                 />
                 <Input
                   value={r.v}
                   onChange={(e) => setLink(i, { v: e.target.value })}
                   placeholder="https://…"
                   aria-label={`${copy.links} URL ${i + 1}`}
-                  className="h-10 border-line bg-white/[0.03] text-sm"
+                  className="h-10 border-line bg-ink-raised text-sm"
                 />
                 <Button
                   variant="ghost"
@@ -377,7 +377,7 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
   }
 
   return (
-    <div className="mt-5 space-y-4 border-t border-line pt-6">
+    <div className="mt-5 space-y-4 border-t-2 border-line pt-6">
       {rows.map((r, i) =>
         Array.isArray(r) ? (
           <div key={i} className="grid gap-4 sm:grid-cols-2">
@@ -411,17 +411,17 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
               setSaving(false);
             }
           }}
-          className="bg-rose-accent px-6 hover:bg-rose-bright"
+          className="px-6"
         >
           <Check className="mr-2 h-4 w-4" /> Save
         </Button>
-        <Button variant="ghost" onClick={onDone} className="border border-line px-5 text-dim">
+        <Button variant="ghost" onClick={onDone} className="border-2 border-line px-5 text-dim">
           <X className="mr-2 h-4 w-4" /> Cancel
         </Button>
         {/* `/arbiters` is arbiter-only in the seat matrix, so this sent every
             client and freelancer who opened Edit to a bounce off /dashboard. */}
         {user.role === "arbiter" && (
-          <Link href="/arbiters" className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">
+          <Link href="/arbiters" className="num ml-auto text-[13px] text-faint underline-offset-4 hover:text-state-split hover:underline">
             arbiter staking &amp; registry →
           </Link>
         )}

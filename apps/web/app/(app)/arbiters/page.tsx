@@ -99,7 +99,7 @@ export default function ArbitersPage() {
           body="Be the first — stake collateral above to join the pool. New arbiters start at trust score 100."
         />
       ) : (
-        <ol className="divide-y divide-white/[0.05] overflow-hidden border border-line">
+        <ol className="divide-y-2 divide-line overflow-hidden border-2 border-line">
           {ranked.map((a, i) => {
             const st = arbiterStanding(a, minStakeWei);
             const tierName = (TIER_NAMES[a.tier ?? 0] ?? "Unstaked").toLowerCase();
@@ -110,10 +110,10 @@ export default function ArbitersPage() {
               <li key={a.address} className={picked ? "bg-rose-soft/40" : undefined}>
                 <Link
                   href={`/profile/${a.address}`}
-                  className={`group relative flex flex-col gap-4 bg-white/[0.012] px-6 py-6 transition-colors hover:bg-white/[0.035] md:flex-row md:items-center ${press}`}
+                  className={`group relative flex flex-col gap-4 bg-ink-raised px-6 py-6 transition-colors hover:bg-ink-hover md:flex-row md:items-center ${press}`}
                 >
                   {/* rank carries the #1 emphasis on its own (rose numeral above);
-                      the 2.5px accent rail here was a banned coloured left border. */}
+                      the 2.5px accent rail here was a banned coloured left border-2. */}
                   {/* pick checkbox — only while seating arbiters on a project */}
                   {pickable && (
                     <button
@@ -121,7 +121,7 @@ export default function ArbitersPage() {
                       aria-label={`${picked ? "Deselect" : "Select"} ${a.profile?.displayName || shortAddress(a.address)}`}
                       aria-pressed={picked}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePick(a.address); }}
-                      className={`relative z-10 grid size-9 shrink-0 place-items-center border transition-colors ${
+                      className={`relative z-10 grid size-9 shrink-0 place-items-center border-2 transition-colors ${
                         picked ? "border-rose-accent bg-rose-accent text-white" : "border-line-strong text-transparent hover:border-rose-accent/60"
                       }`}
                     >
@@ -131,7 +131,7 @@ export default function ArbitersPage() {
                   {/* rank */}
                   <span
                     aria-hidden
-                    className={`num w-10 shrink-0 select-none text-[30px] font-semibold leading-none tracking-tighter ${
+                    className={`display w-12 shrink-0 select-none text-[18px] leading-none ${
                       i === 0 ? "text-rose-bright/60" : "ghost-num"
                     }`}
                   >
@@ -142,12 +142,12 @@ export default function ArbitersPage() {
                     <AddressAvatar address={a.address} size={44} />
                     <span className="min-w-0">
                       <span className="flex items-center gap-2">
-                        <span className="truncate text-[15.5px] font-medium transition-colors group-hover:text-rose-bright">
+                        <span className="truncate text-[16px] font-medium transition-colors group-hover:text-rose-bright">
                           {a.profile?.displayName ?? shortAddress(a.address)}
                         </span>
                         <SealCheck weight="fill" className="h-4 w-4 shrink-0 text-rose-bright" />
                         <span
-                          className="inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-medium"
+                          className="inline-flex items-center gap-1 border-2 px-2 py-0.5 text-[13px] font-medium"
                           style={{
                             color: st.color,
                             borderColor: `color-mix(in oklab, ${st.color} 32%, transparent)`,
@@ -157,7 +157,7 @@ export default function ArbitersPage() {
                           {st.label}
                         </span>
                       </span>
-                      <span className="num mt-0.5 block text-[12px] text-faint">
+                      <span className="num mt-0.5 block text-[13px] text-faint">
                         {a.registeredAt ? `registered ${dateLabel(a.registeredAt)}` : "registered"} · badge {a.sbtTokenId ? `#${a.sbtTokenId}` : "pending"} · {tierName}
                         {st.label === "staked" && a.selectableAfter ? ` · selectable ${timeUntil(a.selectableAfter)}` : ""}
                         {a.kycStatus && a.kycStatus !== "verified" ? ` · kyc ${a.kycStatus}` : ""}
@@ -168,41 +168,41 @@ export default function ArbitersPage() {
                       screens: four `px-5` columns of uppercase-tracked labels
                       were ~430px wide inside a 312px content box, so the page
                       scrolled sideways and "earned" sat off-screen. */}
-                  <span className="flex flex-wrap items-center gap-y-3 gap-x-0 divide-x divide-white/[0.07] md:gap-x-6">
-                    <span className="pr-3 text-left md:pr-6">
-                      <span className="num block text-lg font-medium leading-none">{a.resolutions}</span>
-                      <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">resolved</span>
+                  <span className="flex flex-wrap items-center gap-y-3 gap-x-0 divide-x-2 divide-line md:flex-nowrap">
+                    <span className="pr-3 text-left md:pr-4">
+                      <span className="display block text-[14px] leading-none">{a.resolutions}</span>
+                      <span className="mt-2 block whitespace-nowrap text-[12px] font-semibold uppercase tracking-wide text-faint">resolved</span>
                     </span>
-                    <span className="px-3 text-left md:px-6">
-                      <span className="num block text-lg font-medium leading-none text-state-released">{a.resolutionsWithinSla}</span>
-                      <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">within SLA</span>
+                    <span className="px-3 text-left md:px-4">
+                      <span className="display block text-[14px] leading-none text-state-released">{a.resolutionsWithinSla}</span>
+                      <span className="mt-2 block whitespace-nowrap text-[12px] font-semibold uppercase tracking-wide text-faint">within SLA</span>
                     </span>
-                    <span className="px-3 text-left md:px-6">
-                      <span className={`num block text-lg font-medium leading-none ${a.resolutionsLate > 0 ? "text-state-disputed" : "text-dim"}`}>
+                    <span className="px-3 text-left md:px-4">
+                      <span className={`display block text-[14px] leading-none ${a.resolutionsLate > 0 ? "text-state-disputed" : "text-dim"}`}>
                         {a.resolutionsLate}
                       </span>
-                      <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">late</span>
+                      <span className="mt-2 block whitespace-nowrap text-[12px] font-semibold uppercase tracking-wide text-faint">late</span>
                     </span>
-                    <span className="px-3 text-left md:px-6">
-                      <span className="num block text-lg font-medium leading-none text-rose-bright">
+                    <span className="px-3 text-left md:px-4">
+                      <span className="display block text-[14px] leading-none text-rose-light">
                         {formatEthSummary(a.totalEarnedWei)}
                       </span>
-                      <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-faint">earned</span>
+                      <span className="mt-2 block whitespace-nowrap text-[12px] font-semibold uppercase tracking-wide text-faint">earned</span>
                     </span>
                   </span>
                   {/* stake — the skin in the game */}
-                  <span className="flex items-baseline justify-between gap-2 border-t border-line pt-4 md:w-24 md:flex-col md:items-end md:border-l md:border-t-0 md:pl-6 md:pt-0">
-                    <span className={`num text-lg font-medium leading-none ${belowMinStake ? "text-state-disputed" : "text-dim"}`}>
+                  <span className="flex items-baseline justify-between gap-2 border-t-2 border-line pt-4 md:w-28 md:flex-col md:items-end md:border-l-2 md:border-t-0 md:pl-6 md:pt-0">
+                    <span className={`display text-[14px] leading-none ${belowMinStake ? "text-state-disputed" : "text-dim"}`}>
                       {formatEth(a.stakeWei)}
                     </span>
-                    <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">ETH · {tierName}</span>
+                    <span className="whitespace-nowrap text-[12px] font-semibold uppercase tracking-wide text-faint">ETH · {tierName}</span>
                   </span>
                   {/* trust — the verdict, right rail */}
-                  <span className="flex items-baseline justify-between gap-2 border-t border-line pt-4 md:w-24 md:flex-col md:items-end md:border-l md:border-t-0 md:pl-6 md:pt-0">
-                    <span className={`num text-4xl font-medium leading-none tracking-tight ${a.trustScore > 0 ? "text-state-released" : "text-dim"}`}>
+                  <span className="flex items-baseline justify-between gap-2 border-t-2 border-line pt-4 md:w-28 md:flex-col md:items-end md:border-l-2 md:border-t-0 md:pl-6 md:pt-0">
+                    <span className={`display text-[26px] leading-none ${a.trustScore > 0 ? "text-state-released" : "text-dim"}`}>
                       {a.trustScore}
                     </span>
-                    <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">trust</span>
+                    <span className="text-[12px] font-semibold uppercase tracking-wide text-faint">trust</span>
                   </span>
                 </Link>
               </li>
@@ -314,30 +314,30 @@ function ArbiterPicker({
         <Scales className="h-4 w-4 text-dim" />
         <ListHead>Seat arbiters on a project</ListHead>
       </div>
-      <p className="mt-2.5 max-w-[62ch] text-[13px] leading-relaxed text-dim">
+      <p className="mt-2.5 max-w-[62ch] text-[14px] leading-relaxed text-dim">
         Choose an active project you're part of, then tick up to three eligible arbiters from the roster below. The
         other party approves and the seats lock — disputed milestones then draw these arbiters first.
       </p>
 
       {!seatable.length ? (
-        <p className="mt-4 text-[12.5px] text-faint">
+        <p className="mt-4 text-[14px] text-faint">
           No active project is awaiting arbiters. Seats can be picked once you're on an active project.
         </p>
       ) : proposal && !mine ? (
-        <div className="mt-4 border border-line bg-white/[0.02] p-4">
-          <div className="num text-[11px] uppercase tracking-wider text-faint">counterparty proposal — approve to lock</div>
+        <div className="mt-4 border-2 border-line bg-ink-raised p-4">
+          <div className="num text-[13px] uppercase tracking-wider text-faint">counterparty proposal — approve to lock</div>
           <div className="mt-2 space-y-1.5">
             {proposal.addresses.map((a) => (
               <Link key={a} href={`/profile/${a}`} className="block transition-colors hover:text-rose-bright">
-                <AddressText value={a} className="text-[13px]" />
+                <AddressText value={a} className="text-[14px]" />
               </Link>
             ))}
           </div>
           <div className="mt-3 flex flex-wrap gap-2.5">
-            <Button disabled={busy} onClick={approve} className="bg-state-released px-5 py-2 text-[12.5px] font-medium text-ink hover:brightness-110">
+            <Button disabled={busy} onClick={approve} className="bg-state-released px-5 py-2 text-[14px] font-medium text-ink hover:brightness-110">
               Approve + lock
             </Button>
-            <Button disabled={busy} onClick={() => onChooseProject(null)} className="bg-white/10 px-5 py-2 text-[12.5px] font-medium hover:bg-white/20">
+            <Button variant="outline" disabled={busy} onClick={() => onChooseProject(null)} >
               Dismiss
             </Button>
           </div>
@@ -345,11 +345,11 @@ function ArbiterPicker({
       ) : (
         <div className="mt-4 space-y-4">
           <label className="block space-y-2">
-            <span className="text-[13px] font-medium">Project</span>
+            <span className="text-[14px] font-medium">Project</span>
             <select
               value={projectId ?? ""}
               onChange={(e) => onChooseProject(e.target.value || null)}
-              className="h-11 w-full border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50"
+              className="h-11 w-full border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50"
             >
               <option value="">Select a project…</option>
               {seatable.map((p) => (
@@ -359,19 +359,19 @@ function ArbiterPicker({
           </label>
 
           {project && (
-            <div className="border border-line bg-white/[0.02] p-4">
+            <div className="border-2 border-line bg-ink-raised p-4">
               <div className="flex items-center justify-between">
-                <span className="num text-[11px] uppercase tracking-wider text-faint">
+                <span className="num text-[13px] uppercase tracking-wider text-faint">
                   selected {picked.length}/{MAX_ARBITERS}
                 </span>
                 {picked.length > 0 && (
-                  <button type="button" onClick={() => picked.forEach(onToggle)} className="text-[12px] text-faint hover:text-foreground">
+                  <button type="button" onClick={() => picked.forEach(onToggle)} className="text-[13px] text-faint hover:text-foreground">
                     clear
                   </button>
                 )}
               </div>
               {picked.length === 0 ? (
-                <p className="mt-2 text-[12.5px] text-faint">
+                <p className="mt-2 text-[14px] text-faint">
                   Tick {MIN_ARBITERS}–{MAX_ARBITERS} arbiters in the roster below — eligible rows only. Whoever you
                   lock is the panel; it is never topped up at dispute time.
                 </p>
@@ -379,18 +379,18 @@ function ArbiterPicker({
                 <div className="mt-2 space-y-1.5">
                   {picked.map((a) => (
                     <Link key={a} href={`/profile/${a}`} className="block transition-colors hover:text-rose-bright">
-                      <AddressText value={a} className="text-[13px]" />
+                      <AddressText value={a} className="text-[14px]" />
                     </Link>
                   ))}
                 </div>
               )}
               {mine && (
-                <p className="mt-3 text-[12px] text-amber-300">You proposed these — waiting on the counterparty to approve.</p>
+                <p className="mt-3 text-[13px] text-state-funded">You proposed these — waiting on the counterparty to approve.</p>
               )}
               <Button
                 disabled={busy || picked.length < MIN_ARBITERS || mine}
                 onClick={propose}
-                className="mt-3 bg-rose-accent px-5 py-2 text-[12.5px] font-medium hover:bg-rose-bright"
+                className="mt-3"
               >
                 {mine
                   ? "Proposed"

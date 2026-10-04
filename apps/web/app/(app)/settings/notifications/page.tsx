@@ -25,12 +25,12 @@ import { NOTIFICATION_TYPES, type InboxItem } from "@/lib/types";
 function SectionHead({ icon: Icon, title, desc }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string }) {
   return (
     <div className="mb-4 flex items-start gap-3">
-      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center border border-rose-accent/25 bg-rose-soft text-rose-bright">
+      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center border-2 border-rose-accent/25 bg-rose-soft text-rose-bright">
         <Icon className="h-4 w-4" />
       </span>
       <div>
-        <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
-        <p className="mt-0.5 max-w-[70ch] text-[12.5px] leading-relaxed text-faint">{desc}</p>
+        <h2 className="text-[16px] font-semibold">{title}</h2>
+        <p className="mt-0.5 max-w-[70ch] text-[14px] leading-relaxed text-faint">{desc}</p>
       </div>
     </div>
   );
@@ -42,15 +42,15 @@ function InboxRow({ item }: { item: InboxItem }) {
   const href = notifHref(item);
   const unread = !item.readAt;
   const body = (
-    <div className={cn("flex items-start gap-3 border border-line px-4 py-3 transition-colors", href && "hover:bg-white/[0.03]")}>
+    <div className={cn("flex items-start gap-3 border-2 border-line px-4 py-3 transition-colors", href && "hover:bg-ink-hover")}>
       <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0", unread ? "bg-rose-bright" : "bg-white/10")} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cn("text-[13.5px]", unread ? "font-medium" : "text-dim")}>{meta.label}</span>
-          <span className="num text-[11px] text-faint">{timeAgo(item.createdAt)}</span>
+          <span className={cn("text-[15px]", unread ? "font-medium" : "text-dim")}>{meta.label}</span>
+          <span className="num text-[13px] text-faint">{timeAgo(item.createdAt)}</span>
         </div>
-        {detail && <p className="mt-0.5 text-[12.5px] text-dim">{detail}</p>}
-        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-faint">
+        {detail && <p className="mt-0.5 text-[14px] text-dim">{detail}</p>}
+        <div className="mt-1.5 flex items-center gap-2 text-[13px] text-faint">
           {item.actorAddress && (
             <>
               <AddressAvatar address={item.actorAddress} size={16} />
@@ -89,10 +89,10 @@ function InboxBand() {
                loaded. It cannot page further — say so rather than implying it
                reaches every notification ever. */
             <div className="pt-1 text-center">
-              <button type="button" onClick={() => setShowAll(true)} className="w-full border border-dashed border-line py-2.5 text-[12px] text-faint transition-colors hover:text-dim">
+              <button type="button" onClick={() => setShowAll(true)} className="w-full border-2 border-dashed border-line py-2.5 text-[13px] text-faint transition-colors hover:text-dim">
                 Show more
               </button>
-              <p className="num mt-1.5 text-[11px] text-faint">
+              <p className="num mt-1.5 text-[13px] text-faint">
                 Showing {(data?.items.length ?? 0)} most recent — older events stay in the ledger.
               </p>
             </div>
@@ -144,7 +144,7 @@ function PreferencesBand() {
       {isLoading ? (
         <Skeleton className="h-24" />
       ) : (
-        <div className="overflow-hidden border border-line">
+        <div className="overflow-hidden border-2 border-line">
           <ToggleRow
             label="Mute everything"
             hint="Turn off all inbox + webhook delivery"
@@ -180,18 +180,18 @@ function ToggleRow({ label, hint, muted, busy, onToggle, strong = false }: {
       onClick={onToggle}
       disabled={busy}
       className={cn(
-        "flex w-full items-center gap-3 border-b border-white/[0.04] px-4 py-3 text-left transition-colors hover:bg-white/[0.03] last:border-b-0 disabled:opacity-60",
-        strong && "bg-white/[0.02]",
+        "flex w-full items-center gap-3 border-b-2 border-line-strong px-4 py-3 text-left transition-colors hover:bg-ink-hover last:border-b-0 disabled:opacity-60",
+        strong && "bg-ink-raised",
       )}
     >
       {muted
         ? <ToggleLeft className="h-5 w-5 shrink-0 text-faint" />
         : <ToggleRight className="h-5 w-5 shrink-0 text-rose-bright" />}
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-[13px]", strong ? "font-medium" : "text-dim")}>{label}</span>
-        <span className="block truncate font-mono text-[11px] text-faint">{hint}</span>
+        <span className={cn("block truncate text-[14px]", strong ? "font-medium" : "text-dim")}>{label}</span>
+        <span className="block truncate font-mono text-[13px] text-faint">{hint}</span>
       </span>
-      <span className={cn("shrink-0 text-[11px]", muted ? "text-faint" : "text-state-released")}>{muted ? "muted" : "on"}</span>
+      <span className={cn("shrink-0 text-[13px]", muted ? "text-faint" : "text-state-released")}>{muted ? "muted" : "on"}</span>
     </button>
   );
 }
@@ -217,14 +217,14 @@ export default function NotificationsSettingsPage() {
     <div className="space-y-9">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div className="max-w-[60ch]">
-          <h1 className="display text-[34px] leading-[1.05] md:text-[40px]">Notifications &amp; webhooks.</h1>
+          <h1 className="display text-[18px] leading-[1.5] md:text-[24px]">Notifications &amp; webhooks.</h1>
           <p className="mt-3 text-sm leading-relaxed text-dim">
             The contract is the source of truth; this is the delivery layer around it. In-app inbox, per-type
             mute, and self-serve webhook endpoints — all fed by one transactional outbox so nothing is lost
             between a state change and a notification.
           </p>
         </div>
-        <span className="num pb-1.5 text-right text-[12px] leading-relaxed text-faint">
+        <span className="num pb-1.5 text-right text-[13px] leading-relaxed text-faint">
           endpoint signing: HMAC-SHA256
           <br />
           retry ladder: 5 attempts

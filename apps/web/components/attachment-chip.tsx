@@ -35,7 +35,7 @@ export function AttachmentChip({ attachment }: { attachment: { id: string; filen
   }
 
   return (
-    <span className="inline-flex max-w-[15rem] items-center gap-2 border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim">
+    <span className="inline-flex max-w-[15rem] items-center gap-2 border-2 border-line bg-ink-raised px-3 py-1.5 text-[13px] text-dim">
       <button
         type="button"
         onClick={open}
@@ -48,7 +48,7 @@ export function AttachmentChip({ attachment }: { attachment: { id: string; filen
       </button>
       {/* role="alert" + visible text: a native `title` is the one place an error
           can hide completely — no touch, no screen reader, no visual. */}
-      {err && <span role="alert" className="shrink-0 text-[11px] text-destructive">{err}</span>}
+      {err && <span role="alert" className="shrink-0 text-[13px] text-destructive">{err}</span>}
     </span>
   );
 }
