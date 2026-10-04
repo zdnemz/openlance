@@ -1,21 +1,22 @@
 "use client";
 
 /**
- * OpenLance design primitives — dark premium, one rose accent, mono numerals.
+ * OpenLance design primitives — pixel art on dark ink: square corners, 2px
+ * frames, one rose accent, mono numerals, sprite identity.
  */
-import { ComponentProps, useMemo, useState } from "react";
+import { ComponentProps, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MILESTONE_LABELS, STATE_COLORS, formatEth, formatEthSummary, shortAddress, shortHash } from "@/lib/format";
-import { Check, Copy } from "@/components/icons";
+import { Check, Copy, Spinner } from "@/components/icons";
+import { Sprite, SpriteAvatar } from "@/components/pixel-art";
+import type { SpriteName } from "@/components/pixel-sprites";
 /* ── Status ─────────────────────────────────────────────────────────────── */
 
 export function StatusDot({ color, pulse = false }: { color: string; pulse?: boolean }) {
   return (
-    <span className="relative inline-flex h-2 w-2 shrink-0">
-      {pulse && (
-        <span className="absolute inset-0 opacity-45 breathe" style={{ background: color }} aria-hidden />
-      )}
-      <span className="relative inline-flex h-2 w-2" style={{ background: color }} />
+    <span className="relative inline-flex h-2.5 w-2.5 shrink-0">
+      {pulse && <span className="absolute inset-0 breathe" style={{ background: color }} aria-hidden />}
+      <span className="relative inline-flex h-2.5 w-2.5" style={{ background: color }} />
     </span>
   );
 }
@@ -26,10 +27,10 @@ export function StatusBadge({ status, pulse = true, className }: { status: strin
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border px-2.5 py-0.5 text-[11px] font-medium tracking-wide",
+        "inline-flex items-center gap-2 border-2 px-2 py-0.5 text-[12px] font-semibold uppercase leading-5 tracking-wide",
         className,
       )}
-      style={{ color, borderColor: `color-mix(in oklab, ${color} 32%, transparent)`, background: `color-mix(in oklab, ${color} 9%, transparent)` }}
+      style={{ color, borderColor: color, background: `color-mix(in oklab, ${color} 12%, transparent)` }}
     >
       <StatusDot color={color} pulse={pulse && live} />
       {MILESTONE_LABELS[status] ?? status.replace(/_/g, " ")}
@@ -41,7 +42,7 @@ export function Chip({ children, className, ...rest }: ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border border-line bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-dim",
+        "inline-flex items-center gap-1.5 border-2 border-line bg-white/[0.03] px-2 py-0.5 text-[13px] leading-5 text-dim",
         className,
       )}
       {...rest}
@@ -63,45 +64,18 @@ export function EthAmount({ wei, className, suffix = true, decimals }: { wei: st
   return (
     <span className={cn("num", className)}>
       {decimals === undefined ? formatEth(wei) : formatEthSummary(wei, decimals)}
-      {suffix && <span className="ml-1 text-[max(0.72em,11px)] text-faint">ETH</span>}
+      {suffix && <span className="ml-1 text-[max(0.72em,12px)] text-faint">ETH</span>}
     </span>
   );
 }
 
-/** Deterministic address avatar — hue pair + geometry from the hash bits. */
+/**
+ * Deterministic address avatar — an 8x8 pixel sprite grown from the address
+ * bits (see SpriteAvatar). Kept under this name so call sites read as before.
+ */
 export function AddressAvatar({ address, size = 36, className }: { address: string | null | undefined; size?: number; className?: string }) {
-  const { hue1, hue2, shape, id } = useMemo(() => {
-    const a = (address ?? "0x0").toLowerCase();
-    const h1 = parseInt(a.slice(2, 6) || "0", 16) % 360;
-    const h2 = (h1 + 130 + (parseInt(a.slice(6, 8) || "0", 16) % 80)) % 360;
-    const shape = parseInt(a.slice(9, 11) || "0", 16) % 4;
-    // Deterministic gradient id derived from the address — MUST be identical on
-    // the server and the client. `Math.random()` here caused a hydration
-    // mismatch (different `id`/`fill` attributes on each render).
-    const id = `av-${a.slice(2, 10) || "default"}-${h1}-${h2}`;
-    return { hue1: h1, hue2: h2, shape, id };
-  }, [address]);
-  if (!address) return <span className={cn("inline-block bg-white/5", className)} style={{ width: size, height: size }} />;
-
-  const shapes = [
-    <circle key="c" cx="50" cy="50" r="34" fill={`url(#g-${id})`} />,
-    <rect key="r" x="16" y="16" width="68" height="68" rx="18" fill={`url(#g-${id})`} />,
-    <polygon key="p" points="50,12 88,82 12,82" fill={`url(#g-${id})`} stroke="none" />,
-    <rect key="s" x="14" y="14" width="72" height="72" rx="36" fill={`url(#g-${id})`} />,
-  ];
-
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" className={cn("shrink-0", className)} aria-hidden>
-      <defs>
-        <linearGradient id={`g-${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={`hsl(${hue1} 62% 46%)`} />
-          <stop offset="100%" stopColor={`hsl(${hue2} 48% 30%)`} />
-        </linearGradient>
-      </defs>
-      {shapes[shape]}
-      <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="2" />
-    </svg>
-  );
+  if (!address) return <span className={cn("inline-block border-2 border-line bg-white/5", className)} style={{ width: size, height: size }} />;
+  return <SpriteAvatar address={address} size={size} className={className} />;
 }
 
 export function Copyable({ text, children, className }: { text: string; children?: React.ReactNode; className?: string }) {
@@ -121,11 +95,11 @@ export function Copyable({ text, children, className }: { text: string; children
           .catch(() => {})
           .finally(() => setTimeout(() => setCopied(false), 1200));
       }}
-      className={cn("group inline-flex items-center gap-1.5 transition-colors hover:text-foreground", className)}
+      className={cn("group inline-flex cursor-pointer items-center gap-1.5 transition-colors hover:text-foreground", className)}
       title="Copy"
     >
       {children}
-      {copied ? <Check weight="bold" className="h-3 w-3 text-state-released" /> : <Copy className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />}
+      {copied ? <Check weight="bold" className="h-4 w-4 text-state-released" /> : <Copy className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-60 group-focus-visible:opacity-60" />}
     </button>
   );
 }
@@ -134,7 +108,7 @@ export function HashText({ value, size = 4, className }: { value: string | null 
   if (!value) return <span className={cn("num text-faint", className)}>—</span>;
   return (
     <Copyable text={value} className={cn("num", className)}>
-      <span className="underline decoration-white/20 underline-offset-4">{shortHash(value, size)}</span>
+      <span className="underline decoration-white/30 decoration-2 decoration-dotted underline-offset-4">{shortHash(value, size)}</span>
     </Copyable>
   );
 }
@@ -156,9 +130,9 @@ export function Skeleton({ className }: { className?: string }) {
  */
 export function ArbiterRegistrySkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="divide-y divide-white/[0.05] overflow-hidden border border-line" aria-busy="true" aria-live="polite">
+    <div className="divide-y-2 divide-line overflow-hidden border-2 border-line" aria-busy="true" aria-live="polite">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex flex-col gap-4 bg-white/[0.012] px-6 py-6 md:flex-row md:items-center">
+        <div key={i} className="flex flex-col gap-4 bg-ink-raised px-6 py-6 md:flex-row md:items-center">
           <Skeleton className="h-7 w-10" />
           <div className="flex min-w-0 flex-1 items-center gap-3.5">
             <Skeleton className="h-11 w-11 shrink-0" />
@@ -187,38 +161,42 @@ export function ArbiterRegistrySkeleton({ rows = 3 }: { rows?: number }) {
 export function InlineLoading({ label = "Reading the registry…", className }: { label?: string; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2 text-faint", className)} aria-busy="true" aria-live="polite">
-      <span className="h-3.5 w-3.5 animate-spin border-2 border-current border-t-transparent opacity-70" aria-hidden />
-      <span className="text-[11px]">{label}</span>
+      <Spinner className="h-4 w-4 animate-spin" />
+      <span className="text-[13px]">{label}</span>
     </span>
   );
 }
 
+/** Functional list-section heading: small pixel caps, one per list. */
 export function ListHead({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <h2 className={cn("text-[13px] font-semibold tracking-normal text-foreground/90", className)}>{children}</h2>;
+  return <h2 className={cn("font-display text-[12px] uppercase leading-snug text-foreground", className)}>{children}</h2>;
 }
 
 export function EmptyState({
   icon,
+  sprite,
   title,
   body,
   action,
   className,
 }: {
   icon?: React.ReactNode;
+  /** A pixel sprite instead of an icon — the friendlier choice for a true "nothing here yet". */
+  sprite?: SpriteName;
   title: string;
   body?: string;
   action?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-3 border border-dashed border-line px-8 py-14 text-center", className)}>
-      {icon && <div className="text-faint [&_svg]:h-7 [&_svg]:w-7">{icon}</div>}
-      <div className="text-[15px] font-medium">{title}</div>
-      {body && <p className="max-w-[46ch] text-sm leading-relaxed text-faint">{body}</p>}
+    <div className={cn("flex flex-col items-center justify-center gap-3 border-2 border-dashed border-line-strong px-8 py-14 text-center", className)}>
+      {sprite ? <Sprite name={sprite} size={64} /> : icon && <div className="text-faint [&_svg]:h-8 [&_svg]:w-8">{icon}</div>}
+      <div className="font-display text-[12px] leading-snug">{title}</div>
+      {body && <p className="max-w-[46ch] text-[15px] leading-relaxed text-faint">{body}</p>}
       {action && <div className="mt-1">{action}</div>}
     </div>
   );
 }
 
-/** Tactile button press — the physical push the design system standardizes. */
-export const press = "active:translate-y-px active:scale-[0.985] transition-transform";
+/** Tactile press — the face drops two pixels toward its slab (see .pixel-press). */
+export const press = "pixel-press";
