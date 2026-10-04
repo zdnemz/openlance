@@ -5,6 +5,7 @@
  *   pnpm --filter @openlance/api check:sponsorable
  */
 process.env.CHAIN_MODE = 'real'
+process.env.CHAIN_ID = '31337' // local chain: no INDEXER_START_BLOCK needed
 process.env.ESCROW_ADDRESS = '0x' + '11'.repeat(20)
 process.env.ARBITER_REGISTRY_ADDRESS = '0x' + '22'.repeat(20)
 delete process.env.ROLE_REGISTRY_ADDRESS
