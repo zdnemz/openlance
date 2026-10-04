@@ -46,7 +46,7 @@ export function ArbiterBubble({
       type="button"
       onClick={onClick}
       title={address}
-      className={`group flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[12.5px] transition-colors ${
+      className={`group flex items-center gap-2 border py-1 pl-1 pr-3 text-[12.5px] transition-colors ${
         tone === "locked"
           ? "border-state-released/30 bg-state-released/[0.06] hover:border-state-released/60"
           : "border-line bg-white/[0.03] hover:border-rose-accent/50"
@@ -103,7 +103,7 @@ export function ArbiterDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-raised max-w-md gap-0 rounded-3xl border-line p-0">
+      <DialogContent className="glass-raised max-w-md gap-0 border-line p-0">
         <DialogHeader className="space-y-1.5 px-7 pb-4 pt-7">
           <DialogTitle className="flex items-center gap-2 text-xl tracking-tight">
             <Scales className="h-5 w-5 text-dim" /> Arbiter
@@ -112,8 +112,8 @@ export function ArbiterDetailDialog({
 
         {isLoading ? (
           <div className="space-y-3 px-7 pb-6">
-            <Skeleton className="h-14 w-full rounded-2xl" />
-            <Skeleton className="h-24 w-full rounded-2xl" />
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-24 w-full" />
           </div>
         ) : (
           <div className="px-7 pb-6">
@@ -174,7 +174,7 @@ export function ArbiterDetailDialog({
                   type="button"
                   disabled={actions.busy}
                   onClick={actions.onReject}
-                  className="flex-1 rounded-full border border-line bg-transparent py-3 text-[13px] font-medium text-dim hover:border-destructive/50 hover:text-destructive"
+                  className="flex-1 border border-line bg-transparent py-3 text-[13px] font-medium text-dim hover:border-destructive/50 hover:text-destructive"
                 >
                   {actions.busy ? "Rejecting…" : "Reject"}
                 </Button>
@@ -184,7 +184,7 @@ export function ArbiterDetailDialog({
                   type="button"
                   disabled={actions.busy}
                   onClick={actions.onApprove}
-                  className="flex-1 rounded-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                  className="flex-1 bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
                 >
                   {actions.busy ? "Locking…" : "Approve & lock"}
                 </Button>
@@ -194,7 +194,7 @@ export function ArbiterDetailDialog({
             <Button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="w-full rounded-full bg-white/10 py-3 text-[13px] font-medium hover:bg-white/20"
+              className="w-full bg-white/10 py-3 text-[13px] font-medium hover:bg-white/20"
             >
               Close
             </Button>
@@ -207,7 +207,7 @@ export function ArbiterDetailDialog({
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-2xl border border-line bg-white/[0.02] px-4 py-3">
+    <div className="border border-line bg-white/[0.02] px-4 py-3">
       <div className={`num text-lg font-medium leading-none ${accent ? "text-state-released" : "text-foreground"}`}>{value}</div>
       <div className="mt-1.5 text-[11px] uppercase tracking-[0.14em] text-faint">{label}</div>
     </div>

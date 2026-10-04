@@ -59,7 +59,7 @@ export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-raised max-w-md gap-0 rounded-3xl border-line p-0">
+      <DialogContent className="glass-raised max-w-md gap-0 border-line p-0">
         <DialogHeader className="space-y-2 px-7 pb-5 pt-7">
           <DialogTitle className="text-xl tracking-tight">Connect your wallet</DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-dim">
@@ -73,7 +73,7 @@ export function ConnectPanel({ open, onOpenChange }: { open: boolean; onOpenChan
             type="button"
             disabled={!injectedAvailable || signingIn || !runtimeLoaded}
             onClick={() => void connectReal()}
-            className={`flex w-full items-center justify-center gap-3 rounded-2xl px-5 py-4 text-sm font-medium text-white ${press} ${              injectedAvailable && runtimeLoaded ? "bg-rose-accent hover:bg-rose-bright" : "cursor-not-allowed bg-white/[0.06] text-faint"
+            className={`flex w-full items-center justify-center gap-3 px-5 py-4 text-sm font-medium text-white ${press} ${              injectedAvailable && runtimeLoaded ? "bg-rose-accent hover:bg-rose-bright" : "cursor-not-allowed bg-white/[0.06] text-faint"
             }`}
           >
             {signingIn ? <Spinner className="h-4 w-4 animate-spin" /> : injectedAvailable ? <Wallet weight="bold" className="h-4 w-4" /> : <Plugs className="h-4 w-4" />}

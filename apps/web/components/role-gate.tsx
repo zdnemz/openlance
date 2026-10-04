@@ -51,7 +51,7 @@ export function RoleGate({ children, write = true }: { children: ReactNode; writ
  */
 function LockedSeatCard({ upsell, role, kyc }: { upsell: { title: string; body: string; cta: string }; role: string; kyc: string }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-line bg-white/[0.012] px-6 py-5">
+    <div className="flex flex-wrap items-center justify-between gap-4 border border-line bg-white/[0.012] px-6 py-5">
       <div className="flex items-center gap-3">
         <ShieldStar className="h-5 w-5 shrink-0 text-rose-bright" />
         <div>
@@ -62,7 +62,7 @@ function LockedSeatCard({ upsell, role, kyc }: { upsell: { title: string; body: 
           </div>
         </div>
       </div>
-      <span className="shrink-0 rounded-full border border-line px-4 py-2 text-[12.5px] text-faint">
+      <span className="shrink-0 border border-line px-4 py-2 text-[12.5px] text-faint">
         {upsell.cta} — needs another wallet
       </span>
     </div>
@@ -71,12 +71,12 @@ function LockedSeatCard({ upsell, role, kyc }: { upsell: { title: string; body: 
 
 function GateCard({ title, body, cta, href, onCta }: { title: string; body: string; cta: string; href?: string; onCta?: () => void }) {
   const inner = (
-    <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white">
+    <span className="flex shrink-0 items-center gap-1.5 bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white">
       {cta}
     </span>
   );
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-line bg-white/[0.012] px-6 py-5">
+    <div className="flex flex-wrap items-center justify-between gap-4 border border-line bg-white/[0.012] px-6 py-5">
       <div className="flex items-center gap-3">
         <ShieldStar className="h-5 w-5 shrink-0 text-rose-bright" />
         <div>

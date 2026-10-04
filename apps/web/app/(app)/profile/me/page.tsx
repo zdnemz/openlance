@@ -16,8 +16,8 @@ export default function MyProfilePage() {
   if (!ready) {
     return (
       <div className="space-y-5">
-        <Skeleton className="h-36 w-full rounded-3xl" />
-        <Skeleton className="h-64 w-full rounded-3xl" />
+        <Skeleton className="h-36 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }

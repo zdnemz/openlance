@@ -70,13 +70,13 @@ export default function AdminPage() {
         {/* the console, gated: a dimmed preview of the bento behind a lock plate */}
         <div className="relative">
           <div aria-hidden className="grid gap-4 opacity-45 blur-[1.5px] md:grid-cols-5">
-            <Skeleton className="h-60 rounded-3xl md:col-span-3" />
-            <Skeleton className="h-60 rounded-3xl md:col-span-2" />
-            <Skeleton className="h-28 rounded-3xl md:col-span-5" />
+            <Skeleton className="h-60 md:col-span-3" />
+            <Skeleton className="h-60 md:col-span-2" />
+            <Skeleton className="h-28 md:col-span-5" />
           </div>
           <div className="absolute inset-0 grid place-items-center px-4">
-            <div className="glass-raised flex max-w-md flex-col gap-2.5 rounded-2xl px-6 py-5 text-center sm:flex-row sm:text-left">
-              <div className="grid h-10 w-10 shrink-0 place-items-center self-center rounded-xl bg-rose-soft ring-1 ring-rose-accent/30">
+            <div className="glass-raised flex max-w-md flex-col gap-2.5 px-6 py-5 text-center sm:flex-row sm:text-left">
+              <div className="grid h-10 w-10 shrink-0 place-items-center self-center bg-rose-soft ring-1 ring-rose-accent/30">
                 <ShieldStar weight="bold" className="h-5 w-5 text-rose-bright" />
               </div>
               <div>
@@ -126,7 +126,7 @@ export default function AdminPage() {
       {/* asymmetric operator bento: manifest wide, fees beside, solvency below */}
       <div className="grid gap-4 md:grid-cols-5">
         {/* deployment manifest — hairline definition rows, copyable addresses */}
-        <div className="glass rounded-3xl p-6 md:col-span-3">
+        <div className="glass p-6 md:col-span-3">
           <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">deployment manifest</div>
           <dl className="mt-4 divide-y divide-white/[0.06]">
             {[
@@ -150,7 +150,7 @@ export default function AdminPage() {
           </dl>
         </div>
 
-        <div className="glass flex flex-col rounded-3xl p-6 md:col-span-2">
+        <div className="glass flex flex-col p-6 md:col-span-2">
           <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">fees accrued (mirror)</div>
           <EthAmount wei={accruedWei} className="mt-3 block text-3xl font-medium tracking-tight text-state-split" />
           <p className="mt-2 max-w-[56ch] text-[12px] leading-relaxed text-faint">
@@ -168,13 +168,13 @@ export default function AdminPage() {
               const result = await withdrawFeesAction(chain.run)();
               if (result.ok) toast.success("Fees split 50/50 to treasury + sponsorship");
             }}
-            className="mt-auto w-full rounded-full bg-white/10 py-2.5 text-[12.5px] hover:bg-white/20"
+            className="mt-auto w-full bg-white/10 py-2.5 text-[12.5px] hover:bg-white/20"
           >
             <Coins className="mr-2 h-3.5 w-3.5" /> withdrawFees → treasury + sponsorship (50/50)
           </Button>
         </div>
 
-        <div className="glass rounded-3xl p-6 md:col-span-5">
+        <div className="glass p-6 md:col-span-5">
           <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">solvency check</div>
           {runs?.[0]?.report?.solvency ? (
             <div className="mt-4 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
@@ -194,7 +194,7 @@ export default function AdminPage() {
                   <span className="ml-1.5 text-xs text-faint">ETH owed</span>
                 </span>
               </div>
-              <Button onClick={reconcile} disabled={reconciling} className="rounded-full bg-rose-accent px-6 py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
+              <Button onClick={reconcile} disabled={reconciling} className="bg-rose-accent px-6 py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
                 <ArrowsClockwise className={`mr-2 h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
                 {reconciling ? "Reconciling…" : "Run reconciliation"}
               </Button>
@@ -206,7 +206,7 @@ export default function AdminPage() {
                   ? "Run a reconciliation to verify escrow solvency against the chain — held balance vs unsettled milestones and accrued fees."
                   : "Solvency is a chain read, and this deployment is running in mock mode — it cannot be verified here. Boot the real chain to see the balance sheet."}
               </p>
-              <Button onClick={reconcile} disabled={reconciling} className="shrink-0 rounded-full bg-rose-accent px-6 py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
+              <Button onClick={reconcile} disabled={reconciling} className="shrink-0 bg-rose-accent px-6 py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright">
                 <ArrowsClockwise className={`mr-2 h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
                 {reconciling ? "Reconciling…" : "Run reconciliation"}
               </Button>
@@ -217,7 +217,7 @@ export default function AdminPage() {
 
       <section>
         <ListHead>Reconciliation runs</ListHead>
-        <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+        <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
           {(runs ?? []).map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-x-6 gap-y-1.5 bg-white/[0.012] px-6 py-4">
               <StatusBadge status={r.drifts === 0 ? "released" : "disputed"} pulse={false} />

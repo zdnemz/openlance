@@ -82,7 +82,7 @@ export default function OnboardingPage() {
         ))}
       </ol>
 
-      <div className="mt-6 rounded-3xl border border-line bg-white/[0.012] p-6">
+      <div className="mt-6 border border-line bg-white/[0.012] p-6">
         {step === 1 && (
           <div>
             <h2 className="text-lg font-medium">1 — Connect a real wallet</h2>
@@ -90,7 +90,7 @@ export default function OnboardingPage() {
             <button
               type="button"
               onClick={() => setPanelOpen(true)}
-              className="mt-4 rounded-full bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright"
+              className="mt-4 bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright"
             >
               {walletAddress ? "Sign in" : "Connect wallet"}
             </button>
@@ -200,7 +200,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
       </p>
 
       {claimed ? (
-        <div className="mt-4 rounded-2xl border border-rose-accent/50 bg-rose-soft px-4 py-3.5">
+        <div className="mt-4 border border-rose-accent/50 bg-rose-soft px-4 py-3.5">
           <div className="text-sm font-medium">{selected?.title} · claimed on-chain</div>
           <div className="text-xs text-dim">{selected?.blurb}</div>
           <div className="mt-0.5 text-[11px] text-faint">{selected?.kyc}</div>
@@ -217,7 +217,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
                 aria-checked={active}
                 disabled={busy}
                 onClick={() => setSelectedRole(r.id)}
-                className={`rounded-2xl border px-4 py-3.5 text-left transition-colors ${press} ${
+                className={`border px-4 py-3.5 text-left transition-colors ${press} ${
                   active
                     ? "border-rose-accent/50 bg-rose-soft"
                     : "border-transparent hover:border-line hover:bg-white/[0.04]"
@@ -242,7 +242,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
         type="button"
         disabled={busy || seat.state === "loading" || seat.state === "unreadable"}
         onClick={() => void confirm()}
-        className={`mt-4 inline-flex items-center gap-2 rounded-full bg-rose-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
+        className={`mt-4 inline-flex items-center gap-2 bg-rose-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
       >
         {busy ? <Spinner className="h-4 w-4 animate-spin" /> : null}
         {busy ? "Saving…" : seat.state === "loading" ? "Checking your seat…" : `Continue with ${selected?.title ?? seatRole}`}
@@ -339,7 +339,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
         <ol className="mt-5 flex items-center gap-1.5" aria-label="Verification progress">
           {["Submitted", "In review", "Verified"].map((label, i) => (
             <li key={label} className="flex flex-1 items-center gap-2 last:flex-none">
-              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-medium ${
+              <span className={`grid h-6 w-6 shrink-0 place-items-center text-[11px] font-medium ${
                 i < 2 ? "bg-state-released/15 text-state-released ring-1 ring-state-released/30" : "bg-white/[0.04] text-faint ring-1 ring-line"
               }`}>
                 {i < 2 ? "✓" : i + 1}
@@ -350,7 +350,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
           ))}
         </ol>
         {submitted && (
-          <dl className="num mt-4 space-y-1.5 rounded-2xl border border-line bg-white/[0.02] px-4 py-3 text-[12.5px]">
+          <dl className="num mt-4 space-y-1.5 border border-line bg-white/[0.02] px-4 py-3 text-[12.5px]">
             <div className="flex justify-between gap-4"><dt className="text-faint">Name</dt><dd className="text-dim">{submitted.fullName}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-faint">Country</dt><dd className="text-dim">{submitted.country}</dd></div>
             {submitted.idType && <div className="flex justify-between gap-4"><dt className="text-faint">Document</dt><dd className="text-dim">{ID_TYPES.find((t) => t.id === submitted.idType)?.label} {submitted.idNumber && maskId(submitted.idNumber)}</dd></div>}
@@ -361,7 +361,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
         </p>
         <button
           type="button" disabled={busy} onClick={() => void approve()}
-          className={`mt-3 inline-flex items-center gap-2 rounded-full bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
+          className={`mt-3 inline-flex items-center gap-2 bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
         >
           {busy ? <Spinner className="h-4 w-4 animate-spin" /> : <SealCheck weight="bold" className="h-4 w-4" />}
           Simulate reviewer approval
@@ -374,7 +374,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
   // it produced an empty bordered card with no message at all.
   if (user.kycStatus === "verified") {
     return (
-      <div className="glass rounded-3xl px-6 py-10 text-center">
+      <div className="glass px-6 py-10 text-center">
         <p className="text-[15px] font-medium">You are verified.</p>
         <p className="mx-auto mt-2 max-w-[52ch] text-sm leading-relaxed text-faint">
           Your seat is locked and identity is on file. Use the app to work — or disconnect from the header wallet menu
@@ -408,7 +408,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
       {/* what this level inspects */}
       <ul className="mt-4 flex flex-wrap gap-1.5" aria-label={`Checks for ${level.name} verification`}>
         {level.checks.map((c) => (
-          <li key={c} className="num inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.03] px-2.5 py-1 text-[11.5px] text-dim">
+          <li key={c} className="num inline-flex items-center gap-1.5 border border-line bg-white/[0.03] px-2.5 py-1 text-[11.5px] text-dim">
             <CheckCircle weight="fill" className="h-3 w-3 text-state-released" />{c}
           </li>
         ))}
@@ -421,7 +421,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
             <input
               aria-invalid={!!fullName && !nameOk} aria-describedby={fullName && !nameOk ? "kyc-name-hint" : undefined}
               value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ada Okafor" autoComplete="name"
-              className="h-11 w-full rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
+              className="h-11 w-full border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
             />
             {fullName && !nameOk && <span id="kyc-name-hint" className="mt-1 block text-[11.5px] text-amber-300">Use at least 2 characters.</span>}
           </label>
@@ -441,7 +441,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
                   <button
                     key={id} type="button" role="radio" aria-checked={active} disabled={busy}
                     onClick={() => setIdType(id)}
-                    className={`flex flex-col items-center gap-1.5 rounded-2xl border px-2 py-3.5 text-center transition-colors ${press} ${
+                    className={`flex flex-col items-center gap-1.5 border px-2 py-3.5 text-center transition-colors ${press} ${
                       active ? "border-rose-accent/50 bg-rose-soft" : "border-line bg-white/[0.02] hover:border-line-strong"
                     } disabled:opacity-60`}
                   >
@@ -455,14 +455,14 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
               aria-label="Document number"
               aria-invalid={!!idNumber && !idOk} aria-describedby={idNumber && !idOk ? "kyc-id-hint" : undefined}
               value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="e.g. A1234567" inputMode="text" autoComplete="off"
-              className="mt-2 h-11 w-full rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
+              className="mt-2 h-11 w-full border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
             />
             {idNumber && !idOk && <span id="kyc-id-hint" className="mt-1 block text-[11.5px] text-amber-300">Document number needs 4+ characters.</span>}
           </fieldset>
         )}
 
         {user.role === "arbiter" && (
-          <div className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 ${
+          <div className={`flex items-center justify-between gap-3 border px-4 py-3.5 ${
             livePhase === "done" ? "border-state-released/30 bg-state-released/[0.05]" : "border-line bg-white/[0.02]"
           }`}>
             <span className="flex items-center gap-2.5 text-[13px]">
@@ -473,7 +473,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
               </span>
             </span>
             {livePhase === "idle" ? (
-              <button type="button" disabled={busy} onClick={startLiveness} className={`shrink-0 rounded-full border border-line px-4 py-2 text-[12.5px] text-dim hover:text-foreground ${press}`}>
+              <button type="button" disabled={busy} onClick={startLiveness} className={`shrink-0 border border-line px-4 py-2 text-[12.5px] text-dim hover:text-foreground ${press}`}>
                 Start scan
               </button>
             ) : livePhase === "scanning" ? (
@@ -495,7 +495,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
           <button
             type="button" disabled={!canSubmit} onClick={() => void submit()}
             title={canSubmit ? undefined : "Fill every detail above to continue"}
-            className={`inline-flex items-center gap-2 rounded-full bg-rose-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-50 ${press}`}
+            className={`inline-flex items-center gap-2 bg-rose-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-50 ${press}`}
           >
             {busy ? <Spinner className="h-4 w-4 animate-spin" /> : <ShieldCheck weight="bold" className="h-4 w-4" />}
             {busy ? "Submitting…" : user.role === "client" ? "Verify instantly" : "Submit for review"}
@@ -533,14 +533,14 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
         ref={triggerRef}
         type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open}
         onClick={() => { setQuery(""); setOpen((o) => !o); }}
-        className="flex h-11 w-full items-center gap-2 rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50 disabled:opacity-60"
+        className="flex h-11 w-full items-center gap-2 border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50 disabled:opacity-60"
       >
         <Globe className="h-3.5 w-3.5 shrink-0 text-faint" />
         <span className={`flex-1 truncate text-left ${value ? "" : "text-faint/60"}`}>{value || "Select country"}</span>
         <CaretDown className={`h-3.5 w-3.5 shrink-0 text-faint transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute inset-x-0 top-full z-50 mt-1.5 overflow-hidden rounded-2xl border border-line bg-ink shadow-xl">
+        <div className="absolute inset-x-0 top-full z-50 mt-1.5 overflow-hidden border border-line bg-ink shadow-xl">
           <input
             value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search countries…" autoFocus
             aria-label="Search countries"
@@ -557,7 +557,7 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
                 role="option"
                 aria-selected={c === value}
                 onClick={() => { onChange(c); close(); }}
-                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-[13px] transition-colors ${
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-[13px] transition-colors ${
                   c === value ? "bg-rose-soft text-foreground" : "text-dim hover:bg-white/[0.04] hover:text-foreground"
                 }`}
               >
@@ -580,8 +580,8 @@ function KycHeader({ level, role }: { level: { name: string; eta: string }; role
         Verify identity
       </h3>
       <span className="flex items-center gap-1.5">
-        <span className="num rounded-full border border-line bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-dim">{role} · {level.name}</span>
-        <span className="num rounded-full bg-amber-400/10 px-2.5 py-0.5 text-[11px] text-amber-300 ring-1 ring-amber-400/20">SIMULATED</span>
+        <span className="num border border-line bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-dim">{role} · {level.name}</span>
+        <span className="num bg-amber-400/10 px-2.5 py-0.5 text-[11px] text-amber-300 ring-1 ring-amber-400/20">SIMULATED</span>
       </span>
       <p className="mt-0.5 w-full text-[12px] text-faint">{level.eta} — no documents leave your browser in this mock.</p>
     </div>

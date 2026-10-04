@@ -143,8 +143,8 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
     return (
       <div className="space-y-5">
         <Skeleton className="h-10 w-2/3" />
-        <Skeleton className="h-40 w-full rounded-3xl" />
-        <Skeleton className="h-64 w-full rounded-3xl" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
@@ -155,7 +155,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
     return (
       <div className="space-y-5">
         <Skeleton className="h-10 w-2/3" />
-        <Skeleton className="h-40 w-full rounded-3xl" />
+        <Skeleton className="h-40 w-full" />
       </div>
     );
   }
@@ -165,7 +165,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       {/* header */}
       <div>
         <div className="flex items-center gap-3">
-          <span className="num rounded-md bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">{job.category}</span>
+          <span className="num bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">{job.category}</span>
           <StatusBadge status={job.status} pulse={job.status === "open"} />
           <span className="num text-[11px] text-faint">posted {timeAgo(job.createdAt)}</span>
         </div>
@@ -187,9 +187,9 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       </div>
 
       {job.projectId && stay && (
-        <div className="glass flex flex-wrap items-center gap-3 rounded-2xl px-5 py-4 text-[13px] text-dim">
+        <div className="glass flex flex-wrap items-center gap-3 px-5 py-4 text-[13px] text-dim">
           <span>This job was awarded — work continues in the project room.</span>
-          <Link href={`/projects/${job.projectId}`} className="ml-auto rounded-full bg-white/10 px-4 py-2 text-[12.5px] font-medium hover:bg-white/20">
+          <Link href={`/projects/${job.projectId}`} className="ml-auto bg-white/10 px-4 py-2 text-[12.5px] font-medium hover:bg-white/20">
             Open project room
           </Link>
         </div>
@@ -247,8 +247,8 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
               <ListHead>Proposals{!proposalsLoading ? ` · ${proposals?.length ?? 0}` : ""}</ListHead>
               {!proposals && proposalsLoading ? (
                 <div className="mt-4 space-y-3">
-                  <Skeleton className="h-24 rounded-3xl" />
-                  <Skeleton className="h-24 rounded-3xl" />
+                  <Skeleton className="h-24" />
+                  <Skeleton className="h-24" />
                 </div>
               ) : !proposals?.length ? (
                 <EmptyState
@@ -271,13 +271,13 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
           ) : job.status === "open" && session.token && session.user?.role === "freelancer" ? (
             <ProposeForm jobId={id} />
           ) : job.status === "open" && session.token ? (
-            <div className="glass rounded-3xl p-6 text-sm text-dim">
+            <div className="glass p-6 text-sm text-dim">
               <span className="flex items-center gap-2.5">
                 <Lock className="h-4 w-4 text-faint" /> Proposing needs the freelancer seat — your account is locked to the {session.user?.role} seat.
               </span>
             </div>
           ) : (
-            <div className="glass rounded-3xl p-6 text-sm text-dim">
+            <div className="glass p-6 text-sm text-dim">
               {job.status !== "open" ? (
                 <span className="flex items-center gap-2.5">
                   <Lock className="h-4 w-4 text-faint" /> This job is {job.status.replace("_", " ")} — proposals are closed.
@@ -350,7 +350,7 @@ function DeleteJob({ jobId, jobRef }: { jobId: string; jobRef: string }) {
       <Button
         variant="ghost"
         onClick={() => setOpen(true)}
-        className="rounded-full px-4 py-2 text-[12.5px] text-faint hover:text-destructive"
+        className="px-4 py-2 text-[12.5px] text-faint hover:text-destructive"
       >
         Delete job
       </Button>
@@ -358,18 +358,18 @@ function DeleteJob({ jobId, jobRef }: { jobId: string; jobRef: string }) {
   }
 
   return (
-    <div className="glass flex flex-wrap items-center gap-3 rounded-2xl border-destructive/30 px-5 py-4 text-[13px]">
+    <div className="glass flex flex-wrap items-center gap-3 border-destructive/30 px-5 py-4 text-[13px]">
       <span className="text-dim">
         Any budget still locked in escrow goes back to your wallet before the job is deleted.
       </span>
       <div className="ml-auto flex items-center gap-2">
-        <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy} className="rounded-full px-4 py-2 text-[12.5px]">
+        <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy} className="px-4 py-2 text-[12.5px]">
           Keep it
         </Button>
         <Button
           onClick={remove}
           disabled={busy}
-          className="rounded-full bg-destructive px-4 py-2 text-[12.5px] font-medium text-white hover:bg-destructive/90"
+          className="bg-destructive px-4 py-2 text-[12.5px] font-medium text-white hover:bg-destructive/90"
         >
           {busy ? "Working…" : "Delete"}
         </Button>
@@ -433,7 +433,7 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
   }
 
   return (
-    <section className="glass-raised rounded-3xl p-6">
+    <section className="glass-raised p-6">
       <ListHead>Publish — lock the budget first</ListHead>
       <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
         This draft is private. Publishing locks <EthAmount wei={budgetWei} className="text-foreground" /> (your max
@@ -448,7 +448,7 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
       <Button
         disabled={phase !== "idle"}
         onClick={depositAndPublish}
-        className="mt-4 w-full rounded-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
+        className="mt-4 w-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
       >
         {phase === "idle" ? `Lock ${formatEth(budgetWei)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
       </Button>
@@ -471,7 +471,7 @@ const MAX_PROPOSAL_MILESTONES = 20;
 
 function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/lib/types").ProposalView; onAccept: () => void; awarding: boolean }) {
   return (
-    <article className="glass rounded-3xl p-6">
+    <article className="glass p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="num text-[11px] uppercase tracking-wider text-faint">{proposal.deliveryDays} days</div>
@@ -485,7 +485,7 @@ function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/li
       <p className="mt-4 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{proposal.coverNote}</p>
       <div className="mt-4 space-y-1.5">
         {proposal.milestones.map((m) => (
-          <div key={m.position} className="flex items-center justify-between rounded-xl border border-line bg-white/[0.02] px-3.5 py-2 text-[12.5px]">
+          <div key={m.position} className="flex items-center justify-between border border-line bg-white/[0.02] px-3.5 py-2 text-[12.5px]">
             <span className="truncate text-dim">{m.title}</span>
             <EthAmount wei={m.amountWei} className="shrink-0 text-xs" />
           </div>
@@ -499,7 +499,7 @@ function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/li
         </div>
       )}
       {proposal.status === "submitted" && (
-        <Button onClick={onAccept} disabled={awarding} className="mt-5 w-full rounded-full bg-rose-accent hover:bg-rose-bright">
+        <Button onClick={onAccept} disabled={awarding} className="mt-5 w-full bg-rose-accent hover:bg-rose-bright">
           {awarding ? "Awarding…" : `Accept ${formatEth(proposal.bidTotalWei)} ETH bid`}
         </Button>
       )}
@@ -596,7 +596,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
     return (
       <section>
         <ListHead>Your proposal</ListHead>
-        <div className="glass mt-4 rounded-3xl p-6">
+        <div className="glass mt-4 p-6">
           <div className="flex items-center justify-between">
             <EthAmount wei={mine.bidTotalWei} className="text-lg font-medium text-rose-bright" />
             <StatusBadge status={mine.status} pulse={false} />
@@ -618,7 +618,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
   if (myWithdrawn && !mine) {
     return (
       <section className="space-y-4">
-        <div className="rounded-3xl border border-line bg-white/[0.012] px-6 py-5">
+        <div className="border border-line bg-white/[0.012] px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <ListHead>Your withdrawn proposal</ListHead>
@@ -638,7 +638,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
         <Button
           variant="ghost"
           onClick={() => setDismissedMine(false)}
-          className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+          className="w-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
         >
           Submit a new proposal
         </Button>
@@ -651,7 +651,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
   return (
     <section>
       <ListHead>Propose</ListHead>
-      <div className="glass mt-4 space-y-5 rounded-3xl p-6">
+      <div className="glass mt-4 space-y-5 p-6">
         <div className="space-y-2">
           <label htmlFor="proposal-cover" className="text-[13px] font-medium">Cover note</label>
           <Textarea
@@ -695,7 +695,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
             </button>
           </div>
           {milestones.map((m, i) => (
-            <div key={i} className="space-y-2 rounded-2xl border border-line bg-white/[0.02] p-4">
+            <div key={i} className="space-y-2 border border-line bg-white/[0.02] p-4">
               <div className="flex gap-3">
                 <Input
                   aria-label={`Milestone ${i + 1} title`}
@@ -711,7 +711,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
                   <button
                     type="button" aria-label={`Remove milestone ${i + 1}`}
                     onClick={() => setMilestones(milestones.filter((_, j) => j !== i))}
-                    className="grid size-9 shrink-0 place-items-center rounded-lg text-faint hover:text-destructive"
+                    className="grid size-9 shrink-0 place-items-center text-faint hover:text-destructive"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -726,7 +726,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
               />
             </div>
           ))}
-          <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${overCeiling ? "bg-destructive/10" : "bg-white/[0.04]"}`}>
+          <div className={`flex items-center justify-between px-4 py-3 ${overCeiling ? "bg-destructive/10" : "bg-white/[0.04]"}`}>
             <span className="num text-[11px] uppercase tracking-wider text-faint">
               your bid{ceilingWei > 0n ? ` · ceiling ${formatEth(ceilingWei)} ETH` : ""}
             </span>
@@ -746,12 +746,12 @@ function ProposeForm({ jobId }: { jobId: string }) {
         />
 
         {error && (
-          <p role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+          <p role="alert" className="flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
             <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
           </p>
         )}
 
-        <Button onClick={submit} disabled={submitting || uploading} className="w-full rounded-full bg-rose-accent hover:bg-rose-bright">
+        <Button onClick={submit} disabled={submitting || uploading} className="w-full bg-rose-accent hover:bg-rose-bright">
           {submitting
             ? uploading ? "Uploading files…" : "Submitting…"
             : <span className="flex items-center gap-2"><PaperPlaneTilt className="h-4 w-4" /> Submit proposal</span>}

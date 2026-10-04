@@ -41,7 +41,7 @@ export function ArbiterPickerDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-raised max-w-2xl gap-0 rounded-3xl border-line p-0">
+      <DialogContent className="glass-raised max-w-2xl gap-0 border-line p-0">
         {/* Body mounts fresh on every open (Radix unmounts content when closed),
             so `selected` always seeds from the current proposal. */}
         <ArbiterPickerBody initial={initial} busy={busy} onConfirm={onConfirm} onCancel={() => onOpenChange(false)} />
@@ -138,7 +138,7 @@ function ArbiterPickerBody({
           <Button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-full bg-white/10 py-3 text-[13px] font-medium hover:bg-white/20"
+            className="flex-1 bg-white/10 py-3 text-[13px] font-medium hover:bg-white/20"
           >
             Cancel
           </Button>
@@ -146,7 +146,7 @@ function ArbiterPickerBody({
             type="button"
             disabled={busy || selected.length < MIN_ARBITERS}
             onClick={() => onConfirm(selected)}
-            className="flex-1 rounded-full bg-rose-accent py-3 text-[13px] font-medium hover:bg-rose-bright"
+            className="flex-1 bg-rose-accent py-3 text-[13px] font-medium hover:bg-rose-bright"
           >
             {busy ? "Proposing…" : `Propose ${selected.length || ""}`}
           </Button>
@@ -191,7 +191,7 @@ function ArbiterRow({
           aria-pressed={picked}
           disabled={disabled}
           onClick={onToggle}
-          className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors ${
+          className={`grid size-9 shrink-0 place-items-center border transition-colors ${
             picked
               ? "border-rose-accent bg-rose-accent text-white"
               : disabled

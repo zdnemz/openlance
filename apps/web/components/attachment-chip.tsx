@@ -35,7 +35,7 @@ export function AttachmentChip({ attachment }: { attachment: { id: string; filen
   }
 
   return (
-    <span className="inline-flex max-w-[15rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim">
+    <span className="inline-flex max-w-[15rem] items-center gap-2 border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim">
       <button
         type="button"
         onClick={open}

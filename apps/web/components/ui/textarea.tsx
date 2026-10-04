@@ -26,7 +26,7 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
       className={cn(
         "border-line bg-white/[0.03] placeholder:text-faint focus-visible:border-rose-accent/50",
         "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
-        "field-sizing-content min-h-16 w-full resize-none rounded-md border px-3.5 py-2.5",
+        "field-sizing-content min-h-16 w-full resize-none border px-3.5 py-2.5",
         "text-sm leading-relaxed transition-colors outline-none",
         "focus-visible:ring-[3px] focus-visible:ring-rose-accent/20",
         "disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",

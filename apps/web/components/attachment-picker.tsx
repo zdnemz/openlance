@@ -35,7 +35,7 @@ export function AttachmentPicker({
         {label} <span className="num text-faint">({files.length}/{max})</span>
       </span>
       <label
-        className={`flex items-center gap-2.5 rounded-2xl border border-dashed px-4 py-3.5 text-[13px] transition-colors ${
+        className={`flex items-center gap-2.5 border border-dashed px-4 py-3.5 text-[13px] transition-colors ${
           full
             ? "cursor-not-allowed border-line/50 text-faint"
             : "cursor-pointer border-line text-dim hover:border-line-strong hover:text-foreground"
@@ -62,14 +62,14 @@ export function AttachmentPicker({
           {files.map((f, i) => (
             <span
               key={`${f.name}-${i}`}
-              className="inline-flex max-w-[14rem] items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim"
+              className="inline-flex max-w-[14rem] items-center gap-2 border border-line bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-dim"
             >
               <span className="truncate">{f.name}</span>
               <button
                 type="button"
                 aria-label={`Remove ${f.name}`}
                 onClick={() => onChange(files.filter((_, j) => j !== i))}
-                className="-mr-1 grid size-6 shrink-0 place-items-center rounded-full text-faint hover:text-destructive"
+                className="-mr-1 grid size-6 shrink-0 place-items-center text-faint hover:text-destructive"
               >
                 <X className="h-3 w-3" weight="bold" />
               </button>

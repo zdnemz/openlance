@@ -103,7 +103,7 @@ function StandingIcon({ icon, className }: { icon: Standing["icon"]; className?:
 function TonePill({ label, tone, icon, className }: { label: string; tone: string; icon: Standing["icon"]; className?: string }) {
   return (
     <span
-      className={cn("num inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px]", className)}
+      className={cn("num inline-flex items-center gap-1.5 border px-3 py-1 text-[11.5px]", className)}
       style={{ color: tone, borderColor: `color-mix(in oklab, ${tone} 34%, transparent)`, background: `color-mix(in oklab, ${tone} 9%, transparent)` }}
     >
       <StandingIcon icon={icon} className="h-3.5 w-3.5" />
@@ -138,8 +138,8 @@ function toWei(v: string | bigint | null | undefined): bigint {
 function TrustMeter({ score, floor, tone }: { score: number; floor: number; tone: string }) {
   const pct = Math.max(0, Math.min(100, score));
   return (
-    <div className="relative mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-      <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: tone }} />
+    <div className="relative mt-3 h-1.5 w-full overflow-hidden bg-white/[0.06]">
+      <div className="h-full transition-[width] duration-500" style={{ width: `${pct}%`, background: tone }} />
       <span
         aria-hidden
         className="absolute inset-y-[-3px] w-px bg-white/40"
@@ -180,9 +180,9 @@ function RankProgress({ stakeWei, tier, minWei, silverWei, goldWei }: {
           {remaining > 0n ? <>{formatEth(remaining)} ETH to {nextName}</> : <>{nextName} reached</>}
         </span>
       </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+      <div className="mt-2 h-1.5 w-full overflow-hidden bg-white/[0.06]">
         <div
-          className="h-full rounded-full transition-[width] duration-500"
+          className="h-full transition-[width] duration-500"
           style={{ width: `${pct}%`, background: "var(--color-state-released)" }}
         />
       </div>
@@ -200,14 +200,14 @@ export function ArbiterStakeSummary() {
   const wallNow = useNow(1000);
 
   if (!hydrated) {
-    return <div className="rounded-3xl border border-line bg-white/[0.012] px-6 py-5 text-[13px] text-faint">Checking your wallet…</div>;
+    return <div className="border border-line bg-white/[0.012] px-6 py-5 text-[13px] text-faint">Checking your wallet…</div>;
   }
 
   // The registry is read live (no DB cache), so hold a stable placeholder while
   // the chain read is in flight instead of flashing the "join" CTA.
   if (address && loading && !state) {
     return (
-      <div className="flex items-center gap-3 rounded-3xl border border-line bg-white/[0.012] px-6 py-5" aria-busy="true" aria-live="polite">
+      <div className="flex items-center gap-3 border border-line bg-white/[0.012] px-6 py-5" aria-busy="true" aria-live="polite">
         <SpinnerGap className="h-4 w-4 animate-spin text-state-split" aria-hidden />
         <span className="text-[13px] text-faint">Reading your stake from the registry…</span>
       </div>
@@ -216,7 +216,7 @@ export function ArbiterStakeSummary() {
 
   if (!address || !state?.registered) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-line bg-white/[0.012] px-6 py-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 border border-line bg-white/[0.012] px-6 py-5">
         <div className="flex items-center gap-3">
           <Coins className="h-5 w-5 shrink-0 text-state-split" />
           <div>
@@ -228,7 +228,7 @@ export function ArbiterStakeSummary() {
         </div>
         <Link
           href="/stake"
-          className="flex shrink-0 items-center gap-1.5 rounded-full bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-bright"
+          className="flex shrink-0 items-center gap-1.5 bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-bright"
         >
           Stake &amp; join
           <ArrowRight className="h-3.5 w-3.5" />
@@ -243,7 +243,7 @@ export function ArbiterStakeSummary() {
   const st = standingOf(state, minsToEligible, minsToWithdraw);
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-line bg-white/[0.012]">
+    <div className="overflow-hidden border border-line bg-white/[0.012]">
       <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex items-center gap-2 text-faint">
@@ -253,14 +253,14 @@ export function ArbiterStakeSummary() {
           <div className="flex items-baseline gap-2">
             <span className="num text-4xl font-medium leading-none tracking-tight">{formatEth(toWei(state.stakeWei))}</span>
             <span className="num text-[13px] text-faint">ETH</span>
-            <span className="num ml-1 rounded-full border border-line px-2 py-0.5 text-[11px] text-dim">
+            <span className="num ml-1 border border-line px-2 py-0.5 text-[11px] text-dim">
               {TIER_NAMES[state.tier ?? 0]?.toLowerCase() ?? "unstaked"}
             </span>
           </div>
         </div>
         <Link
           href="/stake"
-          className="flex shrink-0 items-center gap-1.5 rounded-full bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-bright"
+          className="flex shrink-0 items-center gap-1.5 bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-bright"
         >
           Manage stake
           <ArrowRight className="h-3.5 w-3.5" />
@@ -390,7 +390,7 @@ export function ArbiterStakeHub() {
 
   if (!hydrated) {
     return (
-      <div className="rounded-3xl border border-line bg-white/[0.012] px-6 py-6 text-[13px] text-faint">
+      <div className="border border-line bg-white/[0.012] px-6 py-6 text-[13px] text-faint">
         Checking your wallet…
       </div>
     );
@@ -398,7 +398,7 @@ export function ArbiterStakeHub() {
 
   if (!address) {
     return (
-      <div className="rounded-3xl border border-line bg-white/[0.012] px-6 py-10 text-center">
+      <div className="border border-line bg-white/[0.012] px-6 py-10 text-center">
         <Coins className="mx-auto h-7 w-7 text-state-split" />
         <p className="mt-3 text-[15px] font-medium">Connect a wallet to stake</p>
         <p className="mx-auto mt-1.5 max-w-[44ch] text-[13px] leading-relaxed text-faint">
@@ -413,21 +413,21 @@ export function ArbiterStakeHub() {
   if (loading && !state) {
     return (
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start" aria-busy="true" aria-live="polite">
-        <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+        <div className="border border-line bg-white/[0.012] p-6">
           <div className="flex items-center gap-2.5 text-faint">
             <SpinnerGap className="h-4 w-4 animate-spin text-state-split" aria-hidden />
             <span className="text-[13px]">Reading your position from the registry…</span>
           </div>
           <div className="mt-6 space-y-3">
-            <Skeleton className="h-10 w-40 rounded-lg" />
-            <Skeleton className="h-1.5 w-full rounded-full" />
-            <Skeleton className="h-4 w-56 rounded-lg" />
-            <Skeleton className="h-4 w-48 rounded-lg" />
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-1.5 w-full" />
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-4 w-48" />
           </div>
         </div>
         <div className="space-y-6">
-          <Skeleton className="h-40 rounded-3xl" />
-          <Skeleton className="h-40 rounded-3xl" />
+          <Skeleton className="h-40" />
+          <Skeleton className="h-40" />
         </div>
       </div>
     );
@@ -481,7 +481,7 @@ export function ArbiterStakeHub() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
       {/* ── LEFT: your position ─────────────────────────────────────── */}
-      <div className="rounded-3xl border border-line bg-white/[0.012] p-6 lg:sticky lg:top-24">
+      <div className="border border-line bg-white/[0.012] p-6 lg:sticky lg:top-24">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">
             {registered ? "Your position" : "The rules"}
@@ -494,7 +494,7 @@ export function ArbiterStakeHub() {
             <div className="mt-5 flex items-baseline gap-2">
               <span className="num text-[44px] font-medium leading-none tracking-tight">{formatEth(toWei(state.stakeWei))}</span>
               <span className="num text-[14px] text-faint">ETH staked</span>
-              <span className="num ml-1 rounded-full border border-line px-2 py-0.5 text-[11px] text-dim">
+              <span className="num ml-1 border border-line px-2 py-0.5 text-[11px] text-dim">
                 {TIER_NAMES[state.tier ?? 0]?.toLowerCase() ?? "unstaked"}
               </span>
             </div>
@@ -535,7 +535,7 @@ export function ArbiterStakeHub() {
             </dl>
 
             {busy && (
-              <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-state-submitted/30 bg-state-submitted/[0.06] px-3.5 py-3 text-[12.5px] text-dim">
+              <div className="mt-5 flex items-start gap-2.5 border border-state-submitted/30 bg-state-submitted/[0.06] px-3.5 py-3 text-[12.5px] text-dim">
                 <Gavel className="mt-0.5 h-4 w-4 shrink-0 text-state-submitted" />
                 <span>
                   Serving <span className="num text-foreground">{state.activeDisputes}</span> in-flight dispute
@@ -560,14 +560,14 @@ export function ArbiterStakeHub() {
       {/* ── RIGHT: action forms ───────────────────────────────────────── */}
       <div className="space-y-6">
         {kycStatus && kycStatus !== "verified" && (
-          <p className="rounded-3xl border border-line bg-white/[0.012] px-6 py-4 text-[12px] leading-relaxed text-faint">
+          <p className="border border-line bg-white/[0.012] px-6 py-4 text-[12px] leading-relaxed text-faint">
             On-chain selection needs stake only, but product standing needs enhanced KYC too — you’re <span className="num text-dim">KYC {kycStatus}</span>.{" "}
             <Link href="/onboarding" className="text-dim underline underline-offset-2 hover:text-foreground">Verify identity</Link>.
           </p>
         )}
 
         {!(state && state.registered) ? (
-          <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+          <div className="border border-line bg-white/[0.012] p-6">
             <h2 className="text-[16px] font-medium tracking-tight">Join the pool</h2>
             <p className="mt-1 text-[12px] leading-relaxed text-faint">
               Deposit at least the minimum to mint your soulbound badge and enter the selection pool.
@@ -575,7 +575,7 @@ export function ArbiterStakeHub() {
             <div className="mt-5 space-y-3">
               <Button
                 onClick={() => setStakeModalOpen(true)}
-                className="w-full rounded-full bg-rose-accent py-2.5 text-[13px] font-medium hover:bg-rose-bright"
+                className="w-full bg-rose-accent py-2.5 text-[13px] font-medium hover:bg-rose-bright"
               >
                 Stake &amp; join the pool
               </Button>
@@ -584,7 +584,7 @@ export function ArbiterStakeHub() {
         ) : (
           <>
             {/* ── Stake form: top up collateral ─────────────────────────── */}
-            <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+            <div className="border border-line bg-white/[0.012] p-6">
               <h2 className="text-[16px] font-medium tracking-tight">Stake</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-faint">
                 Top up your collateral to climb tiers — Silver at {formatEth(state.tierSilverWei)} ETH, Gold at{" "}
@@ -594,7 +594,7 @@ export function ArbiterStakeHub() {
                 <Button
                   disabled={active}
                   onClick={openTopUp}
-                  className="rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
+                  className="border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
                   variant="ghost"
                 >
                   Add more stake
@@ -602,7 +602,7 @@ export function ArbiterStakeHub() {
                 <Button
                   disabled={active}
                   onClick={openReduce}
-                  className="rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
+                  className="border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
                   variant="ghost"
                 >
                   Reduce stake
@@ -611,7 +611,7 @@ export function ArbiterStakeHub() {
             </div>
 
             {/* ── Unstake form: request, cancel, withdraw ───────────────── */}
-            <div className="rounded-3xl border border-line bg-white/[0.012] p-6">
+            <div className="border border-line bg-white/[0.012] p-6">
               <h2 className="text-[16px] font-medium tracking-tight">Unstake</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-faint">
                 Bench yourself from selection, then withdraw immediately — no waiting period after the request.
@@ -627,7 +627,7 @@ export function ArbiterStakeHub() {
                           : requestLocked ? `Stake must age ${cooldownDays}d before you can request unstake`
                             : "Request unstake — withdrawal pays out immediately"
                     }
-                    className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
+                    className="w-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground disabled:opacity-50"
                     variant="ghost"
                   >
                     {busy
@@ -640,7 +640,7 @@ export function ArbiterStakeHub() {
                   </Button>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2 rounded-2xl border border-line bg-white/[0.02] px-3 py-2 text-[12px] text-faint">
+                    <div className="flex items-center gap-2 border border-line bg-white/[0.02] px-3 py-2 text-[12px] text-faint">
                       <Clock className="h-3.5 w-3.5" />
                       <>Unstaked — you can withdraw your collateral now, no waiting period.</>
                     </div>
@@ -648,7 +648,7 @@ export function ArbiterStakeHub() {
                       <Button
                         disabled={active}
                         onClick={() => cancelUnstake()}
-                        className="rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+                        className="border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
                         variant="ghost"
                       >
                         Cancel unstake
@@ -660,7 +660,7 @@ export function ArbiterStakeHub() {
                           busy ? "You are serving an active dispute"
                             : locked ? `Locked: score ${state.trustScore} < floor ${minScore}` : undefined
                         }
-                        className="rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium hover:bg-white/20 disabled:opacity-50"
+                        className="bg-white/10 py-2.5 text-[12.5px] font-medium hover:bg-white/20 disabled:opacity-50"
                       >
                         Withdraw stake
                       </Button>
@@ -684,7 +684,7 @@ export function ArbiterStakeHub() {
 
       {/* ── Reduce confirmation modal ────────────────────────────────── */}
       <Dialog open={reduceModalOpen} onOpenChange={(v) => { if (!active) setReduceModalOpen(v); }}>
-        <DialogContent className="glass-raised max-w-md gap-0 rounded-3xl border-line p-0">
+        <DialogContent className="glass-raised max-w-md gap-0 border-line p-0">
           <DialogHeader className="space-y-2 px-7 pb-4 pt-7">
             <DialogTitle className="text-xl tracking-tight">Reduce your stake</DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-dim">
@@ -712,7 +712,7 @@ export function ArbiterStakeHub() {
               )}
             </div>
 
-            <div className="space-y-2 rounded-2xl border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
+            <div className="space-y-2 border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
               <div className="flex items-center justify-between">
                 <span className="text-faint">Current stake</span>
                 <span className="num text-dim">{formatEth(stakeTotal)} ETH</span>
@@ -731,7 +731,7 @@ export function ArbiterStakeHub() {
             </div>
 
             {chain.error && (
-              <p className="rounded-2xl border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
+              <p className="border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
                 {chain.error}
               </p>
             )}
@@ -743,7 +743,7 @@ export function ArbiterStakeHub() {
               variant="ghost"
               disabled={active}
               onClick={() => setReduceModalOpen(false)}
-              className="rounded-full border border-line px-5 text-dim hover:text-foreground"
+              className="border border-line px-5 text-dim hover:text-foreground"
             >
               Cancel
             </Button>
@@ -751,7 +751,7 @@ export function ArbiterStakeHub() {
               type="button"
               disabled={active || reduceInvalid !== null}
               onClick={() => reduce(reduceWei)}
-              className="rounded-full bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
+              className="bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
             >
               {active ? (
                 <span className="inline-flex items-center gap-2">
@@ -768,7 +768,7 @@ export function ArbiterStakeHub() {
 
       {/* ── Top-up confirmation modal ────────────────────────────────── */}
       <Dialog open={topUpModalOpen} onOpenChange={(v) => { if (!active) setTopUpModalOpen(v); }}>
-        <DialogContent className="glass-raised max-w-md gap-0 rounded-3xl border-line p-0">
+        <DialogContent className="glass-raised max-w-md gap-0 border-line p-0">
           <DialogHeader className="space-y-2 px-7 pb-4 pt-7">
             <DialogTitle className="text-xl tracking-tight">Add to your stake</DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-dim">
@@ -793,7 +793,7 @@ export function ArbiterStakeHub() {
               />
             </div>
 
-            <div className="space-y-2 rounded-2xl border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
+            <div className="space-y-2 border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
               <div className="flex items-center justify-between">
                 <span className="text-faint">Current stake</span>
                 <span className="num text-dim">{formatEth(toWei(state?.stakeWei))} ETH</span>
@@ -808,7 +808,7 @@ export function ArbiterStakeHub() {
             </div>
 
             {chain.error && (
-              <p className="rounded-2xl border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
+              <p className="border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
                 {chain.error}
               </p>
             )}
@@ -820,7 +820,7 @@ export function ArbiterStakeHub() {
               variant="ghost"
               disabled={active}
               onClick={() => setTopUpModalOpen(false)}
-              className="rounded-full border border-line px-5 text-dim hover:text-foreground"
+              className="border border-line px-5 text-dim hover:text-foreground"
             >
               Cancel
             </Button>
@@ -828,7 +828,7 @@ export function ArbiterStakeHub() {
               type="button"
               disabled={active || topUpWei <= 0n}
               onClick={() => add(topUpWei)}
-              className="rounded-full bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
+              className="bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
             >
               {active ? (
                 <span className="inline-flex items-center gap-2">
@@ -845,7 +845,7 @@ export function ArbiterStakeHub() {
 
       {/* ── Stake confirmation modal ─────────────────────────────────── */}
       <Dialog open={stakeModalOpen} onOpenChange={(v) => { if (!active) setStakeModalOpen(v); }}>
-        <DialogContent className="glass-raised max-w-md gap-0 rounded-3xl border-line p-0">
+        <DialogContent className="glass-raised max-w-md gap-0 border-line p-0">
           <DialogHeader className="space-y-2 px-7 pb-4 pt-7">
             <DialogTitle className="text-xl tracking-tight">Stake collateral</DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-dim">
@@ -867,7 +867,7 @@ export function ArbiterStakeHub() {
                   type="button"
                   disabled={active}
                   onClick={() => setStakeInput(formatEth(toWei(typeof t.w === "string" ? t.w : String(t.w))))}
-                  className="rounded-2xl border border-line px-2 py-2.5 text-center hover:border-rose-accent/40 hover:bg-rose-soft"
+                  className="border border-line px-2 py-2.5 text-center hover:border-rose-accent/40 hover:bg-rose-soft"
                 >
                   <div className="text-[12px] font-medium">{t.n}</div>
                   <div className="num mt-0.5 text-[11px] text-faint">{formatEth(toWei(typeof t.w === "string" ? t.w : String(t.w)))} ETH</div>
@@ -894,7 +894,7 @@ export function ArbiterStakeHub() {
                   variant="ghost"
                   disabled={active}
                   onClick={() => setStakeInput(formatEth(toWei(minStake)))}
-                  className="h-11 shrink-0 rounded-full border border-line px-4 text-[12.5px] text-dim hover:text-foreground"
+                  className="h-11 shrink-0 border border-line px-4 text-[12.5px] text-dim hover:text-foreground"
                 >
                   Min
                 </Button>
@@ -921,7 +921,7 @@ export function ArbiterStakeHub() {
               )}
             </div>
 
-            <div className="space-y-2 rounded-2xl border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
+            <div className="space-y-2 border border-line bg-white/[0.02] px-4 py-3.5 text-[12px]">
               <div className="flex items-center justify-between">
                 <span className="text-faint">You deposit</span>
                 <span className="num text-dim">{stakeInput ? `${stakeInput} ETH` : "—"}</span>
@@ -945,7 +945,7 @@ export function ArbiterStakeHub() {
             </div>
 
             {chain.error && (
-              <p className="rounded-2xl border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
+              <p className="border border-state-disputed/40 bg-state-disputed/[0.06] px-3.5 py-2.5 text-[12px] text-state-disputed">
                 {chain.error}
               </p>
             )}
@@ -957,7 +957,7 @@ export function ArbiterStakeHub() {
               variant="ghost"
               disabled={active}
               onClick={() => setStakeModalOpen(false)}
-              className="rounded-full border border-line px-5 text-dim hover:text-foreground"
+              className="border border-line px-5 text-dim hover:text-foreground"
             >
               Cancel
             </Button>
@@ -965,7 +965,7 @@ export function ArbiterStakeHub() {
               type="button"
               disabled={active || belowMin || !minKnown}
               onClick={() => register(stakeWei)}
-              className="rounded-full bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
+              className="bg-rose-accent px-6 font-medium hover:bg-rose-bright disabled:opacity-50"
               title={!minKnown ? "Live registry reads unavailable — check your wallet network" : undefined}
             >
               {active ? (
