@@ -4,22 +4,23 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  OpenLance design tokens — dark premium, Deep Rose accent.
-  Dials: DESIGN_VARIANCE 8 · MOTION_INTENSITY 6 (calm app, cinematic landing)
-  · VISUAL_DENSITY 4 (gallery-airy).
-  Base: zinc-950. ONE accent: #e11d48 (desaturated rose). Emerald and the
-  state hues exist only as milestone semantics — never as decoration.
-  No purple, no pure black, no neon glows, no blur-blob washes: structure
-  (hairline grids, edges, numerals) replaces glow.
-  Type: Instrument Serif (display voice) · Schibsted Grotesk (UI) ·
-  IBM Plex Mono (ledger data — amounts, hashes, refs).
+  OpenLance design tokens — pixel art on dark ink, Deep Rose accent.
+  Dials: DESIGN_VARIANCE 6 · MOTION_INTENSITY 4 (stepped, never eased) ·
+  VISUAL_DENSITY 5.
+  Base: #09090b ink. ONE accent: #e11d48. Emerald and the state hues exist only
+  as milestone semantics — never as decoration. No gradients, no blur, no soft
+  glows: every edge is a hard pixel — square corners, 2px borders, offset
+  slabs instead of drop-shadows, dither instead of gradients.
+  Type: Press Start 2P (display / labels / controls — short strings only) ·
+  Pixelify Sans (UI + body) · IBM Plex Mono (amounts, hashes, refs — exact
+  data stays legible).
 */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-schibsted-grotesk);
-  --font-mono: var(--font-plex-mono);
-  --font-display: var(--font-instrument-serif);
+  --font-sans: var(--font-pixelify-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-display: var(--font-press-start-2p), ui-monospace, monospace;
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -36,20 +37,35 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+
+  /* pixels have no radius — every corner is square */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+
+  /* motion is stepped: a few hard frames, never an eased tween */
+  --default-transition-duration: 120ms;
+  --default-transition-timing-function: steps(3, end);
+  --animate-spin: spin 0.8s steps(8, end) infinite;
+  --animate-pulse: blink 1.2s steps(2, jump-none) infinite;
 
   /* OpenLance semantic palette — faint/dim clear WCAG AA on ink surfaces */
   --color-rose-accent: #e11d48;
   --color-rose-bright: #f43f5e;
-  --color-rose-soft: rgba(225, 29, 72, 0.12);
+  --color-rose-light: #fb7185;
+  --color-rose-deep: #7f1028;
+  --color-rose-soft: rgba(225, 29, 72, 0.14);
   --color-ink: #09090b;
-  --color-ink-raised: #0e0e12;
-  --color-ink-hover: #131318;
-  --color-line: rgba(255, 255, 255, 0.07);
-  --color-line-strong: rgba(255, 255, 255, 0.13);
+  --color-ink-raised: #101015;
+  --color-ink-hover: #17171e;
+  --color-ink-sunk: #060608;
+  --color-line: #2a2a34;
+  --color-line-strong: #43434f;
   --color-dim: #b9b9c2;
   --color-faint: #9b9ba5;
 
@@ -65,25 +81,25 @@
 
 :root,
 .dark {
-  --radius: 0.875rem;
+  --radius: 0px;
   --background: #09090b;
   --foreground: #f4f4f5;
-  --card: #101014;
+  --card: #101015;
   --card-foreground: #f4f4f5;
-  --popover: #131318;
+  --popover: #101015;
   --popover-foreground: #f4f4f5;
   --primary: #e11d48;
   --primary-foreground: #ffffff;
-  --secondary: rgba(255, 255, 255, 0.05);
+  --secondary: #17171e;
   --secondary-foreground: #f4f4f5;
-  --muted: rgba(255, 255, 255, 0.05);
+  --muted: #17171e;
   --muted-foreground: #a1a1aa;
-  --accent: rgba(225, 29, 72, 0.12);
+  --accent: rgba(225, 29, 72, 0.14);
   --accent-foreground: #fda4af;
   --destructive: #f87171;
-  --border: rgba(255, 255, 255, 0.07);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: rgba(244, 63, 94, 0.55);
+  --border: #2a2a34;
+  --input: #43434f;
+  --ring: #fb7185;
 }
 
 @layer base {
@@ -92,161 +108,269 @@
   }
   html {
     color-scheme: dark;
-    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+    scrollbar-color: #43434f #09090b;
   }
   body {
     @apply bg-background text-foreground;
-    /* one accent, painted once — structure does the rest */
-    background-image: radial-gradient(1100px 520px at 82% -8%, rgba(225, 29, 72, 0.05), transparent 62%);
+    font-size: 16px;
+    line-height: 1.55;
+    /*
+      Dither paper: a 2px checker at ~2.5% — the pixel-art way to get a texture
+      without a gradient. Fixed, so it never scrolls with content.
+    */
+    background-image:
+      linear-gradient(45deg, rgba(255, 255, 255, 0.022) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.022) 75%),
+      linear-gradient(45deg, rgba(255, 255, 255, 0.022) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.022) 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 4px 4px;
     background-attachment: fixed;
+  }
+  /* pixel art must never be smoothed */
+  img,
+  svg,
+  canvas {
+    image-rendering: pixelated;
   }
   /* browser surfaces carry the design: selection, caret, focus */
   ::selection {
-    background: rgba(225, 29, 72, 0.4);
+    background: #e11d48;
+    color: #fff;
   }
   input,
   textarea {
-    caret-color: var(--color-rose-bright);
+    caret-color: var(--color-rose-light);
   }
+  /* focus is a hard 2px frame, never a soft ring; stays visible on every surface */
   :focus-visible {
-    outline: 2px solid rgba(244, 63, 94, 0.6);
+    outline: 2px solid var(--color-rose-light);
     outline-offset: 2px;
   }
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 14px;
+    height: 14px;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    border: 3px solid #09090b;
+    background: #43434f;
+    border: 2px solid #09090b;
+    border-radius: 0;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-rose-accent);
   }
   ::-webkit-scrollbar-track {
-    background: transparent;
+    background: #060608;
+  }
+  ::-webkit-scrollbar-corner {
+    background: #060608;
   }
 }
 
 /*
-  Raised panels — solid ink surfaces with a hairline edge and top light.
-  Blur is reserved for bars that content actually slides under (headers,
-  rails); nothing moves beneath a resting card, so it stays solid and its
+  Raised panels — a solid slab with a hard 2px frame and an offset shadow
+  block. No blur anywhere: nothing here depends on what sits behind it, so
   text contrast is locked to the ink scale.
 */
 @utility glass {
-  background: #101015;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  background: var(--color-ink-raised);
+  border: 2px solid var(--color-line);
+  box-shadow: 4px 4px 0 0 #000;
 }
 
 @utility glass-raised {
-  background: #121218;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 20px 44px -18px rgba(0, 0, 0, 0.55);
+  background: var(--color-ink-raised);
+  border: 2px solid var(--color-line-strong);
+  box-shadow: 6px 6px 0 0 #000;
+}
+
+/* the one surface that gets the accent: money moments */
+@utility glass-accent {
+  background: var(--color-ink-raised);
+  border: 2px solid var(--color-rose-accent);
+  box-shadow: 6px 6px 0 0 var(--color-rose-deep);
+}
+
+/* recessed field — inputs, code wells */
+@utility pixel-well {
+  background: var(--color-ink-sunk);
+  border: 2px solid var(--color-line-strong);
+  box-shadow: inset 2px 2px 0 0 #000;
 }
 
 @utility num {
   font-family: var(--font-plex-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
-/* display serif — the editorial voice for page-level headlines */
+/* display face — Press Start 2P, short strings only (it is one em per glyph) */
 @utility display {
-  font-family: var(--font-instrument-serif), Georgia, serif;
+  font-family: var(--font-press-start-2p), ui-monospace, monospace;
   font-weight: 400;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
+  line-height: 1.5;
+  text-wrap: balance;
+  -webkit-font-smoothing: none;
 }
 
 @utility hairline-t {
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 2px solid var(--color-line);
 }
 
 /*
-  Architectural hero surface — fine 1px drafting grid, no glow.
-  Structure over decoration: the grid reads as "ledger paper" for escrow.
+  Hero surface — a coarse pixel grid of 2px dots on an 16px pitch. It reads as
+  graph paper for the escrow instrument and is masked to the hero only.
 */
 @utility hairline-grid {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(ellipse 90% 70% at 60% 0%, black 30%, transparent 78%);
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.1) 1px, transparent 0);
+  background-size: 16px 16px;
+  mask-image: linear-gradient(to bottom, black 20%, transparent 85%);
 }
 
-/*
-  Spotlight card — cursor-tracked border illumination. The component sets
-  --mx/--my custom properties directly on pointermove (no React re-render);
-  this style turns them into a soft radial border light. Rose only.
-*/
-@utility spotlight {
+/* oversized outlined index digits behind step panels */
+@utility ghost-num {
+  color: transparent;
+  -webkit-text-stroke: 2px rgba(255, 255, 255, 0.1);
+}
+
+/* scanlines — a faint CRT hint, used on a single hero surface only */
+@utility scanlines {
   position: relative;
 }
-.spotlight::before {
+.scanlines::after {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: radial-gradient(
-    220px circle at var(--mx, 50%) var(--my, 50%),
-    rgba(244, 63, 94, 0.38),
-    rgba(244, 63, 94, 0.07) 45%,
-    transparent 70%
-  );
-  -webkit-mask: linear-gradient(black, black) content-box, linear-gradient(black, black);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(black, black) content-box, linear-gradient(black, black);
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
-}
-.spotlight:hover::before,
-.spotlight:focus-within::before {
-  opacity: 1;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
 }
 
-/* ghost numeral — oversized index digits behind step cards */
-@utility ghost-num {
-  color: transparent;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.09);
+/*
+  Pixel button — a notched 2px frame drawn outside the box (so the corners are
+  cut, one pixel step), a bevel, and a 4px slab underneath. Colors come from
+  custom properties so every variant is one set of values.
+    --pb  face      --pf  frame      --ps  slab underneath
+*/
+@utility pixel-btn {
+  --pb: var(--color-rose-accent);
+  --pf: var(--color-rose-light);
+  --ps: var(--color-rose-deep);
+  background: var(--pb);
+  margin: 2px;
+  transform: translateY(-2px);
+  box-shadow:
+    -2px 0 0 0 var(--pf),
+    2px 0 0 0 var(--pf),
+    0 -2px 0 0 var(--pf),
+    0 2px 0 0 var(--pf),
+    inset -4px -4px 0 0 rgba(0, 0, 0, 0.28),
+    inset 4px 4px 0 0 rgba(255, 255, 255, 0.2),
+    0 6px 0 2px var(--ps);
+  transition-property: transform, box-shadow;
+}
+.pixel-btn:not(:disabled):not([aria-disabled="true"]):hover {
+  transform: translateY(-3px);
+}
+.pixel-btn:not(:disabled):not([aria-disabled="true"]):active {
+  transform: translateY(2px);
+  box-shadow:
+    -2px 0 0 0 var(--pf),
+    2px 0 0 0 var(--pf),
+    0 -2px 0 0 var(--pf),
+    0 2px 0 0 var(--pf),
+    inset -4px -4px 0 0 rgba(0, 0, 0, 0.28),
+    inset 4px 4px 0 0 rgba(255, 255, 255, 0.2),
+    0 2px 0 2px var(--ps);
 }
 
-/* breathing status dot — the only perpetual animation in the calm app shell */
-@keyframes breathe {
+/* flat, borderless press for rows and chips that are not full buttons */
+@utility pixel-press {
+  transition-property: transform;
+}
+.pixel-press:not(:disabled):active {
+  transform: translate(2px, 2px);
+}
+
+/* hover shift for panels that link somewhere: the slab grows, the face lifts */
+@utility pixel-lift {
+  transition-property: transform, box-shadow;
+}
+.pixel-lift:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0 0 #000;
+}
+a:focus-visible.pixel-lift,
+.pixel-lift:focus-visible {
+  transform: translate(-2px, -2px);
+}
+
+/* status blink — stepped, never a fade; the only perpetual motion in the app shell */
+@keyframes blink {
   0%,
-  100% {
+  49% {
     opacity: 1;
-    transform: scale(1);
   }
-  50% {
-    opacity: 0.55;
-    transform: scale(0.82);
+  50%,
+  100% {
+    opacity: 0.25;
   }
 }
 .breathe {
-  animation: breathe 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  animation: blink 1.2s steps(2, jump-none) infinite;
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: -560px 0;
-  }
-  100% {
-    background-position: 560px 0;
+/* blinking terminal cursor */
+.cursor-blink {
+  animation: blink 1s steps(2, jump-none) infinite;
+}
+
+/* loading blocks — a dither bar that marches in whole-pixel steps */
+@keyframes march {
+  to {
+    background-position: 32px 0;
   }
 }
 .skeleton-shimmer {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.035) 25%, rgba(255, 255, 255, 0.09) 37%, rgba(255, 255, 255, 0.035) 63%);
-  background-size: 560px 100%;
-  animation: shimmer 1.7s ease-in-out infinite;
+  background-color: #14141b;
+  background-image: repeating-linear-gradient(90deg, #1c1c25 0 8px, transparent 8px 16px);
+  background-size: 32px 100%;
+  animation: march 0.9s steps(4, end) infinite;
+}
+
+/* pop-in for dialogs / menus: four hard frames from small to full */
+@keyframes pixel-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.pixel-pop {
+  animation: pixel-pop 160ms steps(4, end) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .breathe,
-  .skeleton-shimmer {
+  .cursor-blink,
+  .skeleton-shimmer,
+  .pixel-pop,
+  .animate-spin,
+  .animate-pulse {
     animation: none;
+  }
+  .pixel-btn,
+  .pixel-press,
+  .pixel-lift {
+    transition: none;
+  }
+  .pixel-btn:not(:disabled):hover,
+  .pixel-lift:hover {
+    transform: none;
   }
 }

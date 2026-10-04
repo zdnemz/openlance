@@ -100,7 +100,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
     // A <form>, not a <div>: on a five-field form the user tabs to the bottom
     // and presses Enter expecting to save.
     <form
-      className="glass space-y-6 rounded-3xl p-7 md:p-9"
+      className="glass space-y-6 p-7 md:p-9"
       onSubmit={(e) => { e.preventDefault(); void submit(); }}
     >
       <div className="space-y-2">
@@ -132,17 +132,17 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
               <button
                 type="button"
                 aria-labelledby="job-category-label"
-                className="flex h-11 w-full items-center justify-between rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
+                className="flex h-11 w-full items-center justify-between border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
               >
                 <span>{d.category === CUSTOM_CATEGORY ? "Custom…" : d.category}</span>
                 <CaretDown className="h-4 w-4 shrink-0 text-faint" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="glass-raised w-56 rounded-2xl border-line p-1.5">
+            <DropdownMenuContent align="start" className="glass-raised w-56 border-line p-1.5">
               {CATEGORIES.map((c) => (
                 <DropdownMenuItem
                   key={c} onSelect={() => setD({ ...d, category: c })}
-                  className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm"
+                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm"
                 >
                   {c}
                   {d.category === c && <Check className="h-3.5 w-3.5 text-rose-bright" weight="bold" />}
@@ -150,7 +150,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
               ))}
               <DropdownMenuItem
                 onSelect={() => setD({ ...d, category: CUSTOM_CATEGORY })}
-                className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm text-dim"
+                className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-dim"
               >
                 Custom…
                 {d.category === CUSTOM_CATEGORY && <Check className="h-3.5 w-3.5 text-rose-bright" weight="bold" />}
@@ -187,7 +187,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
       {/* role="alert": the only feedback a failed submit produces, and a screen
           reader has no other way to learn it happened. */}
       {error && (
-        <p role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+        <p role="alert" className="flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
           <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
         </p>
       )}
@@ -195,7 +195,7 @@ export function JobForm({ jobId, initial }: { jobId?: string; initial?: JobDraft
       <Button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-full bg-rose-accent py-3.5 text-sm font-medium hover:bg-rose-bright"
+        className="w-full bg-rose-accent py-3.5 text-sm font-medium hover:bg-rose-bright"
       >
         {submitting
           ? "Saving…"
@@ -246,7 +246,7 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
+            className="flex h-11 w-full items-center justify-between gap-3 border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors hover:border-line-strong focus-visible:border-rose-accent/50"
           >
             <span className={`min-w-0 truncate ${tokens.length ? "" : "text-faint"}`}>
               {tokens.length ? preview : "Select skills…"}
@@ -257,11 +257,11 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
             </span>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="glass-raised w-64 rounded-2xl border-line p-1.5">
+        <DropdownMenuContent align="start" className="glass-raised w-64 border-line p-1.5">
           {PRESET_SKILLS.map((s) => (
             <DropdownMenuItem
               key={s} onSelect={(e) => { e.preventDefault(); toggle(s); }}
-              className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm"
+              className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm"
             >
               {s}
               {tokens.includes(s) && <Check className="h-3.5 w-3.5 text-rose-bright" weight="bold" />}
@@ -275,7 +275,7 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
               placeholder="Custom skill…"
               className="h-9 flex-1 border-line bg-white/[0.03] text-[13px]"
             />
-            <Button type="button" onClick={addCustom} disabled={!custom.trim()} className="h-9 shrink-0 rounded-xl bg-white/10 px-3.5 text-[13px] hover:bg-white/20">
+            <Button type="button" onClick={addCustom} disabled={!custom.trim()} className="h-9 shrink-0 bg-white/10 px-3.5 text-[13px] hover:bg-white/20">
               Add
             </Button>
           </div>
@@ -286,7 +286,7 @@ function SkillPicker({ value, onChange, onError }: { value: string; onChange: (v
           {tokens.map((t) => (
             <Chip key={t} className="gap-1.5 py-1 pl-2.5 pr-1.5">
               {t}
-              <button type="button" aria-label={`Remove ${t}`} onClick={() => toggle(t)} className="-mr-1 grid size-6 place-items-center rounded-full text-faint transition-colors hover:text-foreground">
+              <button type="button" aria-label={`Remove ${t}`} onClick={() => toggle(t)} className="-mr-1 grid size-6 place-items-center text-faint transition-colors hover:text-foreground">
                 <X className="h-3 w-3" weight="bold" />
               </button>
             </Chip>

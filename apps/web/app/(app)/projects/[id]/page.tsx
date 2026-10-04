@@ -77,8 +77,8 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
     return (
       <div className="space-y-5">
         <Skeleton className="h-12 w-2/3" />
-        <Skeleton className="h-24 w-full rounded-3xl" />
-        <Skeleton className="h-96 w-full rounded-3xl" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
@@ -88,11 +88,11 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
         title="Project not found, or it is not yours to see"
         body="Projects are visible to their participants and assigned arbiters only. Sign in with a participating client/freelancer wallet — or the seated/selected arbiter wallet — to open this room."
         action={backToJob ? (
-          <Link href={`/jobs/${backToJob}?stay=1`} className="mt-1 inline-block rounded-full bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20">
+          <Link href={`/jobs/${backToJob}?stay=1`} className="mt-1 inline-block bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20">
             Back to job posting
           </Link>
         ) : backToDisputes ? (
-          <Link href="/disputes" className="mt-1 inline-block rounded-full bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20">
+          <Link href="/disputes" className="mt-1 inline-block bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20">
             Back to disputes
           </Link>
         ) : undefined}
@@ -108,7 +108,7 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
       <ProjectHeader id={id} />
       <ArbiterPanel id={id} />
       {!isClient && !isFreelancer && (
-        <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4 text-[13px] text-dim">
+        <div className="glass flex items-center gap-3 px-5 py-4 text-[13px] text-dim">
           <Warning className="h-4 w-4 shrink-0 text-amber-300" />
           You are viewing as a non-participant; sign in as <AddressText value={project.client.walletAddress} className="text-foreground" /> (client) or{" "}
           <AddressText value={project.freelancer.walletAddress} className="text-foreground" /> (freelancer) to act on this project.
@@ -120,13 +120,13 @@ export default function ProjectRoomPage({ params, searchParams }: { params: Prom
       {isClient && job && <SurplusPanel jobId={job.id} jobRef={job.jobRef} />}
       <Tabs defaultValue="milestones" className="gap-6">
         <TabsList className="h-auto gap-7 border-b border-line bg-transparent p-0 pb-px">
-          <TabsTrigger value="milestones" className="rounded-none px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
+          <TabsTrigger value="milestones" className="px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
             Milestones
           </TabsTrigger>
-          <TabsTrigger value="chat" className="rounded-none px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
+          <TabsTrigger value="chat" className="px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
             Chat
           </TabsTrigger>
-          <TabsTrigger value="activity" className="rounded-none px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
+          <TabsTrigger value="activity" className="px-0 pb-2.5 text-[13.5px] text-dim data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_-2px_0_0_var(--color-rose-bright)]">
             On-chain activity
           </TabsTrigger>
         </TabsList>
@@ -163,7 +163,7 @@ function ProjectHeader({ id }: { id: string }) {
   const releasedWei = released.reduce((a, m) => a + toWei(m.amountWei), 0n);
 
   return (
-    <div className="glass rounded-3xl p-7 md:p-8">
+    <div className="glass p-7 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
@@ -276,7 +276,7 @@ function ArbiterPanel({ id }: { id: string }) {
   }
 
   return (
-    <section className="glass rounded-3xl p-6">
+    <section className="glass p-6">
       <div className="flex items-center gap-2.5">
         <Scales className="h-4 w-4 text-dim" />
         <ListHead>Mutual arbiters · {locked.length > 0 ? `${locked.length} locked` : proposal ? "awaiting approval" : "none picked"}</ListHead>
@@ -289,7 +289,7 @@ function ArbiterPanel({ id }: { id: string }) {
       ) : (
         <div className="mt-3 space-y-3">
           {proposal && (
-            <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
+            <div className="border border-line bg-white/[0.02] p-4">
               <div className="num text-[11px] uppercase tracking-wider text-faint">{mine ? "your proposal — waiting on counterparty" : "counterparty proposal"}</div>
               {/* Bubbles: click one for the reputation detail + approve/reject. */}
               <div className="mt-2.5">
@@ -307,7 +307,7 @@ function ArbiterPanel({ id }: { id: string }) {
             <Button
               disabled={busy}
               onClick={() => setPickerOpen(true)}
-              className="rounded-full bg-white/10 px-5 py-2.5 text-[12.5px] font-medium hover:bg-white/20"
+              className="bg-white/10 px-5 py-2.5 text-[12.5px] font-medium hover:bg-white/20"
             >
               {proposal ? "Replace proposal" : "Add arbiters"}
             </Button>
@@ -339,7 +339,7 @@ function MilestonesTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-      <div className="min-w-0 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+      <div className="min-w-0 divide-y divide-white/[0.05] overflow-hidden border border-line">
         {milestones.map((m) => (
           <MilestoneCard key={m.id} milestone={m} selected={selected?.id === m.id} onSelect={() => setSelectedId(m.id)} />
         ))}
@@ -364,7 +364,7 @@ function MilestoneCard({ milestone: m, selected, onSelect }: { milestone: Projec
             <span className="num text-[11px] text-faint">{String(m.position).padStart(2, "0")}</span>
             <StatusBadge status={m.chainStatus} />
             {m.softStatus === "changes_requested" && (
-              <span className="num rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-300">changes requested</span>
+              <span className="num border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-300">changes requested</span>
             )}
           </div>
           <div className="mt-2.5 text-[16px] font-medium tracking-tight">{m.title}</div>
@@ -551,7 +551,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
   }
 
   return (
-    <div className="glass-raised h-fit rounded-3xl p-6 lg:sticky lg:top-24">
+    <div className="glass-raised h-fit p-6 lg:sticky lg:top-24">
       <div className="flex items-center justify-between">
         <ListHead>Milestone {m.position}</ListHead>
         <StatusBadge status={m.chainStatus} />
@@ -590,7 +590,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
               <Button
                 disabled={active || fundState !== "idle"}
                 onClick={() => fundAllMilestones()}
-                className="w-full rounded-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
+                className="w-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
               >
                 <PhaseLabel phase={chain.phase} idle={`Fund ${formatEth(outstandingWei)} ETH (all milestones)`} />
               </Button>
@@ -615,12 +615,12 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
             }
           >
             {fundState === "landed" && (
-              <p className="num rounded-2xl border border-state-released/30 bg-state-released/[0.06] px-4 py-3 text-[12px] text-state-released">
+              <p className="num border border-state-released/30 bg-state-released/[0.06] px-4 py-3 text-[12px] text-state-released">
                 Funding landed on-chain — waiting for the indexer to mirror it.
               </p>
             )}
             {changesRequested && m.softStatusNote && (
-              <p className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-amber-200">
+              <p className="border border-amber-400/30 bg-amber-400/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-amber-200">
                 <span className="num block text-[11px] uppercase tracking-wider text-amber-300/80">Client asks for</span>
                 {m.softStatusNote}
               </p>
@@ -638,14 +638,14 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                 />
                 <SubmissionFiles files={files} onChange={setFiles} max={maxAttachments} />
                 {submitError && (
-                  <p className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+                  <p className="flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
                     <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {submitError}
                   </p>
                 )}
                 <Button
                   disabled={active || notes.trim().length < 1}
                   onClick={() => offscreenSubmit()}
-                  className="w-full rounded-full bg-state-submitted py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                  className="w-full bg-state-submitted py-3 text-[13px] font-medium text-ink hover:brightness-110"
                 >
                   <PhaseLabel
                     phase={chain.phase}
@@ -689,7 +689,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                         successMessage: "Approved: payout is claimable for the freelancer",
                       })
                     }
-                    className="w-full rounded-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                    className="w-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
                   >
                     <PhaseLabel phase={chain.phase} idle={`Approve · ${formatEth(toWei(m.amountWei) - fee)} ETH claimable`} />
                   </Button>
@@ -713,7 +713,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                             toast.error(e instanceof Error ? e.message : "Could not request changes");
                           }
                         }}
-                        className="w-full rounded-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+                        className="w-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
                       >
                         <ArrowClockwise className="mr-2 h-3.5 w-3.5" /> Request changes (off-chain)
                       </Button>
@@ -749,7 +749,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     successMessage: "Withdrawn: payout is in your wallet",
                   })
                 }
-                className="w-full rounded-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                className="w-full bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
               >
                 <PhaseLabel phase={chain.phase} idle={`Withdraw ${formatEth(toWei(m.amountWei) - fee)} ETH`} />
               </Button>
@@ -788,7 +788,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                   : "free to open · the protocol's reward pool pays the arbiters"}
               </p>
               {quorumRisk && (
-                <p className="num rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
+                <p className="num border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
                   {eligibleSeats === 0
                     ? `No eligible arbiter outside the parties right now — opening reverts on-chain until one registers (needs at least 1${QUORUM > 1 ? `, ${QUORUM} for a full panel` : ""}).`
                     : `Only ${eligibleSeats} eligible arbiter${eligibleSeats === 1 ? "" : "s"} outside the parties — this round is a degraded panel, decided by a single vote instead of ${QUORUM}-of-3.`}
@@ -806,7 +806,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
                     ),
                   )
                 }
-                className="w-full rounded-full border border-state-disputed/40 bg-state-disputed/10 py-2.5 text-[12.5px] font-medium text-state-disputed hover:bg-state-disputed/20"
+                className="w-full border border-state-disputed/40 bg-state-disputed/10 py-2.5 text-[12.5px] font-medium text-state-disputed hover:bg-state-disputed/20"
               >
                 <PhaseLabel phase={chain.phase} idle={`Write record + openDispute()${feeWei > 0n ? ` · ${formatEth(disputeFeeWei)} ETH` : " · free"}`} />
               </Button>
@@ -896,7 +896,7 @@ function MilestonePanel({ projectId, milestone: m }: { projectId: string; milest
       )}
 
       {chain.error && (
-        <p className="mt-4 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12px] text-destructive">
+        <p className="mt-4 flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12px] text-destructive">
           <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {chain.error}
         </p>
       )}
@@ -1008,7 +1008,7 @@ function ReviewForm({ projectId, milestoneId }: { projectId: string; milestoneId
             setSubmitting(false);
           }
         }}
-        className="w-full rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium text-foreground hover:bg-white/20"
+        className="w-full bg-white/10 py-2.5 text-[12.5px] font-medium text-foreground hover:bg-white/20"
       >
         Publish review
       </Button>
@@ -1042,10 +1042,10 @@ function MessageBubble({
         {runStart && !mine && <p className="mb-1 px-1 text-[11px] text-faint">{senderName}</p>}
         <div
           className={cn(
-            "inline-block rounded-2xl px-3.5 py-2 text-left text-[13.5px] leading-relaxed",
+            "inline-block px-3.5 py-2 text-left text-[13.5px] leading-relaxed",
             mine
-              ? "rounded-br-md border border-rose-accent/25 bg-rose-soft text-foreground"
-              : "rounded-bl-md border border-line-strong bg-white/[0.045] text-dim",
+              ? "border border-rose-accent/25 bg-rose-soft text-foreground"
+              : "border border-line-strong bg-white/[0.045] text-dim",
           )}
         >
           {msg.body}
@@ -1131,14 +1131,14 @@ function ChatTab({ projectId }: { projectId: string }) {
   // stays participant-only, so say so instead of faking an empty thread.
   if (project && !canPostHere) {
     return (
-      <div className="glass rounded-3xl px-6 py-14 text-center text-sm text-faint">
+      <div className="glass px-6 py-14 text-center text-sm text-faint">
         Messages are participant-only — arbiters judge from milestones, submissions, and on-chain activity.
       </div>
     );
   }
 
   return (
-    <div ref={paneRef} className="glass flex flex-col overflow-hidden rounded-3xl" style={{ height: paneHeight ?? 560 }}>
+    <div ref={paneRef} className="glass flex flex-col overflow-hidden" style={{ height: paneHeight ?? 560 }}>
       <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-6 py-3.5">
         <ChatCircleDots className="h-4 w-4 text-faint" />
         <span className="text-[13px] text-dim">Project chat</span>
@@ -1206,9 +1206,9 @@ function ChatTab({ projectId }: { projectId: string }) {
             rows={1}
             placeholder="Message the counterparty"
             aria-label="Message the counterparty"
-            className="max-h-[140px] flex-1 resize-none rounded-2xl border border-line bg-white/[0.03] px-4 py-3 text-sm leading-snug outline-none placeholder:text-faint focus:border-rose-accent/50"
+            className="max-h-[140px] flex-1 resize-none border border-line bg-white/[0.03] px-4 py-3 text-sm leading-snug outline-none placeholder:text-faint focus:border-rose-accent/50"
           />
-          <Button type="submit" disabled={!draft.trim() || sending} aria-label="Send" className={cn("h-10 w-10 shrink-0 rounded-full bg-rose-accent p-0 hover:bg-rose-bright", press)}>
+          <Button type="submit" disabled={!draft.trim() || sending} aria-label="Send" className={cn("h-10 w-10 shrink-0 bg-rose-accent p-0 hover:bg-rose-bright", press)}>
             <PaperPlaneTilt className="h-4 w-4" />
           </Button>
         </form>
@@ -1226,7 +1226,7 @@ function ActivityTab({ projectId }: { projectId: string }) {
   const { data: project } = useProject(projectId);
 
   return (
-    <div className="glass overflow-hidden rounded-3xl">
+    <div className="glass overflow-hidden">
       <div className="flex items-center gap-2.5 border-b border-line px-6 py-4">
         <Pulse className="h-4 w-4 text-faint" />
         <span className="text-[13px] text-dim">On-chain events for this project</span>
@@ -1241,7 +1241,7 @@ function ActivityTab({ projectId }: { projectId: string }) {
             const payloadFee = (e.payload as Record<string, string>)?.fee;
             return (
               <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-6 py-4">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ledgerDotColor(e.eventType) }} />
+                <span className="h-1.5 w-1.5 shrink-0" style={{ background: ledgerDotColor(e.eventType) }} />
                 <span className="min-w-0 flex-1">
                   <span className="text-[13.5px] text-foreground">{e.eventType}</span>
                   {e.milestoneOnchainId !== null && (

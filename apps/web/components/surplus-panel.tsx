@@ -62,7 +62,7 @@ export function SurplusPanel({ jobId, jobRef }: { jobId: string; jobRef: string 
   if (!escrow || free === null || free <= 0n) return null;
 
   return (
-    <section className="glass rounded-3xl p-6">
+    <section className="glass p-6">
       <ListHead>Free budget</ListHead>
       <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
         What the locked budget has left after the awarded milestones — an under-ceiling award hands its surplus back
@@ -73,7 +73,7 @@ export function SurplusPanel({ jobId, jobRef }: { jobId: string; jobRef: string 
         <Button
           disabled={withdrawing}
           onClick={withdraw}
-          className="rounded-full bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20"
+          className="bg-white/10 px-5 py-2.5 text-[13px] font-medium hover:bg-white/20"
         >
           {withdrawing ? "Withdrawing…" : "Withdraw"}
         </Button>

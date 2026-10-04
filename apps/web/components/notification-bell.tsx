@@ -49,7 +49,7 @@ function NotifRow({ item, onNavigate }: { item: InboxItem; onNavigate: () => voi
   const inner = (
     <>
       <span
-        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
+        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center border"
         style={{
           color: TONE_COLOR[meta.tone],
           borderColor: `color-mix(in oklab, ${TONE_COLOR[meta.tone]} 30%, transparent)`,
@@ -61,7 +61,7 @@ function NotifRow({ item, onNavigate }: { item: InboxItem; onNavigate: () => voi
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className={cn("truncate text-[13px]", unread ? "font-medium text-foreground" : "text-dim")}>{meta.label}</span>
-          {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-bright" aria-label="unread" />}
+          {unread && <span className="h-1.5 w-1.5 shrink-0 bg-rose-bright" aria-label="unread" />}
         </span>
         {detail && <span className="mt-0.5 block truncate text-[12px] text-faint">{detail}</span>}
         <span className="mt-1 flex items-center gap-2 text-[11px] text-faint">
@@ -72,7 +72,7 @@ function NotifRow({ item, onNavigate }: { item: InboxItem; onNavigate: () => voi
     </>
   );
 
-  const className = "flex gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-white/[0.04]";
+  const className = "flex gap-3 px-3 py-2.5 transition-colors hover:bg-white/[0.04]";
   return href ? (
     <Link href={href} onClick={onNavigate} className={className}>
       {inner}
@@ -130,13 +130,13 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
         aria-expanded={open}
         className={cn(
-          "relative grid place-items-center rounded-full border border-line bg-white/[0.03] text-dim transition-colors hover:text-foreground",
+          "relative grid place-items-center border border-line bg-white/[0.03] text-dim transition-colors hover:text-foreground",
           compact ? "h-8 w-8" : "h-9 w-9",
         )}
       >
         <Bell weight={unread > 0 ? "fill" : "regular"} className="h-[17px] w-[17px]" />
         {unread > 0 && (
-          <span className="num absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-accent px-1 text-[11px] font-medium text-white">
+          <span className="num absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center bg-rose-accent px-1 text-[11px] font-medium text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -152,7 +152,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
           // (max-w only caps width — it never re-anchors), and a 420px list did
           // not fit the viewport. `sm:` keeps the popover, which fits beside the
           // bell once there is room for it.
-          className="fixed inset-x-2 top-16 z-50 flex max-h-[calc(100dvh-4.5rem)] flex-col overflow-hidden rounded-2xl border border-line bg-ink/95 shadow-2xl backdrop-blur-xl sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] sm:max-h-none"
+          className="fixed inset-x-2 top-16 z-50 flex max-h-[calc(100dvh-4.5rem)] flex-col overflow-hidden border border-line bg-ink/95 shadow-2xl sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] sm:max-h-none"
         >
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <span className="text-[13px] font-semibold">Notifications</span>

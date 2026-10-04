@@ -15,9 +15,9 @@ export function StatusDot({ color, pulse = false }: { color: string; pulse?: boo
   return (
     <span className="relative inline-flex h-2 w-2 shrink-0">
       {pulse && (
-        <span className="absolute inset-0 rounded-full opacity-45 breathe" style={{ background: color }} aria-hidden />
+        <span className="absolute inset-0 opacity-45 breathe" style={{ background: color }} aria-hidden />
       )}
-      <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: color }} />
+      <span className="relative inline-flex h-2 w-2" style={{ background: color }} />
     </span>
   );
 }
@@ -28,7 +28,7 @@ export function StatusBadge({ status, pulse = true, className }: { status: strin
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium tracking-wide",
+        "inline-flex items-center gap-1.5 border px-2.5 py-0.5 text-[11px] font-medium tracking-wide",
         className,
       )}
       style={{ color, borderColor: `color-mix(in oklab, ${color} 32%, transparent)`, background: `color-mix(in oklab, ${color} 9%, transparent)` }}
@@ -43,7 +43,7 @@ export function Chip({ children, className, ...rest }: ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-dim",
+        "inline-flex items-center gap-1.5 border border-line bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-dim",
         className,
       )}
       {...rest}
@@ -83,7 +83,7 @@ export function AddressAvatar({ address, size = 36, className }: { address: stri
     const id = `av-${a.slice(2, 10) || "default"}-${h1}-${h2}`;
     return { hue1: h1, hue2: h2, shape, id };
   }, [address]);
-  if (!address) return <span className={cn("inline-block rounded-full bg-white/5", className)} style={{ width: size, height: size }} />;
+  if (!address) return <span className={cn("inline-block bg-white/5", className)} style={{ width: size, height: size }} />;
 
   const shapes = [
     <circle key="c" cx="50" cy="50" r="34" fill={`url(#g-${id})`} />,
@@ -148,7 +148,7 @@ export function AddressText({ value, size = 4, className }: { value: string | nu
 /* ── Layout atoms ───────────────────────────────────────────────────────── */
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("skeleton-shimmer rounded-lg", className)} />;
+  return <div className={cn("skeleton-shimmer", className)} />;
 }
 
 /**
@@ -158,12 +158,12 @@ export function Skeleton({ className }: { className?: string }) {
  */
 export function ArbiterRegistrySkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line" aria-busy="true" aria-live="polite">
+    <div className="divide-y divide-white/[0.05] overflow-hidden border border-line" aria-busy="true" aria-live="polite">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex flex-col gap-4 bg-white/[0.012] px-6 py-6 md:flex-row md:items-center">
-          <Skeleton className="h-7 w-10 rounded-md" />
+          <Skeleton className="h-7 w-10" />
           <div className="flex min-w-0 flex-1 items-center gap-3.5">
-            <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+            <Skeleton className="h-11 w-11 shrink-0" />
             <div className="min-w-0 space-y-2">
               <Skeleton className="h-3.5 w-40" />
               <Skeleton className="h-2.5 w-56" />
@@ -189,7 +189,7 @@ export function ArbiterRegistrySkeleton({ rows = 3 }: { rows?: number }) {
 export function InlineLoading({ label = "Reading the registry…", className }: { label?: string; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2 text-faint", className)} aria-busy="true" aria-live="polite">
-      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70" aria-hidden />
+      <span className="h-3.5 w-3.5 animate-spin border-2 border-current border-t-transparent opacity-70" aria-hidden />
       <span className="text-[11px]">{label}</span>
     </span>
   );
@@ -213,7 +213,7 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line px-8 py-14 text-center", className)}>
+    <div className={cn("flex flex-col items-center justify-center gap-3 border border-dashed border-line px-8 py-14 text-center", className)}>
       {icon && <div className="text-faint [&_svg]:h-7 [&_svg]:w-7">{icon}</div>}
       <div className="text-[15px] font-medium">{title}</div>
       {body && <p className="max-w-[46ch] text-sm leading-relaxed text-faint">{body}</p>}

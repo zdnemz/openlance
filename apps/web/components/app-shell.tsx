@@ -36,7 +36,7 @@ export function Logo({ size = "md", withMark = true }: { size?: "sm" | "md"; wit
   return (
     <span className="flex items-center gap-2.5">
       {/* Real brand mark — src/app/icon.svg, served at /icon.svg (single source of truth, also the favicon). */}
-      {withMark && <Image src="/icon.svg" alt="OpenLance" width={32} height={32} priority className="h-8 w-8 rounded-lg" />}
+      {withMark && <Image src="/icon.svg" alt="OpenLance" width={32} height={32} priority className="h-8 w-8" />}
       <span className={cn("font-semibold tracking-tight", size === "md" ? "text-[17px]" : "text-[15px]")}>
         Open<span className="text-rose-bright">Lance</span>
       </span>
@@ -184,7 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-[100dvh] w-full">
       {/* ── desktop rail ─────────────────────────────────────────────── */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-line bg-ink/70 backdrop-blur-xl lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-line bg-ink/70 lg:flex">
         <div className="flex h-16 items-center justify-between px-6">
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
@@ -192,7 +192,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         {role && (
           <div className="px-6 pb-1">
-            <span className="num inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.03] px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-dim">
+            <span className="num inline-flex items-center gap-1.5 border border-line bg-white/[0.03] px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-dim">
               <StatusDot color="#f43f5e" />
               {role} seat
             </span>
@@ -207,15 +207,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13.5px] transition-colors",
+                  "group relative flex items-center gap-3 px-3.5 py-2.5 text-[13.5px] transition-colors",
                   active ? "bg-rose-soft text-foreground" : "text-dim hover:bg-white/[0.04] hover:text-foreground",
                 )}
               >
-                {active && <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-rose-bright" />}
+                {active && <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 bg-rose-bright" />}
                 <Icon weight={active ? "fill" : "regular"} className={cn("h-[17px] w-[17px]", active && "text-rose-bright")} />
                 {item.label}
                 {item.badge ? (
-                  <span className="num ml-auto rounded-full bg-rose-accent/20 px-1.5 py-0.5 text-[11px] text-rose-bright">
+                  <span className="num ml-auto bg-rose-accent/20 px-1.5 py-0.5 text-[11px] text-rose-bright">
                     {item.badge}
                   </span>
                 ) : null}
@@ -226,16 +226,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mt-auto pb-4">
             <a
               href="/console"
-              className="flex items-center gap-2.5 rounded-xl px-3.5 py-2 text-xs text-faint transition-colors hover:text-dim"
+              className="flex items-center gap-2.5 px-3.5 py-2 text-xs text-faint transition-colors hover:text-dim"
             >
               <TerminalWindow className="h-4 w-4" />
               Backend console
             </a>
             {address && (
-              <div className="mt-1 rounded-xl px-1 py-1">
+              <div className="mt-1 px-1 py-1">
                 <Link
                   href="/profile/me"
-                  className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] text-dim hover:bg-white/[0.04] hover:text-foreground"
+                  className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-dim hover:bg-white/[0.04] hover:text-foreground"
                 >
                   <AddressAvatar address={address} size={26} />
                   <span className="min-w-0">
@@ -250,7 +250,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     onboarded user and the API locks the role after onboarding
                     starts, so this route can never change a seat. Disconnecting
                     from the wallet menu is the only path that can. */}
-                <p className="num mt-0.5 block rounded-lg px-3.5 py-1.5 text-[11px] leading-snug text-faint">
+                <p className="num mt-0.5 block px-3.5 py-1.5 text-[11px] leading-snug text-faint">
                   Seat is permanent — disconnect to use another wallet
                 </p>
               </div>
@@ -265,7 +265,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           context and can never lift it above the z-40 bottom nav below — the
           panel's footer and last rows rendered behind the nav. Raising the
           ancestor is the only thing that can. The two never overlap. */}
-      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-line bg-ink/80 px-4 backdrop-blur-xl lg:hidden">
+      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-line bg-ink/80 px-4 lg:hidden">
         {canGoBack ? (
           <button type="button" onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-dim" aria-label="Back">
             <ArrowLeft className="h-4 w-4" /> <Logo size="sm" withMark={false} />
@@ -277,7 +277,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <div className="flex items-center gap-2">
           {role && (
-            <span className="num rounded-full border border-line bg-white/[0.03] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">
+            <span className="num border border-line bg-white/[0.03] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">
               {role}
             </span>
           )}
@@ -290,7 +290,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-60">
         <div className="mx-auto hidden h-16 max-w-[1200px] items-center justify-end px-8 lg:flex">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[11px] text-dim">
+            <span className="flex items-center gap-2 border border-line bg-white/[0.03] px-3 py-1.5 text-[11px] text-dim">
               <StatusDot color="#34d399" pulse />
               <span className="num">{chainId === 84532 ? "base sepolia · 84532" : `env chain · ${chainId}`} · testnet, no real funds</span>
             </span>
@@ -302,7 +302,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ── mobile bottom nav ────────────────────────────────────────── */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[68px] items-stretch border-t border-line bg-ink/90 backdrop-blur-xl lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[68px] items-stretch border-t border-line bg-ink/90 lg:hidden">
         {mobile.map((item) => {
           const active = item.href === mobileActive;
           const Icon = item.icon;
@@ -318,7 +318,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Icon weight={active ? "fill" : "regular"} className="h-5 w-5" />
               {item.label}
               {item.badge ? (
-                <span className="num absolute right-[22%] top-2.5 rounded-full bg-rose-accent px-1 text-[11px] text-white">
+                <span className="num absolute right-[22%] top-2.5 bg-rose-accent px-1 text-[11px] text-white">
                   {item.badge}
                 </span>
               ) : null}

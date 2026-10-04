@@ -44,7 +44,7 @@ export default function DisputesPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-40 rounded-3xl" />
+        <Skeleton className="h-40" />
       ) : !open.length ? (
         <EmptyState icon={<Gavel className="h-5 w-5" />} title="No open disputes" body="When a milestone is disputed it appears here with its selected arbiters, commit-reveal clocks and tally." />
       ) : (
@@ -58,7 +58,7 @@ export default function DisputesPage() {
       {resolved.length > 0 && (
         <section>
           <ListHead>Settled</ListHead>
-          <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+          <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
             {resolved.map((d) => (
               <div key={d.id} className="flex flex-wrap items-center gap-x-5 gap-y-1.5 bg-white/[0.012] px-6 py-4">
                 <StatusBadge status={d.outcome ? `resolved_${d.outcome}` : "resolved_split"} pulse={false} />
@@ -89,7 +89,7 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
   const phaseLabel = dispute.finalized && dispute.status !== "resolved" ? "awaiting payout" : dispute.phase;
 
   return (
-    <div className="glass rounded-3xl p-6">
+    <div className="glass p-6">
       <div className="flex flex-wrap items-center gap-3">
         <StatusBadge status={dispute.finalized && dispute.status !== "resolved" ? "submitted" : "disputed"} />
         <Link href={`/projects/${dispute.projectId}?fromDisputes=1`} className="text-[14px] font-medium hover:text-rose-bright">

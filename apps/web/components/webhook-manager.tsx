@@ -59,7 +59,7 @@ function DeliveryRow({ delivery, onRedeliver }: {
               setBusy(false);
             }
           }}
-          className={cn("shrink-0 rounded-md border border-line px-2 py-0.5 text-[11px] text-dim transition-colors hover:text-foreground disabled:opacity-40", press)}
+          className={cn("shrink-0 border border-line px-2 py-0.5 text-[11px] text-dim transition-colors hover:text-foreground disabled:opacity-40", press)}
           title="Redeliver"
         >
           retry
@@ -145,7 +145,7 @@ function SubscriptionCard({ sub, onChanged }: { sub: WebhookSubscription; onChan
   const scope = sub.eventTypes.length === 0 ? "all events" : `${sub.eventTypes.length} event types`;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-white/[0.012]">
+    <div className="overflow-hidden border border-line bg-white/[0.012]">
       <div className="flex flex-wrap items-center gap-3 px-4 py-3.5">
         <button type="button" onClick={load} className="flex min-w-0 flex-1 items-center gap-2.5 text-left" aria-expanded={open}>
           <CaretDown className={cn("h-3.5 w-3.5 shrink-0 text-faint transition-transform", open && "rotate-180")} />
@@ -163,15 +163,15 @@ function SubscriptionCard({ sub, onChanged }: { sub: WebhookSubscription; onChan
 
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={test} disabled={busy} title="Send test ping"
-            className={cn("grid h-7 w-7 place-items-center rounded-lg border border-line text-dim transition-colors hover:text-foreground disabled:opacity-40", press)}>
+            className={cn("grid h-7 w-7 place-items-center border border-line text-dim transition-colors hover:text-foreground disabled:opacity-40", press)}>
             <PaperPlaneTilt className="h-3.5 w-3.5" />
           </button>
           <button type="button" onClick={rotate} disabled={busy} title="Rotate secret"
-            className={cn("grid h-7 w-7 place-items-center rounded-lg border border-line text-dim transition-colors hover:text-foreground disabled:opacity-40", press)}>
+            className={cn("grid h-7 w-7 place-items-center border border-line text-dim transition-colors hover:text-foreground disabled:opacity-40", press)}>
             <ArrowsCounterClockwise className="h-3.5 w-3.5" />
           </button>
           <button type="button" onClick={remove} disabled={busy} title="Delete subscription"
-            className={cn("grid h-7 w-7 place-items-center rounded-lg border border-line text-dim transition-colors hover:text-[var(--color-state-disputed)] disabled:opacity-40", press)}>
+            className={cn("grid h-7 w-7 place-items-center border border-line text-dim transition-colors hover:text-[var(--color-state-disputed)] disabled:opacity-40", press)}>
             <Trash className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -188,7 +188,7 @@ function SubscriptionCard({ sub, onChanged }: { sub: WebhookSubscription; onChan
           </div>
           <div className="max-h-72 divide-y divide-white/[0.04] overflow-y-auto">
             {deliveries === null ? (
-              <div className="p-3"><Skeleton className="h-9 rounded-lg" /></div>
+              <div className="p-3"><Skeleton className="h-9" /></div>
             ) : deliveries.length === 0 ? (
               <p className="px-4 py-6 text-center text-[12px] text-faint">No deliveries yet — hit the test button.</p>
             ) : (
@@ -247,7 +247,7 @@ export function WebhookManager({ subscriptions, loading, reload }: {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-line bg-white/[0.012] p-4">
+      <div className="border border-line bg-white/[0.012] p-4">
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
             aria-label="Webhook endpoint URL"
@@ -255,13 +255,13 @@ export function WebhookManager({ subscriptions, loading, reload }: {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && create()}
             placeholder="https://example.com/hooks/openlance"
-            className="h-10 flex-1 rounded-xl border border-line bg-white/[0.03] px-3 font-mono text-[13px] text-foreground outline-none transition-colors placeholder:text-faint focus:border-rose-accent/50"
+            className="h-10 flex-1 border border-line bg-white/[0.03] px-3 font-mono text-[13px] text-foreground outline-none transition-colors placeholder:text-faint focus:border-rose-accent/50"
           />
           <button
             type="button"
             onClick={create}
             disabled={creating || !url.trim()}
-            className={cn("flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-accent px-4 text-[13px] font-medium text-white transition-opacity disabled:opacity-40", press)}
+            className={cn("flex h-10 items-center justify-center gap-2 bg-rose-accent px-4 text-[13px] font-medium text-white transition-opacity disabled:opacity-40", press)}
           >
             <Plus weight="bold" className="h-4 w-4" />
             Add endpoint
@@ -282,7 +282,7 @@ export function WebhookManager({ subscriptions, loading, reload }: {
                 aria-pressed={selected.includes(t)}
                 onClick={() => toggle(t)}
                 className={cn(
-                  "rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors",
+                  "border px-2.5 py-1 font-mono text-[11px] transition-colors",
                   selected.includes(t)
                     ? "border-rose-accent/40 bg-rose-soft text-rose-bright"
                     : "border-line text-faint hover:text-dim",
@@ -297,8 +297,8 @@ export function WebhookManager({ subscriptions, loading, reload }: {
 
       {loading ? (
         <div className="space-y-2.5">
-          <Skeleton className="h-16 rounded-2xl" />
-          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-16" />
+          <Skeleton className="h-16" />
         </div>
       ) : subscriptions.length === 0 ? (
         <EmptyState

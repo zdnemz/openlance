@@ -50,7 +50,7 @@ const EscrowCard = memo(function EscrowCard() {
   const current = FLOW[step]!;
 
   return (
-    <SpotCard className="glass-raised relative w-full max-w-md rounded-[26px] p-6">
+    <SpotCard className="glass-raised relative w-full max-w-md p-6">
       <div className="flex items-center justify-between">
         <span className="num text-[12px] uppercase tracking-[0.16em] text-faint">milestone 1 · threat model</span>
         <motion.span
@@ -58,7 +58,7 @@ const EscrowCard = memo(function EscrowCard() {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={spring}
-          className="flex items-center gap-2 rounded-full border px-2.5 py-1 text-[12px] font-medium"
+          className="flex items-center gap-2 border px-2.5 py-1 text-[12px] font-medium"
           style={{ color: current.color, borderColor: `color-mix(in oklab, ${current.color} 34%, transparent)`, background: `color-mix(in oklab, ${current.color} 9%, transparent)` }}
         >
           <StatusDot color={current.color} pulse />
@@ -91,13 +91,13 @@ const EscrowCard = memo(function EscrowCard() {
             transition={spring}
           >
             <span
-              className="h-4 w-[3px] shrink-0 rounded-full"
+              className="h-4 w-[3px] shrink-0"
               style={{ background: i === step ? f.color : "rgba(255,255,255,0.14)" }}
             />
             {i < step ? (
               <CheckCircle weight="fill" className="h-4 w-4 shrink-0" style={{ color: f.color }} />
             ) : (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: i === step ? f.color : "rgba(255,255,255,0.2)" }} />
+              <span className="h-1.5 w-1.5 shrink-0" style={{ background: i === step ? f.color : "rgba(255,255,255,0.2)" }} />
             )}
             <span className="min-w-0">
               <span className={`block text-[13px] ${i === step ? "text-foreground" : "text-dim"}`}>{f.line}</span>
@@ -132,7 +132,7 @@ export default function LandingPage() {
     <MotionConfig reducedMotion="user">
     <div className="relative min-h-[100dvh] w-full">
       {/* nav */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-line/60 bg-ink/70 backdrop-blur-xl">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-line/60 bg-ink/70">
         <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-5 md:px-8">
           <Link href="/" aria-label="OpenLance home">
             <Logo />
@@ -165,7 +165,7 @@ export default function LandingPage() {
         <div className="grid items-center gap-14 lg:grid-cols-[1.08fr_0.92fr]">
           <div className="max-w-2xl">
             <motion.div variants={rise} initial="hidden" animate="show" custom={0} className="flex items-center gap-2.5">
-              <span className="flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3 py-1.5 text-[12px] text-dim">
+              <span className="flex items-center gap-2 border border-line bg-white/[0.03] px-3 py-1.5 text-[12px] text-dim">
                 <StatusDot color="#34d399" pulse /> anvil devnet · Base-native by design
               </span>
             </motion.div>
@@ -193,14 +193,14 @@ export default function LandingPage() {
             <motion.div variants={rise} initial="hidden" animate="show" custom={3} className="mt-9 flex flex-wrap items-center gap-3.5">
               <MagneticLink
                 href="/jobs"
-                className="group inline-flex items-center gap-2 rounded-full bg-rose-accent px-6 py-3.5 text-sm font-medium text-white transition-colors hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
+                className="group inline-flex items-center gap-2 bg-rose-accent px-6 py-3.5 text-sm font-medium text-white transition-colors hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
               >
                 Explore the marketplace
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" weight="bold" />
               </MagneticLink>
               <Link
                 href="/jobs/new"
-                className="inline-flex items-center gap-2 rounded-full border border-line-strong bg-white/[0.03] px-6 py-3.5 text-sm font-medium text-foreground transition-all hover:bg-white/[0.06] active:translate-y-px active:scale-[0.985]"
+                className="inline-flex items-center gap-2 border border-line-strong bg-white/[0.03] px-6 py-3.5 text-sm font-medium text-foreground transition-all hover:bg-white/[0.06] active:translate-y-px active:scale-[0.985]"
               >
                 <FilePlus className="h-4 w-4" /> Post a job
               </Link>
@@ -236,7 +236,7 @@ export default function LandingPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.1 }}
-                className="glass absolute -bottom-7 -left-7 hidden items-center gap-2.5 rounded-2xl px-4 py-3 md:flex"
+                className="glass absolute -bottom-7 -left-7 hidden items-center gap-2.5 px-4 py-3 md:flex"
               >
                 <LockKeyOpen className="h-4 w-4 text-state-funded" weight="bold" />
                 <span className="text-xs text-dim">nonReentrant · CEI · balance ≥ Σ unsettled</span>
@@ -252,7 +252,7 @@ export default function LandingPage() {
           <motion.div style={{ x: stripX }} className="flex shrink-0 items-center gap-10 pr-10">
             {ledgerItems.map((item) => (
               <span key={item.label} className="flex shrink-0 items-center gap-3 text-[12.5px] text-faint">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.color }} />
+                <span className="h-1.5 w-1.5" style={{ background: item.color }} />
                 <span className="num">{item.label}</span>
                 <span className="text-dim">{item.text}</span>
               </span>
@@ -276,7 +276,7 @@ export default function LandingPage() {
           <div className="space-y-5">
             {steps.map((step, i) => (
               <div key={step.title} className="lg:sticky" style={{ top: `${112 + i * 18}px` }}>
-                <SpotCard className="glass-raised relative flex gap-6 overflow-hidden rounded-[26px] p-7 md:p-8">
+                <SpotCard className="glass-raised relative flex gap-6 overflow-hidden p-7 md:p-8">
                   {/* ghost index — oversized, hollow, structural */}
                   <span aria-hidden className="ghost-num num pointer-events-none absolute -right-3 -top-7 select-none text-[110px] font-semibold leading-none tracking-tighter">
                     {String(i + 1).padStart(2, "0")}
@@ -338,7 +338,7 @@ export default function LandingPage() {
             <div className="flex flex-col gap-3.5 lg:items-end">
               <MagneticLink
                 href="/jobs/new"
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-rose-accent px-7 py-4 text-sm font-medium text-white transition-colors hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
+                className="group inline-flex items-center justify-center gap-2 bg-rose-accent px-7 py-4 text-sm font-medium text-white transition-colors hover:bg-rose-bright active:translate-y-px active:scale-[0.985]"
               >
                 Post your first job
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" weight="bold" />
@@ -391,15 +391,15 @@ function ArbiterCardVisual({ className }: { className?: string }) {
       transition={spring}
       className={className}
     >
-      <div className="glass-raised rounded-3xl p-7">
+      <div className="glass-raised p-7">
         <div className="flex items-center justify-between">
           <span className="num text-[12px] uppercase tracking-[0.16em] text-faint">arbiter registry · erc-5194</span>
-          <span className="flex items-center gap-2 rounded-full border border-state-disputed/30 bg-state-disputed/10 px-2.5 py-1 text-[12px] text-state-disputed">
+          <span className="flex items-center gap-2 border border-state-disputed/30 bg-state-disputed/10 px-2.5 py-1 text-[12px] text-state-disputed">
             <StatusDot color="#fb923c" pulse /> 72h SLA live
           </span>
         </div>
         <div className="mt-6 flex items-center gap-4">
-          <AddressAvatar address="0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc" size={56} className="rounded-2xl" />
+          <AddressAvatar address="0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc" size={56} className="" />
           <div>
             <div className="text-lg font-medium tracking-tight">Ingrid Salm</div>
             <div className="num text-[12px] text-faint">security researcher · 40+ peer reviews</div>
@@ -417,7 +417,7 @@ function ArbiterCardVisual({ className }: { className?: string }) {
           ].map(([label, color, time, delta]) => (
             <div key={label} className="flex items-center justify-between py-3.5">
               <span className="flex items-center gap-2.5 text-[12.5px] text-dim">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+                <span className="h-1.5 w-1.5" style={{ background: color }} />
                 {label}
               </span>
               <span className="flex items-center gap-3">

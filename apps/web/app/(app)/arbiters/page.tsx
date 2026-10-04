@@ -101,7 +101,7 @@ export default function ArbitersPage() {
           body="Be the first — stake collateral above to join the pool. New arbiters start at trust score 100."
         />
       ) : (
-        <ol className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+        <ol className="divide-y divide-white/[0.05] overflow-hidden border border-line">
           {ranked.map((a, i) => {
             const st = arbiterStanding(a, minStakeWei);
             const tierName = (TIER_NAMES[a.tier ?? 0] ?? "Unstaked").toLowerCase();
@@ -123,7 +123,7 @@ export default function ArbitersPage() {
                       aria-label={`${picked ? "Deselect" : "Select"} ${a.profile?.displayName || shortAddress(a.address)}`}
                       aria-pressed={picked}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePick(a.address); }}
-                      className={`relative z-10 grid size-9 shrink-0 place-items-center rounded-lg border transition-colors ${
+                      className={`relative z-10 grid size-9 shrink-0 place-items-center border transition-colors ${
                         picked ? "border-rose-accent bg-rose-accent text-white" : "border-line-strong text-transparent hover:border-rose-accent/60"
                       }`}
                     >
@@ -149,7 +149,7 @@ export default function ArbitersPage() {
                         </span>
                         <SealCheck weight="fill" className="h-4 w-4 shrink-0 text-rose-bright" />
                         <span
-                          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                          className="inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-medium"
                           style={{
                             color: st.color,
                             borderColor: `color-mix(in oklab, ${st.color} 32%, transparent)`,
@@ -311,7 +311,7 @@ function ArbiterPicker({
   if (!session.token) return null;
 
   return (
-    <section className="glass rounded-3xl p-6">
+    <section className="glass p-6">
       <div className="flex items-center gap-2.5">
         <Scales className="h-4 w-4 text-dim" />
         <ListHead>Seat arbiters on a project</ListHead>
@@ -326,7 +326,7 @@ function ArbiterPicker({
           No active project is awaiting arbiters. Seats can be picked once you're on an active project.
         </p>
       ) : proposal && !mine ? (
-        <div className="mt-4 rounded-2xl border border-line bg-white/[0.02] p-4">
+        <div className="mt-4 border border-line bg-white/[0.02] p-4">
           <div className="num text-[11px] uppercase tracking-wider text-faint">counterparty proposal — approve to lock</div>
           <div className="mt-2 space-y-1.5">
             {proposal.addresses.map((a) => (
@@ -336,10 +336,10 @@ function ArbiterPicker({
             ))}
           </div>
           <div className="mt-3 flex flex-wrap gap-2.5">
-            <Button disabled={busy} onClick={approve} className="rounded-full bg-state-released px-5 py-2 text-[12.5px] font-medium text-ink hover:brightness-110">
+            <Button disabled={busy} onClick={approve} className="bg-state-released px-5 py-2 text-[12.5px] font-medium text-ink hover:brightness-110">
               Approve + lock
             </Button>
-            <Button disabled={busy} onClick={() => onChooseProject(null)} className="rounded-full bg-white/10 px-5 py-2 text-[12.5px] font-medium hover:bg-white/20">
+            <Button disabled={busy} onClick={() => onChooseProject(null)} className="bg-white/10 px-5 py-2 text-[12.5px] font-medium hover:bg-white/20">
               Dismiss
             </Button>
           </div>
@@ -351,7 +351,7 @@ function ArbiterPicker({
             <select
               value={projectId ?? ""}
               onChange={(e) => onChooseProject(e.target.value || null)}
-              className="h-11 w-full rounded-xl border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50"
+              className="h-11 w-full border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50"
             >
               <option value="">Select a project…</option>
               {seatable.map((p) => (
@@ -361,7 +361,7 @@ function ArbiterPicker({
           </label>
 
           {project && (
-            <div className="rounded-2xl border border-line bg-white/[0.02] p-4">
+            <div className="border border-line bg-white/[0.02] p-4">
               <div className="flex items-center justify-between">
                 <span className="num text-[11px] uppercase tracking-wider text-faint">
                   selected {picked.length}/{MAX_ARBITERS}
@@ -392,7 +392,7 @@ function ArbiterPicker({
               <Button
                 disabled={busy || picked.length < MIN_ARBITERS || mine}
                 onClick={propose}
-                className="mt-3 rounded-full bg-rose-accent px-5 py-2 text-[12.5px] font-medium hover:bg-rose-bright"
+                className="mt-3 bg-rose-accent px-5 py-2 text-[12.5px] font-medium hover:bg-rose-bright"
               >
                 {mine
                   ? "Proposed"

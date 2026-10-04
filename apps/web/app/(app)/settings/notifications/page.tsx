@@ -30,7 +30,7 @@ import { NOTIFICATION_TYPES, type InboxItem } from "@/lib/types";
 function SectionHead({ icon: Icon, title, desc }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string }) {
   return (
     <div className="mb-4 flex items-start gap-3">
-      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-rose-accent/25 bg-rose-soft text-rose-bright">
+      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center border border-rose-accent/25 bg-rose-soft text-rose-bright">
         <Icon className="h-4 w-4" />
       </span>
       <div>
@@ -47,8 +47,8 @@ function InboxRow({ item }: { item: InboxItem }) {
   const href = notifHref(item);
   const unread = !item.readAt;
   const body = (
-    <div className={cn("flex items-start gap-3 rounded-2xl border border-line px-4 py-3 transition-colors", href && "hover:bg-white/[0.03]")}>
-      <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", unread ? "bg-rose-bright" : "bg-white/10")} />
+    <div className={cn("flex items-start gap-3 border border-line px-4 py-3 transition-colors", href && "hover:bg-white/[0.03]")}>
+      <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0", unread ? "bg-rose-bright" : "bg-white/10")} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={cn("text-[13.5px]", unread ? "font-medium" : "text-dim")}>{meta.label}</span>
@@ -83,7 +83,7 @@ function InboxBand() {
         desc="Every domain event you're party to — milestones, disputes, reviews — recorded off-chain and mirrored from chain events by the indexer."
       />
       {isLoading ? (
-        <div className="space-y-2.5"><Skeleton className="h-16 rounded-2xl" /><Skeleton className="h-16 rounded-2xl" /></div>
+        <div className="space-y-2.5"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
       ) : items.length === 0 ? (
         <EmptyState icon={<CheckCircle className="h-5 w-5" />} title="Nothing yet" body="Fund a milestone, submit work or open a dispute and the events land here." />
       ) : (
@@ -94,7 +94,7 @@ function InboxBand() {
                loaded. It cannot page further — say so rather than implying it
                reaches every notification ever. */
             <div className="pt-1 text-center">
-              <button type="button" onClick={() => setShowAll(true)} className="w-full rounded-2xl border border-dashed border-line py-2.5 text-[12px] text-faint transition-colors hover:text-dim">
+              <button type="button" onClick={() => setShowAll(true)} className="w-full border border-dashed border-line py-2.5 text-[12px] text-faint transition-colors hover:text-dim">
                 Show more
               </button>
               <p className="num mt-1.5 text-[11px] text-faint">
@@ -147,9 +147,9 @@ function PreferencesBand() {
         desc="Mute a type to stop both the in-app inbox projection and webhook fan-out for it. Globally-sourced (chain) events are always recorded on the ledger — muting only silences delivery."
       />
       {isLoading ? (
-        <Skeleton className="h-24 rounded-2xl" />
+        <Skeleton className="h-24" />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line">
+        <div className="overflow-hidden border border-line">
           <ToggleRow
             label="Mute everything"
             hint="Turn off all inbox + webhook delivery"

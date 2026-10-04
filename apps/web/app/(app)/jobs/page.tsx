@@ -43,7 +43,7 @@ export default function JobsPage() {
           session.token && session.user?.role === "client" ? (
             <Link
               href="/jobs/new"
-              className={`inline-flex items-center gap-2 rounded-full bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}
+              className={`inline-flex items-center gap-2 bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}
             >
               Post a job
             </Link>
@@ -61,7 +61,7 @@ export default function JobsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search titles…"
-            className="h-11 w-full rounded-full border border-line bg-white/[0.03] pl-11 pr-4 text-sm outline-none transition-colors placeholder:text-faint focus:border-rose-accent/50"
+            className="h-11 w-full border border-line bg-white/[0.03] pl-11 pr-4 text-sm outline-none transition-colors placeholder:text-faint focus:border-rose-accent/50"
           />
         </label>
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
@@ -71,7 +71,7 @@ export default function JobsPage() {
               key={c}
               type="button"
               onClick={() => setCategory(c)}
-              className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs ${press} ${
+              className={`shrink-0 border px-3.5 py-1.5 text-xs ${press} ${
                 category === c
                   ? "border-rose-accent/40 bg-rose-soft text-rose-bright"
                   : "border-line text-dim hover:border-line-strong hover:text-foreground"
@@ -86,7 +86,7 @@ export default function JobsPage() {
 
       <div className="mt-8">
         {isClient && !!drafts?.items.length && (
-          <div className="mb-8 overflow-hidden rounded-3xl border border-amber-400/25 bg-amber-400/[0.04]">
+          <div className="mb-8 overflow-hidden border border-amber-400/25 bg-amber-400/[0.04]">
             <div className="px-6 pt-5">
               <span className="num text-[11px] uppercase tracking-wider text-amber-300">your drafts · deposit to publish</span>
             </div>
@@ -109,7 +109,7 @@ export default function JobsPage() {
         {isLoading ? (
           <div className="space-y-4">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-36 w-full rounded-3xl" />
+              <Skeleton key={i} className="h-36 w-full" />
             ))}
           </div>
         ) : error ? (
@@ -125,7 +125,7 @@ export default function JobsPage() {
             body="Try another category, or clear the search. New jobs land here the moment their milestone template validates."
           />
         ) : (
-          <div className="divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+          <div className="divide-y divide-white/[0.05] overflow-hidden border border-line">
             {data.items.map((job, i) => (
               <motion.div
                 key={job.id}
@@ -139,7 +139,7 @@ export default function JobsPage() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2.5">
-                      <span className="num rounded-md bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">
+                      <span className="num bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">
                         {job.category}
                       </span>
                       <span className="num text-[11px] text-faint">{timeAgo(job.createdAt)}</span>

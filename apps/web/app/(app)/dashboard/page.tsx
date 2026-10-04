@@ -87,7 +87,7 @@ export default function DashboardPage() {
           <Skeleton className="h-12 w-24" />
           <Skeleton className="h-12 w-24" />
         </div>
-        <Skeleton className="h-48 rounded-3xl" />
+        <Skeleton className="h-48" />
       </div>
     );
   }
@@ -129,11 +129,11 @@ export default function DashboardPage() {
   return (
     <div className="space-y-10">
       {me.kycStatus !== "verified" && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-line bg-white/[0.012] px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 border border-line bg-white/[0.012] px-6 py-4">
           <p className="text-[13px] text-dim">
             {me.kycStatus === "pending" ? "KYC pending — approve it to unlock posting and proposing." : "Finish onboarding — pick your seat and verify identity to unlock posting and proposing."}
           </p>
-          <Link href="/onboarding" className="rounded-full bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white hover:bg-rose-bright">
+          <Link href="/onboarding" className="bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white hover:bg-rose-bright">
             {me.kycStatus === "pending" ? "Review KYC" : "Finish onboarding"}
           </Link>
         </div>
@@ -144,7 +144,7 @@ export default function DashboardPage() {
         desc={me.displayName ? `${greet(me.displayName, role)} ${head.desc}` : head.desc}
         meta={meta}
         actions={
-          <Link href={head.cta.href} className={`inline-flex items-center gap-1.5 rounded-full bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}>
+          <Link href={head.cta.href} className={`inline-flex items-center gap-1.5 bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}>
             {head.cta.label} <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         }
@@ -180,7 +180,7 @@ export default function DashboardPage() {
               {drafts.length} unpublished · lock the budget to publish
             </span>
           </div>
-          <div className="mt-5 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-amber-400/25 bg-amber-400/[0.04]">
+          <div className="mt-5 divide-y divide-white/[0.05] overflow-hidden border border-amber-400/25 bg-amber-400/[0.04]">
             {drafts.map((j) => (
               <Link
                 key={j.id}
@@ -212,8 +212,8 @@ export default function DashboardPage() {
         </div>
         {isLoading ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <Skeleton className="h-48 rounded-3xl" />
-            <Skeleton className="h-48 rounded-3xl" />
+            <Skeleton className="h-48" />
+            <Skeleton className="h-48" />
           </div>
         ) : !active.length ? (
           // A user whose only projects are finished is not the same as a user
@@ -282,7 +282,7 @@ export default function DashboardPage() {
             {!openDisputes.length ? (
               <p className="mt-4 max-w-[60ch] text-sm text-faint">No open disputes. Selection is random among eligible stakes — stay eligible.</p>
             ) : (
-              <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+              <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
                 {openDisputes.slice(0, 5).map((d) => <DisputeRow key={d.id} dispute={d} />)}
               </div>
             )}
@@ -292,10 +292,10 @@ export default function DashboardPage() {
         {/* chain pulse */}
         <section>
           <ListHead>Chain pulse</ListHead>
-          <div className="mt-4 divide-y divide-white/[0.04] overflow-hidden rounded-3xl border border-line">
+          <div className="mt-4 divide-y divide-white/[0.04] overflow-hidden border border-line">
             {(ledger?.items ?? []).slice(0, 6).map((e) => (
               <div key={e.id} className="flex items-center gap-3 bg-white/[0.012] px-5 py-3.5">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ledgerDotColor(e.eventType) }} />
+                <span className="h-1.5 w-1.5 shrink-0" style={{ background: ledgerDotColor(e.eventType) }} />
                 <span className="num min-w-0 flex-1 truncate text-[12px] text-dim">
                   {e.eventType} {e.milestoneOnchainId !== null ? `· m${e.milestoneOnchainId}` : ""}
                 </span>
@@ -333,7 +333,7 @@ function ArbiterStats({ open, settled, serving }: { open: number; settled: numbe
 
 function JobRows({ jobs }: { jobs: JobView[] }) {
   return (
-    <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+    <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
       {jobs.map((j) => (
         <Link key={j.id} href={`/jobs/${j.id}`} className="flex items-center justify-between bg-white/[0.012] px-5 py-4 transition-colors hover:bg-white/[0.035]">
           <div className="min-w-0">
@@ -375,14 +375,14 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
   const { data: p, isLoading } = useProject(id);
   const { data: job, isLoading: jobLoading } = useJob(jobId);
   const session = useSession();
-  if (isLoading || !p) return <Skeleton className="h-48 rounded-3xl" />;
+  if (isLoading || !p) return <Skeleton className="h-48" />;
   const isClient = p.client.id === session.user?.id;
   const counterpart = isClient ? p.freelancer : p.client;
   const role = isClient ? "client" : "freelancer";
 
   return (
     <Link href={`/projects/${id}?fromJob=${jobId}`} className="group block min-w-0">
-      <SpotCard className="glass h-full min-w-0 rounded-3xl p-6 transition-colors hover:border-line-strong">
+      <SpotCard className="glass h-full min-w-0 p-6 transition-colors hover:border-line-strong">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">
@@ -398,9 +398,9 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
       {/* milestone rail */}
       <div className="mt-5 flex gap-1.5">
         {p.milestones.map((m) => (
-          <div key={m.id} className="group/ms relative h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]" title={`${m.title} — ${m.chainStatus}`}>
+          <div key={m.id} className="group/ms relative h-1.5 flex-1 overflow-hidden bg-white/[0.06]" title={`${m.title} — ${m.chainStatus}`}>
             <div
-              className="absolute inset-0 rounded-full transition-transform duration-700"
+              className="absolute inset-0 transition-transform duration-700"
               style={{ background: STATE_COLORS[m.chainStatus] ?? "var(--color-state-pending)", opacity: 0.85 }}
             />
           </div>
@@ -411,7 +411,7 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
         <div className="flex flex-wrap gap-2">
           {p.milestones.map((m) => (
             <span key={m.id} className="num flex items-center gap-1.5 text-[11px] text-faint">
-              <span className="h-1 w-1 rounded-full" style={{ background: STATE_COLORS[m.chainStatus] ?? "var(--color-state-pending)" }} aria-hidden />
+              <span className="h-1 w-1" style={{ background: STATE_COLORS[m.chainStatus] ?? "var(--color-state-pending)" }} aria-hidden />
               m{m.position}
             </span>
           ))}

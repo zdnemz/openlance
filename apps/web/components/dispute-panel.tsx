@@ -125,7 +125,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
       {/* The record exists but no on-chain round: the opener's wallet tx never
         landed. Nothing is votable or talliable until it does. */}
       {awaitingOpen && (
-        <div className="num rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
+        <div className="num border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] text-amber-200">
           Waiting for the on-chain open — {isParty
             ? "re-send the opening transaction from the project room, or discard the record below."
             : "a party still has to send the opening transaction."}
@@ -159,7 +159,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
       </div>
 
       {round && !round.resolved && (
-        <div className="num rounded-2xl border border-line bg-white/[0.02] px-4 py-3 text-[11.5px] text-faint">
+        <div className="num border border-line bg-white/[0.02] px-4 py-3 text-[11.5px] text-faint">
           {round.phase === "commit" && <>commit window closes {timeUntil(new Date(round.commitDeadline * 1000).toISOString())}</>}
           {round.phase === "reveal" && now <= round.revealDeadline && <>reveal window closes {timeUntil(new Date(round.revealDeadline * 1000).toISOString())}</>}
           {round.phase === "reveal" && now > round.revealDeadline && <>reveal window closed — tally is available</>}
@@ -178,7 +178,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
               const revealed = (dispute.revealedArbiters ?? []).some((x) => x.toLowerCase() === a.toLowerCase());
               const committed = (dispute.committedArbiters ?? []).some((x) => x.toLowerCase() === a.toLowerCase());
               return (
-                <span key={a} className={`num inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] ${revealed ? "border-state-released/40 text-state-released" : committed ? "border-white/15 text-dim" : "border-line text-faint"}`}>
+                <span key={a} className={`num inline-flex items-center gap-1.5 border px-3 py-1 text-[11.5px] ${revealed ? "border-state-released/40 text-state-released" : committed ? "border-white/15 text-dim" : "border-line text-faint"}`}>
                   <AddressText value={a} size={4} />
                   <span className="text-[11px] opacity-70">{revealed ? "revealed" : committed ? "committed" : "pending"}</span>
                 </span>
@@ -192,7 +192,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
       {round && (round.revealCount > 0 || dispute.finalized) && (
         <div className="grid grid-cols-3 gap-2 text-center">
           {(["Release", "Refund", "Split"] as const).map((label, i) => (
-            <div key={label} className="rounded-xl border border-line bg-white/[0.02] px-3 py-2">
+            <div key={label} className="border border-line bg-white/[0.02] px-3 py-2">
               <div className="num text-[11px] uppercase tracking-wider text-faint">{label}</div>
               <div className="num mt-0.5 text-[16px]">{round.tally[i] ?? 0}</div>
             </div>
@@ -227,7 +227,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
                     refresh();
                   }
                 }}
-                className="w-full rounded-full bg-rose-accent py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright"
+                className="w-full bg-rose-accent py-2.5 text-[12.5px] font-medium text-white hover:bg-rose-bright"
               >
                 {myCommitted ? "Committed — wait for reveal" : `Commit "${outcome === "split" ? "Split 50/50" : outcome}"`}
               </Button>
@@ -252,7 +252,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
               sent anywhere, so a lost commit is a vote lost for the round —
               and the other arbiters need to know the tally is short. */}
           {canRevealRound && myCommitted && !myRevealed && !canRevealNow && (
-            <p className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] leading-relaxed text-amber-200">
+            <p className="border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-[11.5px] leading-relaxed text-amber-200">
               You committed on this device, but the salt is gone — a commit can only be revealed from the browser
               that made it, so this vote cannot be recovered. The other arbiters can still reach quorum without it.
             </p>
@@ -280,7 +280,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
                 const result = await tallyDisputeAction(chain.run)(onchainId, roundIndex, dispute.projectId);
                 if (result.ok) refresh();
               }}
-              className="rounded-full bg-white/10 py-2.5 text-[12px] font-medium hover:bg-white/20"
+              className="bg-white/10 py-2.5 text-[12px] font-medium hover:bg-white/20"
             >
               Tally round
             </Button>
@@ -290,7 +290,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
                 const result = await finalizeDisputeAction(chain.run)(onchainId, dispute.projectId, waitResolved);
                 if (result.ok) refresh();
               }}
-              className="rounded-full bg-state-released/15 py-2.5 text-[12px] font-medium text-state-released hover:bg-state-released/25"
+              className="bg-state-released/15 py-2.5 text-[12px] font-medium text-state-released hover:bg-state-released/25"
             >
               {finalizeInSecs > 0 ? `Finalize ${timeUntil(new Date(appealEndsAt! * 1000).toISOString())}` : "Finalize payout"}
             </Button>
@@ -305,7 +305,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
                 const result = await appealDisputeAction(chain.run)(onchainId, toWei(disputeFeeWei), dispute.projectId);
                 if (result.ok) refresh();
               }}
-              className="w-full rounded-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10"
+              className="w-full border border-state-disputed/40 py-2 text-[12px] font-medium text-state-disputed hover:bg-state-disputed/10"
             >
               {toWei(disputeFeeWei) > 0n ? `Appeal (${formatEth(disputeFeeWei)} ETH)` : "Appeal (free)"} — penalises a wrong majority
             </Button>
@@ -356,7 +356,7 @@ export function DisputePanel({ dispute, compact = false }: { dispute: DisputeVie
           `chain-actions` deliberately suppresses the toast for it — that made
           every one of these five controls fail in total silence. */}
       {chain.error && (
-        <p className="rounded-2xl border border-state-disputed/30 bg-state-disputed/[0.08] px-4 py-3 text-[11.5px] leading-relaxed text-state-disputed">
+        <p className="border border-state-disputed/30 bg-state-disputed/[0.08] px-4 py-3 text-[11.5px] leading-relaxed text-state-disputed">
           {chain.error}
         </p>
       )}
@@ -393,7 +393,7 @@ function OutcomePicker({ outcome, setOutcome }: { outcome: Outcome; setOutcome: 
           type="button"
           aria-pressed={outcome === o}
           onClick={() => setOutcome(o)}
-          className={`rounded-full border px-3 py-2 text-[12px] font-medium ${press} ${outcome === o ? "border-rose-accent bg-rose-soft text-foreground" : "border-line text-dim hover:text-foreground"}`}
+          className={`border px-3 py-2 text-[12px] font-medium ${press} ${outcome === o ? "border-rose-accent bg-rose-soft text-foreground" : "border-line text-dim hover:text-foreground"}`}
         >
           {o === "split" ? "Split 50/50" : o}
         </button>
@@ -442,7 +442,7 @@ function RevealControls({
             onDone();
           }
         }}
-        className="w-full rounded-full bg-white/10 py-2.5 text-[12.5px] font-medium text-foreground hover:bg-white/20"
+        className="w-full bg-white/10 py-2.5 text-[12.5px] font-medium text-foreground hover:bg-white/20"
       >
         Reveal "{outcome === "split" ? "Split 50/50" : outcome}"
       </Button>
@@ -452,7 +452,7 @@ function RevealControls({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-line bg-white/[0.02] px-3 py-2">
+    <div className="border border-line bg-white/[0.02] px-3 py-2">
       <div className="num text-[11px] uppercase tracking-wider text-faint">{label}</div>
       <div className="num mt-0.5 text-[14px]">{value}</div>
     </div>

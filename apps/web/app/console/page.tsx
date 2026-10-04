@@ -79,10 +79,10 @@ const EVENT_ICON: Record<string, typeof Coins> = {
 
 function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${ok
+    <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium ${ok
       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
       : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400'}`}>
-      <span className={`size-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`} aria-hidden />
+      <span className={`size-1.5 ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`} aria-hidden />
       {label}
     </span>
   )
@@ -173,7 +173,7 @@ export default function BackendConsole() {
         <header className="space-y-4">
           <div className="flex flex-wrap items-center gap-3 justify-between">
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-xl bg-emerald-600/15 border border-emerald-600/25 grid place-items-center">
+              <div className="size-10 bg-emerald-600/15 border border-emerald-600/25 grid place-items-center">
                 <ShieldCheck className="size-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
               </div>
               <div>
@@ -209,7 +209,7 @@ export default function BackendConsole() {
           {loaded && error ? (
             <Card className="border-rose-500/30 bg-rose-500/5">
               <CardContent className="p-4 text-sm text-rose-700 dark:text-rose-400">
-                API unreachable ({error}). The API is a separate service — start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">pnpm --filter @openlance/api dev</code>, check that <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">NEXT_PUBLIC_API_BASE</code> points at it and that <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">DATABASE_URL</code> is set, then this console refreshes automatically.
+                API unreachable ({error}). The API is a separate service — start it with <code className="font-mono text-xs bg-muted px-1.5 py-0.5">pnpm --filter @openlance/api dev</code>, check that <code className="font-mono text-xs bg-muted px-1.5 py-0.5">NEXT_PUBLIC_API_BASE</code> points at it and that <code className="font-mono text-xs bg-muted px-1.5 py-0.5">DATABASE_URL</code> is set, then this console refreshes automatically.
               </CardContent>
             </Card>
           ) : null}
@@ -228,7 +228,7 @@ export default function BackendConsole() {
               <StatCard icon={Activity} label="Ledger events" value={data.counts.ledgerEvents} sub="from chain events" />
             </>
           ) : (
-            Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+            Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-24" />)
           )}
         </section>
 
@@ -250,10 +250,10 @@ export default function BackendConsole() {
                     {data.demoProject.milestones.map((m) => {
                       const st = CHAIN_STATUS_STYLES[m.chainStatus] ?? { label: m.chainStatus, className: 'bg-muted text-muted-foreground border-border' }
                       return (
-                        <li key={m.position} className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-2">
+                        <li key={m.position} className="border p-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="grid place-items-center size-6 rounded-md bg-muted text-xs font-semibold">{m.position}</span>
+                              <span className="grid place-items-center size-6 bg-muted text-xs font-semibold">{m.position}</span>
                               <span className="font-medium truncate">{m.title}</span>
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">
@@ -262,14 +262,14 @@ export default function BackendConsole() {
                           </div>
                           <div className="flex items-center gap-2">
                             {m.softStatus === 'changes_requested' ? <Badge variant="outline">changes requested</Badge> : null}
-                            <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${st.className}`}>{st.label}</span>
+                            <span className={`inline-flex items-center border px-2 py-0.5 text-xs font-medium ${st.className}`}>{st.label}</span>
                           </div>
                         </li>
                       )
                     })}
                   </ol>
                 ) : (
-                  <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
+                  <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
                 )}
               </CardContent>
             </Card>
@@ -282,9 +282,9 @@ export default function BackendConsole() {
               </CardHeader>
               <CardContent>
                 {data ? (
-                  <div className="max-h-96 overflow-y-auto rounded-md border">
+                  <div className="max-h-96 overflow-y-auto border">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
+                      <TableHeader className="sticky top-0 bg-muted/95">
                         <TableRow>
                           <TableHead className="w-8" aria-label="icon" />
                           <TableHead>Event</TableHead>
@@ -312,7 +312,7 @@ export default function BackendConsole() {
                     </Table>
                   </div>
                 ) : (
-                  <Skeleton className="h-64 rounded-md" />
+                  <Skeleton className="h-64" />
                 )}
               </CardContent>
             </Card>
@@ -332,7 +332,7 @@ export default function BackendConsole() {
                   ) : (
                     <ul className="space-y-3">
                       {data.arbiters.map((a) => (
-                        <li key={a.address} className="flex items-center justify-between gap-2 rounded-lg border p-3">
+                        <li key={a.address} className="flex items-center justify-between gap-2 border p-3">
                           <div className="min-w-0">
                             <div className="font-mono text-xs truncate">{shortAddr(a.address)}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">
@@ -348,7 +348,7 @@ export default function BackendConsole() {
                       ))}
                     </ul>
                   )
-                ) : <Skeleton className="h-32 rounded-lg" />}
+                ) : <Skeleton className="h-32" />}
               </CardContent>
             </Card>
 
@@ -365,8 +365,8 @@ export default function BackendConsole() {
                     return (
                       <div key={k} className="flex items-center gap-3 text-xs">
                         <span className="w-32 shrink-0 text-muted-foreground">{st.label}</span>
-                        <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-600/70" style={{ width: `${(v / max) * 100}%` }} />
+                        <div className="h-2 flex-1 bg-muted overflow-hidden">
+                          <div className="h-full bg-emerald-600/70" style={{ width: `${(v / max) * 100}%` }} />
                         </div>
                         <span className="w-6 text-right tabular-nums font-medium">{v}</span>
                       </div>
@@ -385,7 +385,7 @@ export default function BackendConsole() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base"><ServerCog className="size-4 text-emerald-600" aria-hidden />API surface <span className="text-muted-foreground font-normal text-sm">— what the frontend will build against</span></CardTitle>
               <CardDescription>
-                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">src/app/api/**</code>.
+                Full walkthrough in <code className="font-mono text-xs bg-muted px-1.5 py-0.5">src/app/api/**</code>.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -395,7 +395,7 @@ export default function BackendConsole() {
                   <ul className="space-y-2">
                     {g.rows.map(([route, desc]) => (
                       <li key={route} className="text-xs leading-relaxed">
-                        <code className="font-mono bg-muted px-1.5 py-0.5 rounded">{route}</code>
+                        <code className="font-mono bg-muted px-1.5 py-0.5">{route}</code>
                         <span className="text-muted-foreground"> — {desc}</span>
                       </li>
                     ))}

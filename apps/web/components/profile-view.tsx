@@ -87,8 +87,8 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
   if (isLoading) {
     return (
       <div className="space-y-5">
-        <Skeleton className="h-36 w-full rounded-3xl" />
-        <Skeleton className="h-64 w-full rounded-3xl" />
+        <Skeleton className="h-36 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
@@ -108,7 +108,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
   return (
     <div className="space-y-9">
       {/* identity card */}
-      <div className="glass rounded-3xl p-7 md:p-8">
+      <div className="glass p-7 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex items-center gap-5">
             <AddressAvatar address={address} size={72} />
@@ -116,10 +116,10 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
               <div className="flex flex-wrap items-center gap-2.5">
                 <h1 className="text-2xl font-semibold tracking-tight">{user.displayName ?? shortAddress(address)}</h1>
                 <Chip>{roleLabel(user.role)}</Chip>
-                {user.kycStatus === "verified" && <span className="num flex items-center gap-1 rounded-full bg-state-released/10 px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-state-released"><SealCheck weight="fill" className="h-3 w-3" /> verified</span>}
+                {user.kycStatus === "verified" && <span className="num flex items-center gap-1 bg-state-released/10 px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-state-released"><SealCheck weight="fill" className="h-3 w-3" /> verified</span>}
                 {arbitersLoading && <InlineLoading label="arbiter…" />}
                 {!isArbiterSeat && arbiter?.registered && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-state-split/10 px-2.5 py-0.5 text-[11px] text-state-split">
+                  <span className="flex items-center gap-1.5 bg-state-split/10 px-2.5 py-0.5 text-[11px] text-state-split">
                     <SealCheck weight="fill" className="h-3.5 w-3.5" /> arbiter · trust {arbiter.trustScore}
                   </span>
                 )}
@@ -134,7 +134,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
             </div>
           </div>
           {allowEdit && isMe && !editing && (
-            <Button variant="ghost" onClick={() => setEditing(true)} className="rounded-full border border-line px-4 text-[12.5px] text-dim hover:text-foreground">
+            <Button variant="ghost" onClick={() => setEditing(true)} className="border border-line px-4 text-[12.5px] text-dim hover:text-foreground">
               <PencilSimple className="mr-2 h-3.5 w-3.5" /> Edit profile
             </Button>
           )}
@@ -184,7 +184,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
           {!reviews?.length ? (
             <EmptyState className="mt-4" title="No reviews yet" body="Reviews unlock after on-chain settlement — one per side per milestone, bound to the settlement tx." />
           ) : (
-            <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden rounded-3xl border border-line">
+            <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
               {reviews.map((r) => (
                 <div key={r.id} className="bg-white/[0.012] px-6 py-5">
                   <div className="flex items-center justify-between">
@@ -215,7 +215,7 @@ export function ProfileView({ address, allowEdit }: { address: string; allowEdit
  * point at the one action that creates the row.
  */
 function ArbiterStanding({ arbiter, loading, minStakeWei, stats }: { arbiter: ArbiterView | undefined; loading: boolean; minStakeWei: string; stats: Stat[] }) {
-  if (loading) return <Skeleton className="mt-7 h-24 w-full rounded-2xl" />;
+  if (loading) return <Skeleton className="mt-7 h-24 w-full" />;
   if (!arbiter?.registered) {
     return (
       <div className="mt-7 border-t border-line pt-6">
@@ -232,7 +232,7 @@ function ArbiterStanding({ arbiter, loading, minStakeWei, stats }: { arbiter: Ar
     <div className="mt-7 border-t border-line pt-6">
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <span className="text-[11px] uppercase tracking-[0.14em] text-faint">registry standing</span>
-        <span className="rounded-full px-2.5 py-0.5 text-[11px]" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 9%, transparent)` }}>{st.label}</span>
+        <span className="px-2.5 py-0.5 text-[11px]" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 9%, transparent)` }}>{st.label}</span>
         {arbiter.registeredAt && <span className="num text-[11px] text-faint">registered {dateLabel(arbiter.registeredAt)}</span>}
         <Link href="/arbiters" className="num ml-auto text-[11.5px] text-faint underline-offset-4 hover:text-state-split hover:underline">roster →</Link>
       </div>
@@ -356,7 +356,7 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
                   variant="ghost"
                   onClick={() => setLinks((rows) => rows.filter((_, n) => n !== i))}
                   aria-label={`Remove ${r.k || `link ${i + 1}`}`}
-                  className="h-10 w-10 shrink-0 rounded-full p-0 text-faint hover:text-state-disputed"
+                  className="h-10 w-10 shrink-0 p-0 text-faint hover:text-state-disputed"
                 >
                   <Trash className="h-4 w-4" />
                 </Button>
@@ -416,11 +416,11 @@ function EditProfile({ onDone, user }: { onDone: () => void; user: PublicUser })
               setSaving(false);
             }
           }}
-          className="rounded-full bg-rose-accent px-6 hover:bg-rose-bright"
+          className="bg-rose-accent px-6 hover:bg-rose-bright"
         >
           <Check className="mr-2 h-4 w-4" /> Save
         </Button>
-        <Button variant="ghost" onClick={onDone} className="rounded-full border border-line px-5 text-dim">
+        <Button variant="ghost" onClick={onDone} className="border border-line px-5 text-dim">
           <X className="mr-2 h-4 w-4" /> Cancel
         </Button>
         {/* `/arbiters` is arbiter-only in the seat matrix, so this sent every
