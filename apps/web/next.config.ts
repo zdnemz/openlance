@@ -2,7 +2,9 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // `standalone` is the self-hosted server bundle (see scripts/finalize-standalone.mjs).
+  // Vercel builds and hosts its own output, so it is left off there.
+  output: process.env.VERCEL ? undefined : "standalone",
   // The app lives at `apps/web/` but the workspace root holds the lockfile and
   // pnpm's store. Tracing from the monorepo root keeps the standalone bundle
   // rooted at the repo, so the server entry is
