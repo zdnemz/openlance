@@ -157,8 +157,9 @@ public identity · `/admin` reconciliation + fees · `/console` backend console.
   OOM kills at ~2.9GB). The wallet layer (`src/lib/wallet.ts`) is ~150 lines
   of viem — local persona accounts + an injected-provider path — which cut
   the dev server's settled footprint from ~2.4GB to ~1.5GB.
-- **Phosphor icons are imported per-icon** (`dist/csr/*`): the barrel import
-  drags ~3000 modules into the dev compile.
+- **Icons are imported per-glyph** from `pixelarticons/react/<Name>`, behind
+  `components/icons.tsx` (concept → glyph), so a page never reaches into the
+  package and a barrel import never drags the whole set into the dev compile.
 - **SIWE gotcha**: the parser enforces strict EIP-55 checksums — anvil's
   displayed casing is NOT EIP-55, so the frontend checksums with viem's
   `getAddress()` before building the message.
@@ -167,8 +168,14 @@ public identity · `/admin` reconciliation + fees · `/console` backend console.
 
 ## Frontend design system
 
-Dark premium: zinc-950 base, one deep-rose accent (`#e11d48`), emerald
-reserved for money-released semantics, Geist + Geist Mono (every wei amount,
-hash, and timestamp is mono/tabular). Motion budget: cinematic landing
-(parallax hero, sticky-stack scrolltelling, kinetic marquee), calm app
-interior (spring hovers, breathing status dots, shimmer skeletons).
+Pixel art on dark ink: zinc-950 base, one deep-rose accent (`#e11d48`), the
+milestone-state hues as semantics only. Press Start 2P for short display
+strings and controls, Pixelify Sans for UI and body copy, IBM Plex Mono for
+every wei amount, hash and timestamp (mono/tabular). All three faces are
+self-hosted (`apps/web/app/fonts`), so the build needs no network. Square
+corners, 2px frames, offset slabs instead of shadows, dither instead of
+gradients. Motion budget: a stepped landing page (scroll motion snapped to
+8px, a frame-by-frame escrow card) and a calm app interior (blinking status
+squares, a marching-dither skeleton). Everything moves in `steps()`, never a
+spring, and `prefers-reduced-motion` is honored. Full rules in
+[`DESIGN.md`](./DESIGN.md).

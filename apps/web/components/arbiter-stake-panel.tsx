@@ -982,7 +982,7 @@ function RuleRow({ label, value, hint, accent, strong }: { label: string; value:
     <div className="flex items-baseline justify-between gap-4">
       <dt className={cn("text-faint", strong && "text-dim")}>
         {label}
-        {hint && <span className="ml-1.5 text-[13px] text-faint/70">{hint}</span>}
+        {hint && <span className="ml-1.5 text-[13px] text-faint">{hint}</span>}
       </dt>
       <dd className={cn("num shrink-0 font-medium", accent ? "text-state-disputed" : strong ? "text-foreground" : "text-dim")}>{value}</dd>
     </div>

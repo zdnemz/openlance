@@ -65,7 +65,7 @@ export default function AdminPage() {
         </div>
         {/* the console, gated: a dimmed preview of the bento behind a lock plate */}
         <div className="relative">
-          <div aria-hidden className="grid gap-4 opacity-45 blur-[1.5px] md:grid-cols-5">
+          <div aria-hidden className="grid gap-4 opacity-45 grayscale md:grid-cols-5">
             <Skeleton className="h-60 md:col-span-3" />
             <Skeleton className="h-60 md:col-span-2" />
             <Skeleton className="h-28 md:col-span-5" />
