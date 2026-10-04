@@ -1,0 +1,7 @@
+secrets/
+node_modules/
+snapshots/
+.scratch/
+.waveform-cache/
+.thumbnails/
+.hyperframes/preview/

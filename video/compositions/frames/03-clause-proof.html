@@ -1,0 +1,123 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face{font-family:'IBM Plex Mono';font-weight:400;src:url('assets/fonts/IBMPlexMono-400.woff2') format('woff2');}
+    @font-face{font-family:'IBM Plex Mono';font-weight:500;src:url('assets/fonts/IBMPlexMono-500.woff2') format('woff2');}
+    @font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;src:url('assets/fonts/InstrumentSerif-400.woff2') format('woff2');}
+    @font-face{font-family:'Instrument Serif';font-style:italic;font-weight:400;src:url('assets/fonts/InstrumentSerif-400-italic.woff2') format('woff2');}
+    @font-face{font-family:'Schibsted Grotesk';font-weight:400 700;src:url('assets/fonts/SchibstedGrotesk-400.woff2') format('woff2');}
+    .f3-cam{position:absolute;inset:0}
+    #root{position:absolute;inset:0;container-type:size;color:#f4f4f5;overflow:hidden}
+    .f3-ground{position:absolute;inset:0;background:#09090b}
+    #root::after{content:"";position:absolute;inset:0;z-index:20;pointer-events:none;opacity:.9;mix-blend-mode:overlay;
+      background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(0,0,0,.55))}
+    .f3-margin{position:absolute;top:0;bottom:0;left:2.6cqw;width:1px;background:rgba(244,244,245,.09)}
+    .f3-numeral{position:absolute;right:6cqw;top:4cqw;font-family:'Instrument Serif';font-size:50cqw;line-height:.78;color:transparent;-webkit-text-stroke:.22cqw rgba(244,244,245,.26)}
+    .f3-stage{position:absolute;inset:0;perspective:140cqw;z-index:3}
+    .f3-win{position:absolute;width:52cqw;height:34cqw;left:-6cqw;top:6cqw;background:#101014;border:1px solid rgba(244,244,245,.16);border-radius:1cqw;box-shadow:0 3cqw 7cqw rgba(0,0,0,.65),0 .4cqw 1cqw rgba(0,0,0,.5);overflow:hidden;font-family:'IBM Plex Mono'}
+    .f3-chrome{display:flex;align-items:center;gap:.6cqw;padding:.9cqw 1.2cqw;border-bottom:1px solid rgba(244,244,245,.09);background:#18181b}
+    .f3-chrome i{width:.8cqw;height:.8cqw;border-radius:50%;background:rgba(244,244,245,.18)}
+    .f3-chrome span{margin-left:auto;font-size:1cqw;color:#a1a1aa;letter-spacing:.06em}
+    .f3-body{display:grid;grid-template-columns:22% 1fr;height:calc(100% - 3cqw)}
+    .f3-side{border-right:1px solid rgba(244,244,245,.09);padding:1.4cqw 1.2cqw;display:flex;flex-direction:column;gap:1cqw}
+    .f3-side b{display:block;height:.7cqw;border-radius:.4cqw;background:rgba(244,244,245,.12)}
+    .f3-side b.on{background:rgba(244,244,245,.32)}
+    .f3-main{padding:1.6cqw;display:flex;flex-direction:column;gap:1.2cqw;min-width:0}
+    .f3-ph{height:.8cqw;width:55%;border-radius:.4cqw;background:rgba(244,244,245,.1)}
+    .f3-row{display:flex;align-items:center;justify-content:space-between;gap:1cqw;border:1px solid rgba(244,244,245,.09);border-radius:.7cqw;padding:1.1cqw 1.3cqw;background:#0e0e12;font-size:1.2cqw}
+    .f3-pill{font-size:1cqw;letter-spacing:.1em;padding:.35cqw .9cqw;border-radius:99px;border:1px solid currentColor}
+    .f3-gloss{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;--g:-30;background:linear-gradient(25deg,transparent calc(var(--g)*1% - 22%),rgba(255,255,255,.05) calc(var(--g)*1% - 9%),rgba(255,255,255,.42) calc(var(--g)*1%),rgba(255,255,255,.06) calc(var(--g)*1% + 9%),transparent calc(var(--g)*1% + 22%))}
+    .f3-ring{position:absolute;inset:-.25cqw;border-radius:50%;border:.2cqw solid currentColor;opacity:0}
+    .f3-tab{position:absolute;left:5cqw;top:3.2cqw;z-index:4;font-family:'IBM Plex Mono';font-weight:500;font-size:1.15cqw;letter-spacing:.14em;text-transform:uppercase;background:#f4f4f5;color:#09090b;padding:.55cqw 1.1cqw;border-radius:.4cqw}
+    .f3-copy{position:absolute;left:56cqw;top:10.2cqw;z-index:5}
+    .f3-kicker{font-family:'IBM Plex Mono';font-weight:500;font-size:1.46cqw;letter-spacing:.16em;text-transform:uppercase;color:#a1a1aa}
+    .f3-head{margin-top:2cqw;font-family:'Instrument Serif';font-size:6cqw;line-height:1.02;letter-spacing:-.02em}
+    .f3-head span{display:inline-block}
+    .f3-head .f3-line{display:block}
+    .f3-lead{margin-top:1.6cqw;font-family:'Schibsted Grotesk';font-size:2.2cqw;color:#a1a1aa}
+    .f3-lead span{display:inline-block}
+    .f3-rail{position:absolute;left:4.2cqw;right:4.2cqw;top:44cqw;display:grid;grid-template-columns:auto 1fr auto 1fr auto;align-items:center;gap:1.4cqw;z-index:5;font-family:'IBM Plex Mono';font-weight:500;font-size:1.25cqw;letter-spacing:.12em}
+    .f3-node{display:flex;align-items:center;gap:.8cqw}
+    .f3-dot{position:relative;width:2.2cqw;height:2.2cqw;border-radius:50%;border:.25cqw solid currentColor;display:grid;place-items:center;font-style:normal;font-size:1.3cqw}
+    .f3-seg{height:.25cqw;transform-origin:left center}
+    .f3-page{position:absolute;right:3cqw;top:53cqw;font-family:'IBM Plex Mono';font-size:1.1cqw;color:#a1a1aa;letter-spacing:.14em}
+  </style>
+
+  <div data-hf-id="hf-pgva" id="root" data-composition-id="03-clause-proof" data-width="1920" data-height="1080" data-duration="7.141">
+    <div data-hf-id="hf-8afr" id="f3-ground" class="f3-ground clip" data-start="0" data-duration="7.141" data-track-index="0"></div>
+    <div class="f3-cam" id="f3-cam">
+    <div data-hf-id="hf-3rex" class="f3-numeral" data-layout-ignore="" id="f3-num">2</div>
+    <div data-hf-id="hf-tnos" class="f3-margin"></div>
+    <div data-hf-id="hf-gg24" class="f3-stage">
+      <div data-hf-id="hf-bp46" class="f3-win" id="f3-win">
+        <span class="f3-gloss" id="f3-gloss"></span>
+        <div data-hf-id="hf-1tz4" class="f3-chrome"><i data-hf-id="hf-wt6k"></i><i data-hf-id="hf-zeb8"></i><i data-hf-id="hf-y7e5"></i><span data-hf-id="hf-jclb">openlance · milestone M1</span></div>
+        <div data-hf-id="hf-uwpm" class="f3-body">
+          <div data-hf-id="hf-jec3" class="f3-side"><b data-hf-id="hf-xujp"></b><b data-hf-id="hf-a562" class="on"></b><b data-hf-id="hf-ey49"></b><b data-hf-id="hf-g51c"></b></div>
+          <div data-hf-id="hf-m23l" class="f3-main">
+            <div data-hf-id="hf-x2im" class="f3-ph"></div>
+            <div data-hf-id="hf-x54x" class="f3-row" id="f3-r1"><span data-hf-id="hf-g1mj">proof · brand-v3.fig + notes.pdf</span><span data-hf-id="hf-lh9s" class="f3-pill" style="color:#60a5fa">SUBMITTED</span></div>
+            <div data-hf-id="hf-138y" class="f3-row" id="f3-r2"><span data-hf-id="hf-ouq1">client approved · 2.50 ETH → freelancer</span><span data-hf-id="hf-yps3" class="f3-pill" style="color:#34d399">RELEASED</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div data-hf-id="hf-cmsl" class="f3-tab" id="f3-tab">Exhibit B</div>
+    <div data-hf-id="hf-b11p" class="f3-copy">
+      <div data-hf-id="hf-2dhf" class="f3-kicker" id="f3-kick">✱ Clause 2</div>
+      <div data-hf-id="hf-4if0" class="f3-head"><span data-hf-id="hf-t1r3" class="f3-line"><span data-hf-id="hf-wwn7" class="f3-w" data-layout-allow-overlap="">Deliver</span> <span data-hf-id="hf-o8f9" class="f3-w" data-layout-allow-overlap="">the</span> <span data-hf-id="hf-2kq4" class="f3-w" data-layout-allow-overlap="">proof,</span></span><span data-hf-id="hf-9q42" class="f3-line" id="f3-paid" data-layout-allow-overlap="" style="font-style:italic;color:#f43f5e">get paid.</span></div>
+      <div data-hf-id="hf-2abs" class="f3-lead"><span data-hf-id="hf-5uok" id="f3-l1">No invoices.</span> <span data-hf-id="hf-v2z2" id="f3-l2">No chasing.</span></div>
+    </div>
+    <div data-hf-id="hf-x1ci" class="f3-rail">
+      <span data-hf-id="hf-sbyc" class="f3-node" id="f3-n1" style="color:#fbbf24"><i data-hf-id="hf-vb53" class="f3-dot"><b class="f3-ring" id="f3-g1"></b></i>FUNDED</span>
+      <span data-hf-id="hf-hdo7" class="f3-seg" id="f3-s1" style="background:linear-gradient(90deg,#fbbf24,#60a5fa)"></span>
+      <span data-hf-id="hf-r3el" class="f3-node" id="f3-n2" style="color:#60a5fa"><i data-hf-id="hf-06o7" class="f3-dot"><b class="f3-ring" id="f3-g2"></b></i>SUBMITTED</span>
+      <span data-hf-id="hf-ywm2" class="f3-seg" id="f3-s2" style="background:linear-gradient(90deg,#60a5fa,#34d399)"></span>
+      <span data-hf-id="hf-hkl5" class="f3-node" id="f3-n3" style="color:#34d399"><i data-hf-id="hf-r467" class="f3-dot" id="f3-d3">✓<b class="f3-ring" id="f3-g3"></b></i>RELEASED</span>
+    </div>
+    <div data-hf-id="hf-n63g" class="f3-page">P. 3</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const cam = "#f3-cam";
+      tl.fromTo(cam, { scale: 1.09, rotation: -0.6 }, { scale: 1, rotation: 0, duration: 1.3, ease: "expo.out" }, 0);
+      tl.to(cam, { scale: 1.035, duration: 5.34, ease: "none" }, 1.3);
+      const hit = (t, k = 1) => tl.to(cam, { keyframes: [
+        { x: -9 * k, y: 5 * k, duration: 0.04 }, { x: 7 * k, y: -4 * k, duration: 0.05 },
+        { x: -3 * k, y: 2 * k, duration: 0.05 }, { x: 0, y: 0, duration: 0.09 }] }, t);
+      const W = document.querySelectorAll("#root .f3-w");
+      tl.fromTo("#f3-num", { yPercent: 14, opacity: 0, scale: 1.35, rotation: -8 }, { yPercent: 0, opacity: 1, scale: 1, rotation: 0, duration: 1.3, ease: "power4.out" }, 0);
+      tl.to("#f3-num", { yPercent: -4, duration: 5.3, ease: "none" }, 1.3);
+      // Exhibit B swings in from off-frame left (mirror of frame 02), slow push-in after
+      tl.fromTo("#f3-win", { xPercent: -45, rotationY: 32, rotationX: 4, rotationZ: 1, opacity: 0 },
+        { xPercent: 0, rotationY: 14, rotationX: 4, rotationZ: 1, opacity: 1, duration: 1.2, ease: "power3.out" }, 0);
+      tl.fromTo("#f3-win", { scale: 1 }, { scale: 1.04, duration: 5.4, ease: "none", immediateRender: false }, 1.2);
+      tl.fromTo("#f3-tab", { y: -30, rotation: -7, opacity: 0 }, { y: 0, rotation: -2, opacity: 1, duration: 0.6, ease: "back.out(1.6)" }, 0.5);
+      tl.fromTo("#f3-kick", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0.3);
+      // "deliver the proof," (1.48 / 1.87 / 2.00) then rose "get paid." (2.53)
+      [1.42, 1.8, 1.94].forEach((t, i) => tl.fromTo(W[i], { yPercent: 45, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, t));
+      tl.fromTo("#f3-paid", { yPercent: 40, opacity: 0, scale: 1.3, rotation: -3, transformOrigin: "0% 60%" }, { yPercent: 0, opacity: 1, scale: 1, rotation: 0, duration: 0.6, ease: "expo.out" }, 2.5);
+      hit(2.55, 1);
+      [["#f3-g1", 0.9], ["#f3-g2", 1.95], ["#f3-g3", 2.8]].forEach(([r, t]) => tl.fromTo(r, { scale: 1, opacity: 0.9 }, { scale: 2.8, opacity: 0, duration: 0.9, ease: "power2.out" }, t));
+      tl.set("#f3-gloss", { opacity: 1, "--g": -30 }, 2.9);
+      tl.to("#f3-gloss", { "--g": 130, duration: 1.0, ease: "power2.out" }, 2.9);
+      // the window's rows land on their cues: proof -> SUBMITTED, paid -> RELEASED
+      tl.fromTo("#f3-r1", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 1.95);
+      tl.fromTo("#f3-r2", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 2.6);
+      // state rail draws left -> right in the app's own colors
+      tl.fromTo("#f3-n1", { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out" }, 0.9);
+      tl.fromTo("#f3-s1", { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: "power2.inOut" }, 1.1);
+      tl.fromTo("#f3-n2", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2)" }, 1.95);
+      tl.fromTo("#f3-s2", { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power2.inOut" }, 2.15);
+      tl.fromTo("#f3-n3", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2)" }, 2.75);
+      tl.fromTo("#f3-d3", { backgroundColor: "rgba(52,211,153,0)", color: "rgba(9,9,11,0)" }, { backgroundColor: "#34d399", color: "#09090b", duration: 0.3 }, 2.95);
+      // "No invoices." (3.47) / "No chasing." (4.49)
+      tl.fromTo("#f3-l1", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 3.42);
+      tl.fromTo("#f3-l2", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 4.44);
+      window.__timelines["03-clause-proof"] = tl;
+    })();
+  </script>
+</template>

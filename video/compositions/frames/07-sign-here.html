@@ -1,0 +1,79 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face{font-family:'IBM Plex Mono';font-weight:400;src:url('assets/fonts/IBMPlexMono-400.woff2') format('woff2');}
+    @font-face{font-family:'IBM Plex Mono';font-weight:500;src:url('assets/fonts/IBMPlexMono-500.woff2') format('woff2');}
+    @font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;src:url('assets/fonts/InstrumentSerif-400.woff2') format('woff2');}
+    @font-face{font-family:'Instrument Serif';font-style:italic;font-weight:400;src:url('assets/fonts/InstrumentSerif-400-italic.woff2') format('woff2');}
+    .f7-cam{position:absolute;inset:0}
+    #root{position:absolute;inset:0;container-type:size;color:#f4f4f5;overflow:hidden}
+    .f7-ground{position:absolute;inset:0;background:#09090b}
+    #root::after{content:"";position:absolute;inset:0;z-index:20;pointer-events:none;opacity:.9;mix-blend-mode:overlay;
+      background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(0,0,0,.55))}
+    .f7-stack{position:absolute;left:0;right:0;top:3.4cqw;display:flex;flex-direction:column;align-items:center;text-align:center;gap:1.1cqw;z-index:3}
+    .f7-seal{position:relative;width:15cqw;height:15cqw;display:grid;place-items:center}
+    .f7-ring{position:absolute;inset:0;width:100%;height:100%}
+    .f7-icon{width:8cqw;height:8cqw;border-radius:1.8cqw}
+    .f7-word{font-family:'Instrument Serif';font-size:9cqw;line-height:.98;letter-spacing:-.025em}
+    .f7-word{perspective:40cqw}
+    .f7-word span{display:inline-block}
+    .f7-cta{position:relative;overflow:hidden}
+    .f7-gloss{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;--g:-30;background:linear-gradient(25deg,transparent calc(var(--g)*1% - 22%),rgba(255,255,255,.05) calc(var(--g)*1% - 9%),rgba(255,255,255,.7) calc(var(--g)*1%),rgba(255,255,255,.06) calc(var(--g)*1% + 9%),transparent calc(var(--g)*1% + 22%))}
+    .f7-tag{font-family:'Instrument Serif';font-style:italic;font-size:3cqw}
+    .f7-tag span{display:inline-block}
+    .f7-sign{position:relative;width:46cqw;height:5cqw;margin-top:.4cqw}
+    .f7-sign svg{position:absolute;inset:0;width:100%;height:100%}
+    .f7-cta{margin-top:.6cqw;font-family:'IBM Plex Mono';font-size:1.6cqw;background:#e11d48;color:#ffffff;padding:.9cqw 2.2cqw;border-radius:99px;letter-spacing:.04em}
+  </style>
+
+  <div data-hf-id="hf-893o" id="root" data-composition-id="07-sign-here" data-width="1920" data-height="1080" data-duration="6.269">
+    <div data-hf-id="hf-x7s3" id="f7-ground" class="f7-ground clip" data-start="0" data-duration="6.269" data-track-index="0"></div>
+    <div class="f7-cam" id="f7-cam">
+    <div data-hf-id="hf-5a2q" class="f7-stack" id="f7-stack">
+      <div data-hf-id="hf-30y1" class="f7-seal">
+        <svg data-hf-id="hf-1nde" class="f7-ring" id="f7-ring" viewBox="0 0 200 200"><defs data-hf-id="hf-mh0t"><path data-hf-id="hf-f4xv" id="f7-ringpath" d="M100,100 m-82,0 a82,82 0 1,1 164,0 a82,82 0 1,1 -164,0" /></defs><circle data-hf-id="hf-igcx" cx="100" cy="100" r="96" fill="none" stroke="rgba(244,244,245,.18)" /><text data-hf-id="hf-tq01" font-family="IBM Plex Mono" font-size="11.2" fill="#a1a1aa"><textpath data-hf-id="hf-hivz" href="#f7-ringpath" textLength="505" lengthAdjust="spacing">SIGNED · ESCROWED · ENFORCED ON-CHAIN · </textpath></text></svg>
+        <img data-hf-id="hf-jqsi" class="f7-icon" id="f7-icon" src="assets/openlance-icon.svg" alt="">
+      </div>
+      <div data-hf-id="hf-fnbu" class="f7-word" id="f7-word"><span data-hf-id="hf-h7vu">O</span><span data-hf-id="hf-sqrn">p</span><span data-hf-id="hf-xwr0">e</span><span data-hf-id="hf-tjdp">n</span><span data-hf-id="hf-hm6v">L</span><span data-hf-id="hf-zhz4">a</span><span data-hf-id="hf-mult">n</span><span data-hf-id="hf-ypd2">c</span><span data-hf-id="hf-pn38">e</span></div>
+      <div data-hf-id="hf-4j8i" class="f7-tag" id="f7-tag"><span data-hf-id="hf-ptqy">Freelance,</span> <span data-hf-id="hf-91x1">with</span> <span data-hf-id="hf-3tds">the</span> <span data-hf-id="hf-tt83">money</span> <span data-hf-id="hf-dnos">on</span> <span data-hf-id="hf-5u2g">the</span> <span data-hf-id="hf-c9cf">table.</span></div>
+      <div data-hf-id="hf-veu1" class="f7-sign">
+        <svg data-hf-id="hf-2sbk" viewBox="0 0 400 50" preserveAspectRatio="none"><path data-hf-id="hf-6p2q" id="f7-sig" d="M30 34 C 52 6, 66 6, 70 30 S 92 46, 108 20 S 136 8, 150 32 S 186 40, 204 18 C 214 8, 226 30, 240 26 S 276 12, 300 30" fill="none" stroke="#f4f4f5" stroke-width="2.2" stroke-linecap="round" pathLength="1" stroke-dasharray="1" /><line data-hf-id="hf-3v77" id="f7-line" x1="0" y1="44" x2="400" y2="44" stroke="rgba(244,244,245,.45)" stroke-width="1" /><text data-hf-id="hf-c944" x="2" y="40" font-family="IBM Plex Mono" font-size="14" fill="#a1a1aa">✕</text></svg>
+      </div>
+      <div data-hf-id="hf-xarf" class="f7-cta" id="f7-cta">github.com/zdnemz/openlance<span class="f7-gloss" id="f7-gloss"></span></div>
+    </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const cam = "#f7-cam";
+      tl.fromTo(cam, { scale: 1.09, rotation: -0.6 }, { scale: 1, rotation: 0, duration: 1.3, ease: "expo.out" }, 0);
+      tl.to(cam, { scale: 1.035, duration: 4.97, ease: "none" }, 1.3);
+      const hit = (t, k = 1) => tl.to(cam, { keyframes: [
+        { x: -9 * k, y: 5 * k, duration: 0.04 }, { x: 7 * k, y: -4 * k, duration: 0.05 },
+        { x: -3 * k, y: 2 * k, duration: 0.05 }, { x: 0, y: 0, duration: 0.09 }] }, t);
+      // shield mark + seal ring turn in, ring keeps turning slowly
+      tl.fromTo("#f7-icon", { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "power3.out" }, 0);
+      tl.fromTo("#f7-ring", { rotation: -160, scale: 1.6, opacity: 0 }, { rotation: 0, scale: 1, opacity: 1, duration: 1.3, ease: "expo.out" }, 0.05);
+      tl.to("#f7-ring", { rotation: 22, duration: 4.85, ease: "none" }, 1.35);
+      // wordmark typesets by letter on "OpenLance." (0.40)
+      tl.fromTo("#f7-word span", { yPercent: 30, rotationX: -90, opacity: 0 }, { yPercent: 0, rotationX: 0, opacity: 1, duration: 0.7, stagger: 0.04, ease: "power3.out" }, 0.35);
+      // tagline on "Freelance work, with the money on the table." (1.60 → 3.31)
+      const T = document.querySelectorAll("#f7-tag span");
+      [1.56, 2.5, 2.7, 2.82, 3.06, 3.17, 3.27].forEach((t, i) =>
+        tl.fromTo(T[i], { yPercent: 40, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, t));
+      // the signature draws itself in one stroke
+      tl.fromTo("#f7-line", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 2.3);
+      tl.fromTo("#f7-sig", { strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 1.1, ease: "power1.inOut" }, 2.5);
+      // rose CTA springs in and holds
+      tl.fromTo("#f7-cta", { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(1.4)" }, 3.9);
+      hit(4.05, 0.7);
+      tl.set("#f7-gloss", { opacity: 1, "--g": -30 }, 4.5);
+      tl.to("#f7-gloss", { "--g": 130, duration: 0.9, ease: "power2.out" }, 4.5);
+      // final frame: a gentle settle in the last 0.8s
+      tl.to("#f7-stack", { opacity: 0.0, scale: 0.98, duration: 0.8, ease: "power2.in" }, 5.45);
+      window.__timelines["07-sign-here"] = tl;
+    })();
+  </script>
+</template>

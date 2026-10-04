@@ -1,0 +1,83 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face{font-family:'IBM Plex Mono';font-weight:500;src:url('assets/fonts/IBMPlexMono-500.woff2') format('woff2');}
+    @font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;src:url('assets/fonts/InstrumentSerif-400.woff2') format('woff2');}
+    @font-face{font-family:'Instrument Serif';font-style:italic;font-weight:400;src:url('assets/fonts/InstrumentSerif-400-italic.woff2') format('woff2');}
+    .f1-cam{position:absolute;inset:0}
+    #root{position:absolute;inset:0;container-type:size;color:#f4f4f5;overflow:hidden}
+    .f1-ground{position:absolute;inset:0;background:#09090b}
+    #root::after{content:"";position:absolute;inset:0;z-index:20;pointer-events:none;opacity:.9;mix-blend-mode:overlay;
+      background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(0,0,0,.55))}
+    .f1-margin{position:absolute;top:0;bottom:0;left:2.6cqw;width:1px;background:rgba(244,244,245,.09)}
+    .f1-numeral{position:absolute;right:20cqw;top:3cqw;font-family:'Instrument Serif';font-size:52cqw;line-height:.78;color:transparent;-webkit-text-stroke:.22cqw rgba(244,244,245,.26)}
+    .f1-kicker{position:absolute;left:4.2cqw;top:4.2cqw;font-family:'IBM Plex Mono';font-weight:500;font-size:1.46cqw;letter-spacing:.16em;text-transform:uppercase;color:#a1a1aa;display:flex;align-items:center}
+    .f1-caret{display:inline-block;width:.9cqw;height:1.6cqw;background:#f4f4f5;margin-left:.6cqw}
+    .f1-doubt{position:absolute;font-family:'Instrument Serif';font-size:12.5cqw;line-height:.92;letter-spacing:-.03em}
+    .f1-doubt .f1-line{display:block;overflow:hidden;padding-bottom:.08em}
+    .f1-doubt .f1-w{display:inline-block}
+    .f1-pay{left:4.2cqw;top:12cqw}
+    .f1-deliver{right:5cqw;top:23.5cqw;text-align:right;font-style:italic;color:#f43f5e}
+    .f1-label{position:absolute;font-family:'IBM Plex Mono';font-weight:500;font-size:1.46cqw;letter-spacing:.16em;text-transform:uppercase;color:#a1a1aa}
+    .f1-rule{position:absolute;left:4.2cqw;right:4.2cqw;top:7.6cqw;height:1px;background:rgba(244,244,245,.16);transform-origin:left center}
+    .f1-idx{position:absolute;font-family:'IBM Plex Mono';font-weight:500;font-size:1.46cqw;letter-spacing:.16em;color:#a1a1aa}
+    .f1-page{position:absolute;right:3cqw;top:53cqw;font-family:'IBM Plex Mono';font-size:1.1cqw;color:#a1a1aa;letter-spacing:.14em}
+  </style>
+
+  <div data-hf-id="hf-u1i5" id="root" data-composition-id="01-two-doubts" data-width="1920" data-height="1080" data-duration="7.201">
+    <div data-hf-id="hf-jvpq" id="f1-ground" class="f1-ground clip" data-start="0" data-duration="7.201" data-track-index="0"></div>
+    <div class="f1-cam" id="f1-cam">
+    <div data-hf-id="hf-22qu" class="f1-margin"></div>
+    <div data-hf-id="hf-yq2h" class="f1-numeral" data-layout-ignore="" id="f1-q">?</div>
+    <div data-hf-id="hf-ku33" class="f1-kicker"><span data-hf-id="hf-zak0">✱&#160;</span><span data-hf-id="hf-pk96" id="f1-type"><span data-hf-id="hf-ms68">A</span><span data-hf-id="hf-kec2">G</span><span data-hf-id="hf-f8cp">R</span><span data-hf-id="hf-l6y4">E</span><span data-hf-id="hf-16v8">E</span><span data-hf-id="hf-i0hw">M</span><span data-hf-id="hf-zzy5">E</span><span data-hf-id="hf-gtkt">N</span><span data-hf-id="hf-efqn">T</span></span><span data-hf-id="hf-y2qn" class="f1-caret" id="f1-caret"></span></div>
+    <div data-hf-id="hf-n8gy" class="f1-rule" id="f1-rule"></div>
+    <div data-hf-id="hf-jhid" class="f1-idx" id="f1-i1" style="left:4.2cqw;top:9.6cqw">01 /</div>
+    <div data-hf-id="hf-fyqt" class="f1-idx" id="f1-i2" style="right:5cqw;top:21cqw">/ 02</div>
+    <div data-hf-id="hf-lvzs" class="f1-doubt f1-pay" id="f1-pay"><span data-hf-id="hf-5juh" class="f1-line"><span data-hf-id="hf-ykhq" class="f1-w">Will</span> <span data-hf-id="hf-76do" class="f1-w">they</span></span><span data-hf-id="hf-zedp" class="f1-line"><span data-hf-id="hf-q5b1" class="f1-w">pay?</span></span></div>
+    <div data-hf-id="hf-x5j3" class="f1-label" id="f1-l1" style="left:4.2cqw;top:38cqw">— asks the freelancer</div>
+    <div data-hf-id="hf-kuqs" class="f1-doubt f1-deliver" id="f1-del"><span data-hf-id="hf-0las" class="f1-line"><span data-hf-id="hf-4en6" class="f1-w">Will</span> <span data-hf-id="hf-q2as" class="f1-w">they</span></span><span data-hf-id="hf-06zr" class="f1-line"><span data-hf-id="hf-rl3w" class="f1-w">deliver?</span></span></div>
+    <div data-hf-id="hf-kzmx" class="f1-label" id="f1-l2" style="right:5cqw;top:50.5cqw">asks the client —</div>
+    <div data-hf-id="hf-svvs" class="f1-page">P. 1</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const cam = "#f1-cam";
+      tl.fromTo(cam, { scale: 1.09, rotation: -0.6 }, { scale: 1, rotation: 0, duration: 1.3, ease: "expo.out" }, 0);
+      tl.to(cam, { scale: 1.035, duration: 5.40, ease: "none" }, 1.3);
+      const hit = (t, k = 1) => tl.to(cam, { keyframes: [
+        { x: -9 * k, y: 5 * k, duration: 0.04 }, { x: 7 * k, y: -4 * k, duration: 0.05 },
+        { x: -3 * k, y: 2 * k, duration: 0.05 }, { x: 0, y: 0, duration: 0.09 }] }, t);
+      const q = (s) => document.querySelectorAll(s);
+      // caret blinks, then types AGREEMENT (one letter per ~70ms)
+      const letters = q("#f1-type span");
+      tl.set(letters, { opacity: 0 }, 0);
+      [0, 0.25, 0.5].forEach((t, i) => tl.set("#f1-caret", { opacity: i % 2 ? 1 : 0.15 }, t));
+      letters.forEach((el, i) => tl.set(el, { opacity: 1 }, 0.3 + i * 0.07));
+      tl.set("#f1-caret", { opacity: 1 }, 0.3);
+      // contract top rule draws across; "01 / 02" marks land on "two doubts" (2.61 / 2.94)
+      tl.fromTo("#f1-rule", { scaleX: 0 }, { scaleX: 1, duration: 1.4, ease: "power3.inOut" }, 0.9);
+      tl.fromTo("#f1-i1", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 2.6);
+      tl.fromTo("#f1-i2", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 2.9);
+      // giant outlined "?" fades up behind and drifts (camera layer)
+      tl.fromTo("#f1-q", { opacity: 0, scale: 1.7, rotation: -14, yPercent: 4 }, { opacity: 1, scale: 1, rotation: 0, duration: 1.8, ease: "power4.out" }, 1.0);
+      tl.to("#f1-q", { yPercent: -3, duration: 5.5, ease: "none" }, 1.2);
+      // "Will they pay?" slams in word by word on the VO (3.58 / 3.79 / 3.98)
+      const pay = q("#f1-pay .f1-w");
+      [3.5, 3.72, 3.92].forEach((t, i) => tl.fromTo(pay[i], { yPercent: 70, opacity: 0, scale: 1.35 }, { yPercent: 0, opacity: 1, scale: 1, duration: 0.55, ease: "expo.out" }, t));
+      hit(3.95, 1.2);
+      tl.fromTo("#f1-l1", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 4.2);
+      // "Will they deliver?" cross-corner in rose italic (4.60 / 4.82 / 4.98)
+      const del = q("#f1-del .f1-w");
+      [4.52, 4.74, 4.92].forEach((t, i) => tl.fromTo(del[i], { yPercent: 70, opacity: 0, scale: 1.35, rotation: -4 }, { yPercent: 0, opacity: 1, scale: 1, rotation: 0, duration: 0.55, ease: "expo.out" }, t));
+      hit(4.95, 1.4);
+      tl.fromTo("#f1-l2", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 5.3);
+      // the doubts lean apart a touch while held
+      tl.to("#f1-pay", { x: -12, duration: 3, ease: "power1.inOut" }, 3.7);
+      tl.to("#f1-del", { x: 12, duration: 1.8, ease: "power1.inOut" }, 4.9);
+      window.__timelines["01-two-doubts"] = tl;
+    })();
+  </script>
+</template>

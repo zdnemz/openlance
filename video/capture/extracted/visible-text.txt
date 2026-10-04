@@ -1,0 +1,55 @@
+---
+workflow: product-launch-video
+flow: automation
+storyboard: yes
+message: "The money exists before the work does."
+destination: youtube
+aspect: 1920x1080
+language: en
+length: 45s
+angle: contract-typeset
+---
+
+## Intent
+
+Concept #4, "The Contract, Typeset". An editorial promo for OpenLance, a
+milestone-escrow freelance marketplace. A contract is set clause by clause in
+Instrument Serif: each clause states one promise ("Clause 1. The money exists
+before the work does."), and a real OpenLance app screen backs it as evidence.
+No blockchain clichés: "enforced by a smart contract" appears only in the final
+beat. Calm, assured voiceover, as if a narrator were reading a contract aloud.
+It is a hybrid: motion typography plus captured app screens.
+
+Draft clause spine (inferred, open to plan review):
+1. Money locked before work starts (milestone escrow).
+2. Released on proof of delivery.
+3. Disagreements go to staked arbiters (SBT, ERC-5194).
+4. No gas for your actions (sponsored meta-tx).
+5. Reveal: enforced by a smart contract.
+6. Logo + CTA: github.com/zdnemz/openlance
+
+## Assets
+
+- ../openlance/apps/web/app/icon.svg is the OpenLance mark, used in the closing lockup.
+- ../openlance/apps/web/app/globals.css holds the brand tokens and is the brand truth: ink #09090b, ink-raised #0e0e12, rose #e11d48, rose-bright #f43f5e; fonts Instrument Serif (display), Schibsted Grotesk (sans), IBM Plex Mono (mono).
+- App screens come from the user's local dev at http://localhost:3000 (landing, /jobs, /projects/:id, /disputes, /arbiters, /dashboard). The user starts `pnpm chain` + `pnpm dev` with seeded data before capture.
+
+## Customizations
+
+- Sound comes entirely from ElevenLabs: voiceover (TTS), a music bed (ElevenLabs Music), and SFX (ElevenLabs sound generation). The API key arrives later as $ELEVENLABS_API_KEY.
+- Voice: offer 2–3 ElevenLabs voice samples once the key is available. The tone is calm, assured, editorial.
+- Screens appear as numbered "Exhibit A/B/C…" in framed cards with a slow push-in, like evidence attached to a contract.
+- Cut on the music's beat: clause reveals and transitions land on the music track's beat grid. The voiceover wins when the two conflict.
+
+## Notes
+
+- About 100 words of voiceover to fit roughly 45s.
+- Avoid spinning coins, neon blockchain cubes, and "Web3 revolution" tropes.
+- The CTA is the GitHub repo; no public product URL is known.
+## Frontend design system
+
+Dark premium: zinc-950 base, one deep-rose accent (`#e11d48`), emerald
+reserved for money-released semantics, Geist + Geist Mono (every wei amount,
+hash, and timestamp is mono/tabular). Motion budget: cinematic landing
+(parallax hero, sticky-stack scrolltelling, kinetic marquee), calm app
+interior (spring hovers, breathing status dots, shimmer skeletons).

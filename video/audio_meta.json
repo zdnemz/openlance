@@ -1,0 +1,711 @@
+{
+  "bgm": {
+    "path": "assets/bgm/underscore.wav",
+    "volume": 0.14,
+    "mode": "generate",
+    "query": "ElevenLabs sound-generation x3, crossfaded",
+    "duration_s": 48.0
+  },
+  "bgm_pending": false,
+  "voices": [
+    {
+      "frame": 1,
+      "path": "assets/voice/01.wav",
+      "duration_s": 6.701,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Every",
+          "start": 0.8,
+          "end": 1.148
+        },
+        {
+          "id": "w1",
+          "text": "freelance",
+          "start": 1.218,
+          "end": 1.659
+        },
+        {
+          "id": "w2",
+          "text": "deal",
+          "start": 1.694,
+          "end": 1.903
+        },
+        {
+          "id": "w3",
+          "text": "starts",
+          "start": 1.984,
+          "end": 2.344
+        },
+        {
+          "id": "w4",
+          "text": "with",
+          "start": 2.391,
+          "end": 2.553
+        },
+        {
+          "id": "w5",
+          "text": "two",
+          "start": 2.611,
+          "end": 2.867
+        },
+        {
+          "id": "w6",
+          "text": "doubts.",
+          "start": 2.936,
+          "end": 3.482
+        },
+        {
+          "id": "w7",
+          "text": "Will",
+          "start": 3.575,
+          "end": 3.761
+        },
+        {
+          "id": "w8",
+          "text": "they",
+          "start": 3.795,
+          "end": 3.911
+        },
+        {
+          "id": "w9",
+          "text": "pay?",
+          "start": 3.981,
+          "end": 4.48
+        },
+        {
+          "id": "w10",
+          "text": "Will",
+          "start": 4.596,
+          "end": 4.782
+        },
+        {
+          "id": "w11",
+          "text": "they",
+          "start": 4.817,
+          "end": 4.922
+        },
+        {
+          "id": "w12",
+          "text": "deliver?",
+          "start": 4.98,
+          "end": 6.001
+        }
+      ]
+    },
+    {
+      "frame": 2,
+      "path": "assets/voice/02.wav",
+      "duration_s": 6.78,
+      "words": [
+        {
+          "id": "w0",
+          "text": "OpenLance",
+          "start": 0.3,
+          "end": 0.962
+        },
+        {
+          "id": "w1",
+          "text": "rewrites",
+          "start": 1.031,
+          "end": 1.531
+        },
+        {
+          "id": "w2",
+          "text": "the",
+          "start": 1.589,
+          "end": 1.67
+        },
+        {
+          "id": "w3",
+          "text": "deal.",
+          "start": 1.728,
+          "end": 2.158
+        },
+        {
+          "id": "w4",
+          "text": "Clause",
+          "start": 2.274,
+          "end": 2.622
+        },
+        {
+          "id": "w5",
+          "text": "one:",
+          "start": 2.68,
+          "end": 3.063
+        },
+        {
+          "id": "w6",
+          "text": "the",
+          "start": 3.342,
+          "end": 3.446
+        },
+        {
+          "id": "w7",
+          "text": "money",
+          "start": 3.504,
+          "end": 3.76
+        },
+        {
+          "id": "w8",
+          "text": "exists",
+          "start": 3.876,
+          "end": 4.305
+        },
+        {
+          "id": "w9",
+          "text": "before",
+          "start": 4.352,
+          "end": 4.689
+        },
+        {
+          "id": "w10",
+          "text": "the",
+          "start": 4.723,
+          "end": 4.793
+        },
+        {
+          "id": "w11",
+          "text": "work",
+          "start": 4.863,
+          "end": 5.141
+        },
+        {
+          "id": "w12",
+          "text": "does.",
+          "start": 5.211,
+          "end": 5.78
+        }
+      ]
+    },
+    {
+      "frame": 3,
+      "path": "assets/voice/03.wav",
+      "duration_s": 6.641,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Clause",
+          "start": 0.3,
+          "end": 0.695
+        },
+        {
+          "id": "w1",
+          "text": "two:",
+          "start": 0.73,
+          "end": 1.206
+        },
+        {
+          "id": "w2",
+          "text": "deliver",
+          "start": 1.484,
+          "end": 1.821
+        },
+        {
+          "id": "w3",
+          "text": "the",
+          "start": 1.867,
+          "end": 1.937
+        },
+        {
+          "id": "w4",
+          "text": "proof,",
+          "start": 1.995,
+          "end": 2.448
+        },
+        {
+          "id": "w5",
+          "text": "get",
+          "start": 2.529,
+          "end": 2.75
+        },
+        {
+          "id": "w6",
+          "text": "paid.",
+          "start": 2.819,
+          "end": 3.353
+        },
+        {
+          "id": "w7",
+          "text": "No",
+          "start": 3.47,
+          "end": 3.632
+        },
+        {
+          "id": "w8",
+          "text": "invoices.",
+          "start": 3.713,
+          "end": 4.41
+        },
+        {
+          "id": "w9",
+          "text": "No",
+          "start": 4.491,
+          "end": 4.665
+        },
+        {
+          "id": "w10",
+          "text": "chasing.",
+          "start": 4.747,
+          "end": 5.641
+        }
+      ]
+    },
+    {
+      "frame": 4,
+      "path": "assets/voice/04.wav",
+      "duration_s": 7.105,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Clause",
+          "start": 0.3,
+          "end": 0.637
+        },
+        {
+          "id": "w1",
+          "text": "three:",
+          "start": 0.672,
+          "end": 1.078
+        },
+        {
+          "id": "w2",
+          "text": "if",
+          "start": 1.136,
+          "end": 1.275
+        },
+        {
+          "id": "w3",
+          "text": "you",
+          "start": 1.322,
+          "end": 1.403
+        },
+        {
+          "id": "w4",
+          "text": "disagree,",
+          "start": 1.473,
+          "end": 2.123
+        },
+        {
+          "id": "w5",
+          "text": "three",
+          "start": 2.204,
+          "end": 2.506
+        },
+        {
+          "id": "w6",
+          "text": "staked",
+          "start": 2.564,
+          "end": 2.982
+        },
+        {
+          "id": "w7",
+          "text": "arbiters",
+          "start": 3.04,
+          "end": 3.47
+        },
+        {
+          "id": "w8",
+          "text": "decide.",
+          "start": 3.516,
+          "end": 4.143
+        },
+        {
+          "id": "w9",
+          "text": "And",
+          "start": 4.294,
+          "end": 4.433
+        },
+        {
+          "id": "w10",
+          "text": "they",
+          "start": 4.48,
+          "end": 4.619
+        },
+        {
+          "id": "w11",
+          "text": "have",
+          "start": 4.677,
+          "end": 4.84
+        },
+        {
+          "id": "w12",
+          "text": "skin",
+          "start": 4.886,
+          "end": 5.234
+        },
+        {
+          "id": "w13",
+          "text": "in",
+          "start": 5.292,
+          "end": 5.35
+        },
+        {
+          "id": "w14",
+          "text": "the",
+          "start": 5.385,
+          "end": 5.455
+        },
+        {
+          "id": "w15",
+          "text": "game.",
+          "start": 5.513,
+          "end": 6.105
+        }
+      ]
+    },
+    {
+      "frame": 5,
+      "path": "assets/voice/05.wav",
+      "duration_s": 6.208,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Clause",
+          "start": 0.3,
+          "end": 0.672
+        },
+        {
+          "id": "w1",
+          "text": "four:",
+          "start": 0.73,
+          "end": 1.113
+        },
+        {
+          "id": "w2",
+          "text": "submit,",
+          "start": 1.229,
+          "end": 1.774
+        },
+        {
+          "id": "w3",
+          "text": "approve,",
+          "start": 1.798,
+          "end": 2.436
+        },
+        {
+          "id": "w4",
+          "text": "vote.",
+          "start": 2.564,
+          "end": 3.04
+        },
+        {
+          "id": "w5",
+          "text": "No",
+          "start": 3.156,
+          "end": 3.353
+        },
+        {
+          "id": "w6",
+          "text": "gas.",
+          "start": 3.423,
+          "end": 3.853
+        },
+        {
+          "id": "w7",
+          "text": "It's",
+          "start": 3.899,
+          "end": 4.131
+        },
+        {
+          "id": "w8",
+          "text": "on",
+          "start": 4.189,
+          "end": 4.305
+        },
+        {
+          "id": "w9",
+          "text": "us.",
+          "start": 4.422,
+          "end": 5.408
+        }
+      ]
+    },
+    {
+      "frame": 6,
+      "path": "assets/voice/06.wav",
+      "duration_s": 6.358,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Every",
+          "start": 0.5,
+          "end": 0.86
+        },
+        {
+          "id": "w1",
+          "text": "clause",
+          "start": 0.93,
+          "end": 1.278
+        },
+        {
+          "id": "w2",
+          "text": "is",
+          "start": 1.313,
+          "end": 1.394
+        },
+        {
+          "id": "w3",
+          "text": "enforced",
+          "start": 1.452,
+          "end": 1.87
+        },
+        {
+          "id": "w4",
+          "text": "by",
+          "start": 1.905,
+          "end": 2.021
+        },
+        {
+          "id": "w5",
+          "text": "a",
+          "start": 2.079,
+          "end": 2.102
+        },
+        {
+          "id": "w6",
+          "text": "smart",
+          "start": 2.172,
+          "end": 2.509
+        },
+        {
+          "id": "w7",
+          "text": "contract.",
+          "start": 2.567,
+          "end": 3.217
+        },
+        {
+          "id": "w8",
+          "text": "Not",
+          "start": 3.298,
+          "end": 3.495
+        },
+        {
+          "id": "w9",
+          "text": "a",
+          "start": 3.542,
+          "end": 3.565
+        },
+        {
+          "id": "w10",
+          "text": "promise.",
+          "start": 3.646,
+          "end": 4.262
+        },
+        {
+          "id": "w11",
+          "text": "Code.",
+          "start": 4.355,
+          "end": 4.958
+        }
+      ]
+    },
+    {
+      "frame": 7,
+      "path": "assets/voice/07.wav",
+      "duration_s": 6.269,
+      "words": [
+        {
+          "id": "w0",
+          "text": "OpenLance.",
+          "start": 0.4,
+          "end": 1.271
+        },
+        {
+          "id": "w1",
+          "text": "Freelance",
+          "start": 1.596,
+          "end": 2.095
+        },
+        {
+          "id": "w2",
+          "text": "work,",
+          "start": 2.13,
+          "end": 2.501
+        },
+        {
+          "id": "w3",
+          "text": "with",
+          "start": 2.536,
+          "end": 2.699
+        },
+        {
+          "id": "w4",
+          "text": "the",
+          "start": 2.734,
+          "end": 2.803
+        },
+        {
+          "id": "w5",
+          "text": "money",
+          "start": 2.861,
+          "end": 3.059
+        },
+        {
+          "id": "w6",
+          "text": "on",
+          "start": 3.105,
+          "end": 3.175
+        },
+        {
+          "id": "w7",
+          "text": "the",
+          "start": 3.21,
+          "end": 3.279
+        },
+        {
+          "id": "w8",
+          "text": "table.",
+          "start": 3.314,
+          "end": 4.069
+        }
+      ]
+    }
+  ],
+  "sfx": [
+    {
+      "frame": 1,
+      "name": "type",
+      "file": "assets/sfx/type.mp3",
+      "offset_s": 0.3,
+      "duration_s": 1.0,
+      "volume": 0.3
+    },
+    {
+      "frame": 1,
+      "name": "impact",
+      "file": "assets/sfx/impact.mp3",
+      "offset_s": 3.5,
+      "duration_s": 1.0,
+      "volume": 0.45
+    },
+    {
+      "frame": 1,
+      "name": "impact",
+      "file": "assets/sfx/impact.mp3",
+      "offset_s": 4.52,
+      "duration_s": 1.0,
+      "volume": 0.4
+    },
+    {
+      "frame": 2,
+      "name": "stamp",
+      "file": "assets/sfx/stamp.mp3",
+      "offset_s": 0.3,
+      "duration_s": 0.6,
+      "volume": 0.45
+    },
+    {
+      "frame": 2,
+      "name": "tick",
+      "file": "assets/sfx/tick.mp3",
+      "offset_s": 4.6,
+      "duration_s": 0.5,
+      "volume": 0.3
+    },
+    {
+      "frame": 3,
+      "name": "page",
+      "file": "assets/sfx/page.mp3",
+      "offset_s": 0.0,
+      "duration_s": 0.7,
+      "volume": 0.4
+    },
+    {
+      "frame": 3,
+      "name": "tick",
+      "file": "assets/sfx/tick.mp3",
+      "offset_s": 2.75,
+      "duration_s": 0.5,
+      "volume": 0.3
+    },
+    {
+      "frame": 4,
+      "name": "page",
+      "file": "assets/sfx/page.mp3",
+      "offset_s": 0.0,
+      "duration_s": 0.7,
+      "volume": 0.4
+    },
+    {
+      "frame": 4,
+      "name": "cards",
+      "file": "assets/sfx/cards.mp3",
+      "offset_s": 2.2,
+      "duration_s": 1.0,
+      "volume": 0.45
+    },
+    {
+      "frame": 5,
+      "name": "page",
+      "file": "assets/sfx/page.mp3",
+      "offset_s": 0.0,
+      "duration_s": 0.7,
+      "volume": 0.4
+    },
+    {
+      "frame": 5,
+      "name": "tick",
+      "file": "assets/sfx/tick.mp3",
+      "offset_s": 1.18,
+      "duration_s": 0.5,
+      "volume": 0.25
+    },
+    {
+      "frame": 5,
+      "name": "tick",
+      "file": "assets/sfx/tick.mp3",
+      "offset_s": 1.75,
+      "duration_s": 0.5,
+      "volume": 0.25
+    },
+    {
+      "frame": 5,
+      "name": "tick",
+      "file": "assets/sfx/tick.mp3",
+      "offset_s": 2.5,
+      "duration_s": 0.5,
+      "volume": 0.25
+    },
+    {
+      "frame": 5,
+      "name": "stamp",
+      "file": "assets/sfx/stamp.mp3",
+      "offset_s": 3.85,
+      "duration_s": 0.6,
+      "volume": 0.4
+    },
+    {
+      "frame": 6,
+      "name": "whoosh",
+      "file": "assets/sfx/whoosh.mp3",
+      "offset_s": 0.0,
+      "duration_s": 1.0,
+      "volume": 0.4
+    },
+    {
+      "frame": 6,
+      "name": "type",
+      "file": "assets/sfx/type.mp3",
+      "offset_s": 0.65,
+      "duration_s": 1.0,
+      "volume": 0.25
+    },
+    {
+      "frame": 6,
+      "name": "impact",
+      "file": "assets/sfx/impact.mp3",
+      "offset_s": 2.1,
+      "duration_s": 1.0,
+      "volume": 0.4
+    },
+    {
+      "frame": 7,
+      "name": "pen",
+      "file": "assets/sfx/pen.mp3",
+      "offset_s": 2.5,
+      "duration_s": 1.3,
+      "volume": 0.45
+    }
+  ]
+}
