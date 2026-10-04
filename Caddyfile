@@ -16,20 +16,10 @@
 
 # ── Web app ────────────────────────────────────────────────────────────────
 :81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
-
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			import forwarded
-		}
-	}
-
-	handle {
-		reverse_proxy localhost:3000 {
-			import forwarded
-		}
+	# No `?XTransformPort=` passthrough: it proxied ANY local port (anvil's
+	# unlocked admin RPC included) to anyone who asked.
+	reverse_proxy localhost:3000 {
+		import forwarded
 	}
 }
 

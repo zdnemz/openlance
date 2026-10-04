@@ -45,10 +45,10 @@ interface Overview {
   arbiters: { address: string; registered: boolean; sbtTokenId: number | null; trustScore: number; resolutions: number; resolutionsWithinSla: number; resolutionsLate: number }[]
   latestLedger: { id: number; eventType: string; blockNumber: number; blockTime: string; txHash: string; payload: Record<string, unknown> }[]
   demoProject: {
-    id: string; status: string; createdAt: string
+    status: string; createdAt: string
     client: { displayName: string | null; walletAddress: string } | null
     freelancer: { displayName: string | null; walletAddress: string } | null
-    milestones: { id: string; position: number; title: string; amountWei: string; chainStatus: string; softStatus: string | null; settlementTxHash: string | null }[]
+    milestones: { position: number; title: string; amountWei: string; chainStatus: string; softStatus: string | null; settlementTxHash: string | null }[]
   } | null
 }
 
@@ -250,7 +250,7 @@ export default function BackendConsole() {
                     {data.demoProject.milestones.map((m) => {
                       const st = CHAIN_STATUS_STYLES[m.chainStatus] ?? { label: m.chainStatus, className: 'bg-muted text-muted-foreground border-border' }
                       return (
-                        <li key={m.id} className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-2">
+                        <li key={m.position} className="rounded-lg border p-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="grid place-items-center size-6 rounded-md bg-muted text-xs font-semibold">{m.position}</span>

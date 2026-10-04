@@ -190,12 +190,15 @@ async function loadOverview() {
       ms.sort((a, b) => a.position - b.position)
       const client = parties.find((u) => u.id === newest.clientId)
       const freelancer = parties.find((u) => u.id === newest.freelancerId)
+      // No ids: this endpoint is public, and a milestone id IS its on-chain
+      // `ref` — publishing it before funding let anyone front-run the
+      // funding with a fake one. Status and amounts are the demo.
       demoProject = {
-        id: newest.id, status: newest.status, createdAt: newest.createdAt,
+        status: newest.status, createdAt: newest.createdAt,
         client: client ? { displayName: client.displayName, walletAddress: client.walletAddress } : null,
         freelancer: freelancer ? { displayName: freelancer.displayName, walletAddress: freelancer.walletAddress } : null,
         milestones: ms.map((m) => ({
-          id: m.id, position: m.position, title: m.title, amountWei: m.amountWei,
+          position: m.position, title: m.title, amountWei: m.amountWei,
           chainStatus: m.chainStatus, softStatus: m.softStatus, settlementTxHash: m.settlementTxHash,
         })),
       }
