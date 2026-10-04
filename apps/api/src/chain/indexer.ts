@@ -421,8 +421,24 @@ async function applyDisputeOpened(tx: Tx, evt: RawChainLog): Promise<PlannedNoti
   if (!legal) return drift('DisputeOpened (illegal from ' + m.chainStatus + ')', id, evt.txHash)
   await tx.update(projectMilestones).set({ chainStatus: to, updatedAt: evt.blockTime })
     .where(eq(projectMilestones.id, m.id))
-  // The off-chain POST /disputes already notified — chain event is confirmation only.
-  return null
+  // A dispute opened from a wallet, not through POST /disputes, has no row —
+  // and without one every round event was dropped as drift, the arbiter queue
+  // never listed it, and nobody revealed: a guaranteed no-quorum refund.
+  const [existing] = await tx.select({ id: disputes.id }).from(disputes).where(eq(disputes.milestoneId, m.id)).limit(1)
+  if (existing) return null // the off-chain POST /disputes already notified
+  const [opener] = await tx.select({ id: users.id }).from(users).where(eq(users.walletAddress, str(evt.args.by).toLowerCase())).limit(1)
+  if (!opener) return drift('DisputeOpened (opener has no account)', id, evt.txHash)
+  await tx.insert(disputes).values({
+    milestoneId: m.id, projectId: m.projectId, openedById: opener.id,
+    reason: 'Opened directly on-chain — no reason was recorded.',
+  })
+  return {
+    type: 'dispute.opened',
+    actorAddress: str(evt.args.by).toLowerCase(),
+    projectId: m.projectId,
+    milestoneId: m.id,
+    payload: { milestoneTitle: m.title, onchainOnly: true },
+  }
 }
 
 async function applyDisputeResolved(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {
@@ -479,7 +495,14 @@ async function applyArbitersSelected(tx: Tx, evt: RawChainLog): Promise<PlannedN
     revealDeadline: new Date(revealMs),
     updatedAt: evt.blockTime,
   }).where(eq(disputes.id, dispute.id))
-  return null
+  // The seated arbiters must hear about it, or the round dies of silence.
+  return {
+    type: 'dispute.arbiters_selected',
+    actorAddress: null,
+    projectId: milestone.projectId,
+    milestoneId: milestone.id,
+    payload: { round, selectedArbiters: arbiters, milestoneTitle: milestone.title },
+  }
 }
 
 async function applyVoteCommitted(tx: Tx, evt: RawChainLog): Promise<PlannedNotification | null> {

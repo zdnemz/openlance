@@ -15,6 +15,7 @@ import { isNotNull } from 'drizzle-orm'
 import { env } from '../config.ts'
 import { logger } from '../lib/logger.ts'
 import { getKv } from '../lib/kv.ts'
+import { cached } from '../lib/cache.ts'
 import { getDb } from '../db/index.ts'
 import { feeOf } from '../lib/money.ts'
 import { ESCROW_ABI, outcomeFromUint8, type ResolutionOutcome } from './abi.ts'
@@ -85,6 +86,9 @@ function normalizeArgs(args: Record<string, unknown>): Record<string, unknown> {
   }
   return out
 }
+
+/** Seconds a live chain read is reused across polls (see getMilestoneFull). */
+const LIVE_READ = { ttlSeconds: 3, namespace: 'chain' }
 
 export interface FundingLog {
   milestoneId: number
@@ -214,7 +218,17 @@ export class RealChainAdapter implements ChainAdapter {
     return ONCHAIN_MILESTONE_STATUS[Number(data)] ?? null
   }
 
+  /**
+   * Live reads behind every poll (project room 4 s, dispute queue) are cached
+   * for a few seconds: N open tabs used to mean N × milestones eth_calls per
+   * poll against a rate-limited public RPC. Seconds of staleness against a
+   * 2 s block time is the trade.
+   */
   async getMilestoneFull(onchainId: number) {
+    return cached(`ms:${this.escrowAddress}:${onchainId}`, LIVE_READ, () => this.readMilestoneFull(onchainId))
+  }
+
+  private async readMilestoneFull(onchainId: number) {
     const { client } = await this.viem()
     const { ESCROW_ABI } = await import('./abi.ts')
     const raw = await client.readContract({
@@ -244,6 +258,10 @@ export class RealChainAdapter implements ChainAdapter {
   }
 
   async getDisputeRound(onchainId: number, round: number) {
+    return cached(`round:${this.escrowAddress}:${onchainId}:${round}`, LIVE_READ, () => this.readDisputeRound(onchainId, round))
+  }
+
+  private async readDisputeRound(onchainId: number, round: number) {
     const { client } = await this.viem()
     const { ESCROW_ABI } = await import('./abi.ts')
     const ZERO = '0x0000000000000000000000000000000000000000'
@@ -272,6 +290,10 @@ export class RealChainAdapter implements ChainAdapter {
   }
 
   async getDisputeMeta(onchainId: number): Promise<{ round: number; appealCount: number } | null> {
+    return cached(`dmeta:${this.escrowAddress}:${onchainId}`, LIVE_READ, () => this.readDisputeMeta(onchainId))
+  }
+
+  private async readDisputeMeta(onchainId: number): Promise<{ round: number; appealCount: number } | null> {
     const { client } = await this.viem()
     const { ESCROW_ABI } = await import('./abi.ts')
     const raw = await client.readContract({

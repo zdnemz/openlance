@@ -9,7 +9,7 @@
  * index) is read live from the chain on every read, with the indexer mirror
  * as fallback only.
  */
-import { desc, eq, inArray, or } from 'drizzle-orm'
+import { desc, eq, inArray, ne, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb } from '../db/index.ts'
 import { validate } from '../lib/http.ts'
@@ -126,17 +126,21 @@ export async function discardDispute(request: Request, projectId: string, milest
 export async function listDisputes(request: Request) {
   const user = await requireAuth(request)
   const db = getDb()
-  const rows: DisputeRow[] = (await db.select().from(disputes).orderBy(desc(disputes.createdAt)).limit(200))
-    .map((d) => ({ ...d, onchainId: null }))
-  // Live first: a newly-selected arbiter must see the dispute even when the
-  // indexer mirror hasn't caught up — filter on the overlaid selection, not
-  // the stale cache. Costs one getRound per open dispute; failures keep the
-  // mirror, so worst case this degrades to the old behavior.
-  await overlayRounds(rows)
   // Participants AND arbiters assigned to a round can see the dispute.
   const userProjects = await db.select({ id: projects.id }).from(projects)
     .where(or(eq(projects.clientId, user.id), eq(projects.freelancerId, user.id)))
   const ids = new Set(userProjects.map((p) => p.id))
+  // Every OPEN dispute (any of them may seat this viewer) plus the viewer's own
+  // resolved ones. This used to be the platform's newest 200 of any status,
+  // filtered afterwards — past 200, an arbiter's live dispute vanished.
+  const rows: DisputeRow[] = (await db.select().from(disputes)
+    .where(ids.size ? or(ne(disputes.status, 'resolved'), inArray(disputes.projectId, [...ids])) : ne(disputes.status, 'resolved'))
+    .orderBy(desc(disputes.createdAt)))
+    .map((d) => ({ ...d, onchainId: null }))
+  // Live first: a newly-selected arbiter must see the dispute even when the
+  // indexer mirror hasn't caught up — filter on the overlaid selection, not
+  // the stale cache. Reads are cached per round for a few seconds (adapter).
+  await overlayRounds(rows)
   // Seated fallback: a locked project arbiter sees open disputes on that
   // project even when the round mirror is empty (indexer lag / overlay miss).
   // Voting stays chain-gated (`NotSelectedArbiter` reverts), so this only
