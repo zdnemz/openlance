@@ -218,7 +218,7 @@ export default function LandingPage() {
               transition={stepTransition(0.5, 5, 0.25)}
               className="flex justify-center lg:justify-end"
             >
-              <div className="relative">
+              <div className="relative w-full max-w-md">
                 <EscrowCard />
                 <motion.div
                   initial={{ opacity: 0 }}
