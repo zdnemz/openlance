@@ -5,8 +5,9 @@
  *
  * The live window into the backend: health, adapter modes, the seeded demo
  * project, the on-chain ledger mirror, arbiter trust scores, and the API
- * surface. The API is a separate Hono service, so every request here is a
- * cross-origin call to `NEXT_PUBLIC_API_BASE` (`apiUrl`).
+ * surface. The API is a separate Hono service, so every request here goes to
+ * `apiUrl` — `NEXT_PUBLIC_API_BASE` when the API has its own origin (a
+ * cross-origin call), or this page's own origin when that is empty.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { apiUrl } from '@/lib/api'
@@ -19,10 +20,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 /**
- * The API is a SEPARATE origin (`NEXT_PUBLIC_API_BASE`), not a route handler
- * inside this app — this file has no `app/api/**` and next.config has no
- * rewrite, so a same-origin `/api/...` request 404'd on every load and the page
- * reported "Backend unreachable (HTTP 404)" against a backend that was up.
+ * The API is a SEPARATE service (`NEXT_PUBLIC_API_BASE`, see lib/api-base.ts),
+ * not a route handler inside this app — this file has no `app/api/**` and
+ * next.config has no rewrite. So a bare same-origin `/api/...` only works where
+ * something routes `/api` to the API (the Vercel services rewrite); otherwise it
+ * 404'd on every load and the page reported "Backend unreachable (HTTP 404)"
+ * against a backend that was up. `apiUrl` follows lib/api-base.ts either way.
  */
 const GW = (path: string) => apiUrl(path)
 
@@ -116,7 +119,7 @@ const API_GROUPS: { title: string; icon: typeof ServerCog; rows: [string, string
   ] },
   { title: 'Collaboration (F6–F8)', icon: MessageSquare, rows: [
     ['POST /projects/:id/messages', 'append-only evidence log + realtime'],
-    ['POST /projects/:id/attachments', 'signed upload, 25MB + MIME allowlist'],
+    ['POST /projects/:id/attachments', 'signed upload, size cap (MAX_UPLOAD_BYTES) + MIME allowlist'],
     ['POST …/milestones/:mid/submissions', 'off-chain record + on-chain flip'],
   ] },
   { title: 'Money & trust (F4–F14)', icon: ShieldCheck, rows: [
@@ -206,7 +209,7 @@ export default function BackendConsole() {
           {loaded && error ? (
             <Card className="!border-rose-accent">
               <CardContent className="p-4 text-[15px] text-rose-light">
-                API unreachable ({error}). The API is a separate service — start it with <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">pnpm --filter @openlance/api dev</code>, check that <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">NEXT_PUBLIC_API_BASE</code> points at it and that <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">DATABASE_URL</code> is set, then this console refreshes automatically.
+                API unreachable ({error}). The API is a separate service — start it with <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">pnpm --filter @openlance/api dev</code>, check that <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">NEXT_PUBLIC_API_BASE</code> points at it (or is empty only where <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">/api</code> is routed to it on this origin) and that <code className="font-mono text-[13px] bg-muted px-1.5 py-0.5">DATABASE_URL</code> is set, then this console refreshes automatically.
               </CardContent>
             </Card>
           ) : null}

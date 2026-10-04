@@ -6,6 +6,10 @@
 # The API is a separate service now, so the browser calls it cross-origin and
 # the API answers its own CORS preflights. Caddy fronts it so production keeps
 # one TLS-terminating public entry point per origin.
+#
+# This is the SEPARATE-ORIGINS topology (local / self-hosted). On Vercel the two
+# services share ONE domain through the rewrites in the root vercel.json, so
+# nothing below applies there.
 
 (forwarded) {
 	header_up Host {host}
@@ -24,7 +28,7 @@
 }
 
 # ── API ────────────────────────────────────────────────────────────────────
-# The API reads the client IP for rate limiting (backend/lib/rate-limit.ts
+# The API reads the client IP for rate limiting (apps/api/src/lib/rate-limit.ts
 # keys on x-forwarded-for), so these headers are load-bearing, not decorative.
 # Do not expose this origin without a rate limit in front of it: the API trusts
 # the forwarded IP that Caddy sets.

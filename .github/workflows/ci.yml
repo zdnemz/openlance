@@ -36,6 +36,11 @@ jobs:
         # exists but was never mounted (or vice versa).
         run: pnpm check:routes
 
+      - name: Vercel services config
+        # vercel.json is only validated by Vercel at deploy time (and a few
+        # mistakes, like a wrong `functions` key, not at all). No dependencies.
+        run: pnpm check:vercel
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -50,6 +55,15 @@ jobs:
           pnpm --filter @openlance/api check:webhook-url
           pnpm --filter @openlance/api check:cron
           pnpm --filter @openlance/api check:kv
+
+      - name: Web same-origin and proxy checks (no browser)
+        # The API-base resolver, the awarded-job redirect and the file/RPC URL
+        # builders: the pieces a single-origin (Vercel services) deployment leans on.
+        run: |
+          pnpm --filter @openlance/web check:api-base
+          pnpm --filter @openlance/web check:job-redirect
+          pnpm --filter @openlance/web check:file-url
+          pnpm --filter @openlance/web check:wallet-rpc
 
       - name: Lint
         run: pnpm lint

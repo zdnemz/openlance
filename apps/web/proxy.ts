@@ -18,21 +18,32 @@
  *    server-side 307 so the job page never paints for a link the user did not
  *    mean to click (a shared bid, a notification, the back button).
  *
- * The API is a separate origin now (apps/api on :4000) and answers its own
- * CORS preflights, so there is no `/api` branch here — this app serves pages.
+ * There is no `/api` branch here — this app serves pages. The API is apps/api,
+ * either on its own origin (:4000, which answers its own CORS preflights) or,
+ * on Vercel, on this same origin: the top-level `/api/(.*)` rewrite sends those
+ * requests to the api service before they reach this app. lib/api-base.ts
+ * decides which.
  *
- * The gate cookies are stamped by the API. Cross-origin that only works if
- * they share a domain: set COOKIE_DOMAIN on the API in production
- * (e.g. .example.com), or every visitor is bounced to /onboarding forever.
+ * The gate cookies are stamped by the API. On one origin they are host-only and
+ * just work. Cross-origin that only works if they share a domain: set
+ * COOKIE_DOMAIN on the API in production (e.g. .example.com), or every visitor
+ * is bounced to /onboarding forever.
  *
- * Edge runtime: no node-only imports — the matrix lives in the
- * dependency-free src/lib/role-routes.ts.
+ * Keep imports dependency-free (no node-only or client-only modules): the seat
+ * matrix lives in lib/role-routes.ts and the API base in lib/api-base.ts.
+ * Service bindings do not resolve in the proxy, so it reaches the API by URL.
  */
 import { NextResponse, type NextRequest } from 'next/server'
 import { ONBOARDED_COOKIE, ROLE_COOKIE, ROLE_HOME, ONBOARDING_PATH, isAllowed, isAppRole } from '@/lib/role-routes'
+import { absoluteApiUrl } from '@/lib/api-base'
 
-/** Same origin the client uses (lib/api.ts) — kept inline: this file is edge. */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000'
+/**
+ * Longest the proxy waits on the API before letting the page render. This read
+ * sits in front of every `/jobs/<uuid>` navigation, and on Vercel it is a
+ * round trip through routing to a function that may be cold — an API that is
+ * slow or hung must cost the visitor a redirect, not the page.
+ */
+const JOB_READ_TIMEOUT_MS = 5000
 
 /** `/jobs/<uuid>` — the only path that can be answered by a redirect. */
 const JOB_PATH = /^\/jobs\/([0-9a-fA-F-]{36})$/
@@ -60,9 +71,17 @@ async function redirectAwardedJob(request: NextRequest, jobId: string) {
     // server-to-server call that would otherwise land in one shared bucket for
     // every user on the box.
     const forwarded = request.headers.get('x-forwarded-for')
-    const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, {
+    // A server-side fetch needs an absolute URL. With a separate API origin that
+    // is the configured base; same-origin (empty base) it is this request's own
+    // origin, where `/api/*` is routed to the API.
+    const res = await fetch(absoluteApiUrl(`/api/jobs/${jobId}`, () => request.nextUrl.origin), {
       cache: 'no-store',
       headers: forwarded ? { 'x-forwarded-for': forwarded } : undefined,
+      signal: AbortSignal.timeout(JOB_READ_TIMEOUT_MS),
+      // Never follow a redirect: one (say, to a protection login page) is not the
+      // job, and following it would parse HTML as JSON for no gain. A 3xx is not
+      // `ok`, so it falls through to the page like any other failed read.
+      redirect: 'manual',
     })
     if (!res.ok) return NextResponse.next()
     const { data } = (await res.json()) as { data?: { projectId?: string | null } }
@@ -113,7 +132,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // every page — the gate is enforced for all routes, landing included
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|txt|xml|webmanifest)$).*)',
+    // every page — the gate is enforced for all routes, landing included. `api/`
+    // is excluded: on one origin the top-level rewrite sends it to the api service
+    // before this app sees it, but a cookie-less sign-in call must never be bounced
+    // to /onboarding even if that order ever changes.
+    '/((?!api/|_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|txt|xml|webmanifest)$).*)',
   ],
 }

@@ -9,6 +9,20 @@
  *
  *   apps/web  ──fetch──▶  apps/api  ──▶  Postgres / Upstash / chain
  *      (pages)             (this)          (nothing imports this package)
+ *
+ * Two deployment shapes share this one app, and nothing in it depends on which:
+ *
+ *   - Separate origins (`pnpm dev`, Caddy/self-hosted): the browser calls this
+ *     API cross-origin, so the CORS block below is load-bearing.
+ *   - One origin (Vercel services, see the root `vercel.json`): a top-level
+ *     rewrite sends `/api/*` here and everything else to the web app. The path
+ *     is passed through UNCHANGED — every route is registered with the literal
+ *     `/api` prefix (see `routes.ts`), so a rewrite that stripped it would turn
+ *     every request into a 404. Do not add a `request.path` transform. CORS is
+ *     simply never exercised, because same-origin requests do not use it.
+ *
+ * This file is the serverless entrypoint (default export); `serve.ts` is the
+ * long-running Node one and is never used on Vercel.
  */
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -23,9 +37,12 @@ const ALLOWED = [env.APP_URI, 'http://localhost:3000'].filter(Boolean)
 const app = new Hono()
 
 /**
- * CORS. The browser calls this origin directly, so this replaces the CORS
- * block that used to live in the web app's proxy — the API is now the
- * security boundary, and it answers preflights itself.
+ * CORS. When the web app is on a different origin (local dev, self-hosted) the
+ * browser calls this origin directly, so this replaces the CORS block that used
+ * to live in the web app's proxy — the API is the security boundary, and it
+ * answers preflights itself. Under a single-origin deployment (Vercel services)
+ * the browser never sends a cross-origin request, so none of this fires; it
+ * stays because the other shapes still need it.
  *
  * Credentials are required: the gate cookies (`el_onboarded`, `el_role`) are
  * read by the web app's edge proxy but stamped here, so a cross-origin request

@@ -48,10 +48,13 @@ const cookieBase = {
   maxAge: env.SESSION_TTL_SECONDS,
   ...(process.env.NODE_ENV === 'production' ? { secure: true } : {}),
   // The gate cookies are read by the *web* app's edge proxy, but set by this
-  // API. Cross-origin means they only reach both if the domain is shared —
-  // e.g. api.example.com + example.com → COOKIE_DOMAIN=.example.com.
+  // API. If the two live on different hosts they only reach both when the
+  // domain is shared — e.g. api.example.com + example.com →
+  // COOKIE_DOMAIN=.example.com.
   // Unset (default) keeps them host-only, which is right when both are on
-  // localhost: cookies ignore ports, so :3000 and :4000 share a jar anyway.
+  // localhost (cookies ignore ports, so :3000 and :4000 share a jar anyway) and
+  // on a single-origin deployment (Vercel services), where the API and the
+  // proxy that reads the cookie are the same host.
   ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
 }
 
