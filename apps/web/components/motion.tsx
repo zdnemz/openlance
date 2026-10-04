@@ -1,89 +1,64 @@
 "use client";
 
 /**
- * Motion primitives (MOTION_INTENSITY 6) — isolated so the calm app shell
- * never imports framer-motion. Both run entirely outside the React render
- * cycle: spotlight mutates CSS vars on the DOM node, magnetic drives
- * useMotionValue through springs. Zero re-renders on pointer move.
+ * Motion primitives — pixel motion is stepped. Nothing here eases: a value
+ * moves in a handful of whole-pixel frames (`steps(n)`), the way a sprite
+ * animates, never as a spring or a tween. Isolated so the calm app shell never
+ * imports framer-motion; only the landing page does.
  */
-import { useRef, type ComponentProps, type ReactNode } from "react";
+import type { ComponentProps } from "react";
 import Link from "next/link";
-import { motion, useMotionValue, useSpring } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 /**
- * Spotlight card — cursor-tracked rose border illumination.
- * The ::before layer lives in globals.css (.spotlight); this component
- * only feeds it --mx/--my coordinates. Cheap, compositional, no state.
+ * A quantised easing for framer-motion: progress snaps to `n` equal frames and
+ * lands exactly on 1. `stepEase(4)` is a 4-frame sprite move.
  */
-export function SpotCard({ children, className, ...rest }: ComponentProps<"div">) {
-  const ref = useRef<HTMLDivElement>(null);
+export const stepEase = (n: number) => (t: number) => Math.min(1, Math.floor(t * n) / (n - 1 || 1));
+
+/** Frame budget used across the landing page: short, snappy, always a few frames. */
+export const stepTransition = (duration = 0.4, frames = 5, delay = 0) =>
+  ({ duration, ease: stepEase(frames), delay }) as const;
+
+/**
+ * A panel that lifts on hover: the face steps up-left and its slab grows
+ * (`.pixel-lift`). Replaces the cursor-tracked spotlight — there is no pointer
+ * tracking and nothing to re-render.
+ */
+export function LiftCard({ children, className, ...rest }: ComponentProps<"div">) {
   return (
-    <div
-      ref={ref}
-      onPointerMove={(e) => {
-        const el = ref.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        el.style.setProperty("--mx", `${e.clientX - r.left}px`);
-        el.style.setProperty("--my", `${e.clientY - r.top}px`);
-      }}
-      className={cn("spotlight", className)}
-      {...rest}
-    >
+    <div className={cn("pixel-lift", className)} {...rest}>
       {children}
     </div>
   );
 }
 
 /**
- * Magnetic link — the physical pull toward the cursor (skill: magnetic
- * micro-physics for MOTION_INTENSITY > 5). Springs, never setState.
+ * Primary call-to-action link rendered as a pixel button. Replaces the magnetic
+ * link: the press is physical (the face drops onto its slab) instead of pulled
+ * toward the cursor.
  */
-export function MagneticLink({
-  children,
-  pull = 9,
-  className,
-  ...rest
-}: ComponentProps<typeof Link> & { pull?: number }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const sx = useSpring(x, { stiffness: 150, damping: 15, mass: 0.25 });
-  const sy = useSpring(y, { stiffness: 150, damping: 15, mass: 0.25 });
-
+export function PixelLink({ children, className, ...rest }: ComponentProps<typeof Link>) {
   return (
-    <motion.span ref={ref} style={{ x: sx, y: sy, display: "inline-block" }}>
-      <Link
-        onPointerMove={(e) => {
-          const el = ref.current;
-          if (!el) return;
-          const r = el.getBoundingClientRect();
-          x.set(((e.clientX - r.left) / r.width - 0.5) * 2 * pull);
-          y.set(((e.clientY - r.top) / r.height - 0.5) * 2 * pull);
-        }}
-        onPointerLeave={() => {
-          x.set(0);
-          y.set(0);
-        }}
-        className={className}
-        {...rest}
-      >
-        {children}
-      </Link>
-    </motion.span>
+    <Link
+      className={cn(
+        "pixel-btn inline-flex min-h-12 cursor-pointer items-center justify-center gap-2.5 px-6 py-3.5 font-display text-[12px] uppercase leading-none text-white focus-visible:outline-offset-4",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </Link>
   );
 }
 
 /** Stagger container/child variants — parent + child must share one client tree. */
 export const staggerParent = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+  show: { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
 } as const;
 
 export const staggerChild = {
-  hidden: { opacity: 0, y: 18 },
-  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 110, damping: 20 } },
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: stepTransition(0.32, 4) },
 } as const;
-
-export type MotionNode = ReactNode;

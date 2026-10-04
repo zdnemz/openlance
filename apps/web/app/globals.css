@@ -48,6 +48,12 @@
   --radius-3xl: 0px;
   --radius-4xl: 0px;
 
+  /* the pixel faces read small: floor the type scale at 13px */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.5;
+
   /* motion is stepped: a few hard frames, never an eased tween */
   --default-transition-duration: 120ms;
   --default-transition-timing-function: steps(3, end);
@@ -255,7 +261,7 @@
   --pf: var(--color-rose-light);
   --ps: var(--color-rose-deep);
   background: var(--pb);
-  margin: 2px;
+  margin: 2px 2px 4px;
   transform: translateY(-2px);
   box-shadow:
     -2px 0 0 0 var(--pf),
@@ -280,6 +286,11 @@
     inset -4px -4px 0 0 rgba(0, 0, 0, 0.28),
     inset 4px 4px 0 0 rgba(255, 255, 255, 0.2),
     0 2px 0 2px var(--ps);
+}
+
+/* a full-width button still has to leave room for its 2px frame on each side */
+.pixel-btn.w-full {
+  width: calc(100% - 4px);
 }
 
 /* flat, borderless press for rows and chips that are not full buttons */
