@@ -13,7 +13,7 @@ palette:
   dim: "#b9b9c2" (secondary text, WCAG AA on all ink surfaces)
   faint: "#9b9ba5" (meta text, WCAG AA on all ink surfaces)
   accent: "#e11d48" Deep Rose (ONE accent; hover #f43f5e)
-  state-semantics: funded #fbbf24 · submitted #38bdf8 · released #34d399 · disputed #fb923c · split #5eead4 · refund #d4d4d8 (never decoration)
+  state-semantics: funded #fbbf24 · submitted #60a5fa · released #34d399 · disputed #fb923c · split #a7f3d0 · refund #d4d4d8 (never decoration; source: --color-state-* in apps/web/app/globals.css)
   lines: rgba(255,255,255,0.07) line / 0.13 line-strong
 motion:
   philosophy: landing may move, but only in response to the reader's scroll; the app interior stays calm

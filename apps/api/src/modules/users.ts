@@ -66,14 +66,18 @@ export const clearable = (max: number) =>
     return s ? s : null
   })
 
+const webUrl = z.string().url().refine((u) => /^https?:\/\//i.test(u), 'http(s) URL required')
+
 export async function updateMe(request: Request) {
   const user = await requireKyc(request)
   const body = await validate(request, z.object({
     displayName: clearable(80).optional(),
-    avatarUrl: z.string().url().max(500).optional(),
+    // http(s) only: `z.url()` also accepts javascript:/data: URLs, and these
+    // are rendered as links and images on every profile view.
+    avatarUrl: webUrl.max(500).optional(),
     bio: clearable(2000).optional(),
     skills: z.array(z.string().min(1).max(40)).max(20).optional(),
-    links: z.record(z.string(), z.string().url()).optional(),
+    links: z.record(z.string(), webUrl).optional(),
   }))
   const db = getDb()
   const [updated] = await db.update(users).set({ ...body, updatedAt: new Date() })
