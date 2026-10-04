@@ -20,18 +20,7 @@ import { AddressAvatar, StatusDot } from "@/components/design";
 import { shortAddress } from "@/lib/format";
 import { useRuntime } from "@/lib/runtime";
 import type { UserRole } from "@/lib/types";
-import { Compass } from "@phosphor-icons/react/dist/csr/Compass";
-import { SquaresFour } from "@phosphor-icons/react/dist/csr/SquaresFour";
-import { Layout } from "@phosphor-icons/react/dist/csr/Layout";
-import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
-import { Scales } from "@phosphor-icons/react/dist/csr/Scales";
-import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
-import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
-import { ShieldStar } from "@phosphor-icons/react/dist/csr/ShieldStar";
-import { TerminalWindow } from "@phosphor-icons/react/dist/csr/TerminalWindow";
-import { ArrowLeft } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { Bell } from "@phosphor-icons/react/dist/csr/Bell";
-
+import { ArrowLeft, Bell, Coins, Compass, Gavel, Layout, Scales, SealCheck, ShieldStar, SquaresFour, TerminalWindow } from "@/components/icons";
 export function Logo({ size = "md", withMark = true }: { size?: "sm" | "md"; withMark?: boolean }) {
   return (
     <span className="flex items-center gap-2.5">

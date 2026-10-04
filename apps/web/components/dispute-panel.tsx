@@ -36,8 +36,7 @@ import { useRuntime } from "@/lib/runtime";
 import { formatEth, shortAddress, timeUntil, toWei } from "@/lib/format";
 import { press, AddressText } from "@/components/design";
 import { Button } from "@/components/ui/button";
-import { HandCoins } from "@phosphor-icons/react/dist/csr/HandCoins";
-import { SealCheck } from "@phosphor-icons/react/dist/csr/SealCheck";
+import { HandCoins, SealCheck } from "@/components/icons";
 import { toast } from "sonner";
 import type { DisputeView } from "@/lib/types";
 

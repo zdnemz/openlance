@@ -6,9 +6,7 @@
 import { ComponentProps, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MILESTONE_LABELS, STATE_COLORS, formatEth, formatEthSummary, shortAddress, shortHash } from "@/lib/format";
-import { Check } from "@phosphor-icons/react/dist/csr/Check";
-import { Copy } from "@phosphor-icons/react/dist/csr/Copy";
-
+import { Check, Copy } from "@/components/icons";
 /* ── Status ─────────────────────────────────────────────────────────────── */
 
 export function StatusDot({ color, pulse = false }: { color: string; pulse?: boolean }) {

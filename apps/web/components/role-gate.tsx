@@ -6,8 +6,7 @@ import type { ReactNode } from "react";
 import { useSession, useSessionHydrated } from "@/lib/session";
 import { requiredRolesForPath, roleUpsell } from "@/lib/roles";
 import { isAllowed } from "@/lib/role-routes";
-import { ShieldStar } from "@phosphor-icons/react";
-
+import { ShieldStar } from "@/components/icons";
 /**
  * RoleGate — redirect + upsell (never a dead 404).
  * Strict separation: the proxy is the enforcer; this covers a stale gate

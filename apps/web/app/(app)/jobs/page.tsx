@@ -10,11 +10,7 @@ import { AddressAvatar, Chip, Skeleton, EmptyState, press } from "@/components/d
 import { PageHeader } from "@/components/page-header";
 import { RoleGate } from "@/components/role-gate";
 import { formatEth, timeAgo } from "@/lib/format";
-import { MagnifyingGlass } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { Briefcase } from "@phosphor-icons/react/dist/csr/Briefcase";
-import { ArrowUpRight } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
-import { Funnel } from "@phosphor-icons/react/dist/csr/Funnel";
-
+import { ArrowUpRight, Briefcase, Funnel, MagnifyingGlass } from "@/components/icons";
 const CATEGORIES = ["all", "security", "contracts", "frontend", "backend", "design"];
 
 export default function JobsPage() {

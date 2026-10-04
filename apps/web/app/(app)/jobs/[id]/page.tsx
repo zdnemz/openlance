@@ -22,12 +22,7 @@ import { describeFundingRevert, readJobBudget, returnBudgetSurplus } from "@/lib
 import { SurplusPanel } from "@/components/surplus-panel";
 import { ESCROW_ABI } from "@/lib/contracts";
 import { toast } from "sonner";
-import { PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { Check } from "@phosphor-icons/react/dist/csr/Check";
-import { X } from "@phosphor-icons/react/dist/csr/X";
-import { Warning } from "@phosphor-icons/react/dist/csr/Warning";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { Lock } from "@phosphor-icons/react/dist/csr/Lock";
+import { ArrowRight, Check, Lock, PaperPlaneTilt, Warning, X } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";

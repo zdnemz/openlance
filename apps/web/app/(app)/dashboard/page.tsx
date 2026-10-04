@@ -18,12 +18,7 @@ import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
 import { SpotCard } from "@/components/motion";
 import { STATE_COLORS, timeAgo, toWei, formatEth, ledgerDotColor } from "@/lib/format";
 import type { DisputeView, JobView } from "@/lib/types";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { Briefcase } from "@phosphor-icons/react/dist/csr/Briefcase";
-import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
-import { TrendUp } from "@phosphor-icons/react/dist/csr/TrendUp";
-import { TrendDown } from "@phosphor-icons/react/dist/csr/TrendDown";
-
+import { ArrowRight, Briefcase, Gavel, TrendDown, TrendUp } from "@/components/icons";
 const HEAD: Record<string, { title: string; desc: string; cta: { href: string; label: string } }> = {
   client: {
     title: "Commission work.",

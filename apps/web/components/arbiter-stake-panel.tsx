@@ -43,15 +43,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Lock } from "@phosphor-icons/react/dist/csr/Lock";
-import { LockOpen } from "@phosphor-icons/react/dist/csr/LockOpen";
-import { ShieldWarning } from "@phosphor-icons/react/dist/csr/ShieldWarning";
-import { Coins } from "@phosphor-icons/react/dist/csr/Coins";
-import { Clock } from "@phosphor-icons/react/dist/csr/Clock";
-import { Gavel } from "@phosphor-icons/react/dist/csr/Gavel";
-import { ArrowRight } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { Info } from "@phosphor-icons/react/dist/csr/Info";
-import { SpinnerGap } from "@phosphor-icons/react/dist/csr/SpinnerGap";
+import { ArrowRight, Clock, Coins, Gavel, Info, Lock, LockOpen, ShieldWarning, SpinnerGap } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 /** Compact countdown: "3d 4h", "4h 12m", "12m", "<1m". */

@@ -12,7 +12,7 @@ import { useRuntime } from "@/lib/runtime";
 import { loginWithWallet, disconnectAndLogout } from "@/lib/siwe";
 import { useSession } from "@/lib/session";
 import { ROLE_HOME } from "@/lib/role-routes";
-import { Wallet, Info, Plugs, Spinner } from "@phosphor-icons/react";
+import { Info, Plugs, Spinner, Wallet } from "@/components/icons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
