@@ -50,18 +50,18 @@ export function RoleGate({ children, write = true }: { children: ReactNode; writ
  */
 function LockedSeatCard({ upsell, role, kyc }: { upsell: { title: string; body: string; cta: string }; role: string; kyc: string }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border border-line bg-white/[0.012] px-6 py-5">
+    <div className="glass flex flex-wrap items-center justify-between gap-4 px-6 py-5">
       <div className="flex items-center gap-3">
-        <ShieldStar className="h-5 w-5 shrink-0 text-rose-bright" />
+        <ShieldStar className="h-8 w-8 shrink-0 text-rose-light" />
         <div>
-          <div className="text-[13.5px] font-medium">{upsell.title}</div>
-          <div className="mt-0.5 max-w-xl text-[12px] leading-relaxed text-dim">
+          <div className="font-display text-[12px] leading-snug">{upsell.title}</div>
+          <div className="mt-1.5 max-w-xl text-[15px] leading-relaxed text-dim">
             {upsell.body} You are {role} + KYC {kyc}. A seat is permanent once onboarding starts — disconnect from the
             header wallet menu to use a different one.
           </div>
         </div>
       </div>
-      <span className="shrink-0 border border-line px-4 py-2 text-[12.5px] text-faint">
+      <span className="shrink-0 border-2 border-dashed border-line-strong px-4 py-2 text-[14px] text-faint">
         {upsell.cta} — needs another wallet
       </span>
     </div>
@@ -70,17 +70,17 @@ function LockedSeatCard({ upsell, role, kyc }: { upsell: { title: string; body: 
 
 function GateCard({ title, body, cta, href, onCta }: { title: string; body: string; cta: string; href?: string; onCta?: () => void }) {
   const inner = (
-    <span className="flex shrink-0 items-center gap-1.5 bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white">
+    <span className="pixel-btn flex shrink-0 cursor-pointer items-center gap-1.5 px-4 py-3 font-display text-[11px] uppercase leading-none text-white">
       {cta}
     </span>
   );
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border border-line bg-white/[0.012] px-6 py-5">
+    <div className="glass flex flex-wrap items-center justify-between gap-4 px-6 py-5">
       <div className="flex items-center gap-3">
-        <ShieldStar className="h-5 w-5 shrink-0 text-rose-bright" />
+        <ShieldStar className="h-8 w-8 shrink-0 text-rose-light" />
         <div>
-          <div className="text-[13.5px] font-medium">{title}</div>
-          <div className="mt-0.5 max-w-xl text-[12px] leading-relaxed text-dim">{body}</div>
+          <div className="font-display text-[12px] leading-snug">{title}</div>
+          <div className="mt-1.5 max-w-xl text-[15px] leading-relaxed text-dim">{body}</div>
         </div>
       </div>
       {href ? <Link href={href}>{inner}</Link> : <button type="button" onClick={onCta}>{inner}</button>}

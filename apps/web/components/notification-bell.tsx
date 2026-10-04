@@ -40,30 +40,30 @@ function NotifRow({ item, onNavigate }: { item: InboxItem; onNavigate: () => voi
   const inner = (
     <>
       <span
-        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center border"
+        className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center border-2"
         style={{
           color: TONE_COLOR[meta.tone],
-          borderColor: `color-mix(in oklab, ${TONE_COLOR[meta.tone]} 30%, transparent)`,
-          background: `color-mix(in oklab, ${TONE_COLOR[meta.tone]} 10%, transparent)`,
+          borderColor: TONE_COLOR[meta.tone],
+          background: `color-mix(in oklab, ${TONE_COLOR[meta.tone]} 12%, transparent)`,
         }}
       >
-        <Icon weight="fill" className="h-[15px] w-[15px]" />
+        <Icon weight="fill" className="h-5 w-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className={cn("truncate text-[13px]", unread ? "font-medium text-foreground" : "text-dim")}>{meta.label}</span>
-          {unread && <span className="h-1.5 w-1.5 shrink-0 bg-rose-bright" aria-label="unread" />}
+          <span className={cn("truncate text-[14px]", unread ? "font-medium text-foreground" : "text-dim")}>{meta.label}</span>
+          {unread && <span className="h-2 w-2 shrink-0 bg-rose-light" aria-label="unread" />}
         </span>
-        {detail && <span className="mt-0.5 block truncate text-[12px] text-faint">{detail}</span>}
-        <span className="mt-1 flex items-center gap-2 text-[11px] text-faint">
+        {detail && <span className="mt-0.5 block truncate text-[13px] text-faint">{detail}</span>}
+        <span className="mt-1 flex items-center gap-2 text-[13px] text-faint">
           <span className="num">{timeAgo(item.createdAt)}</span>
-          {item.actorAddress && <AddressText value={item.actorAddress} className="text-[11px]" />}
+          {item.actorAddress && <AddressText value={item.actorAddress} className="text-[13px]" />}
         </span>
       </span>
     </>
   );
 
-  const className = "flex gap-3 px-3 py-2.5 transition-colors hover:bg-white/[0.04]";
+  const className = "flex cursor-pointer gap-3 border-b-2 border-dashed border-line px-3 py-3 transition-colors last:border-b-0 hover:bg-ink-hover";
   return href ? (
     <Link href={href} onClick={onNavigate} className={className}>
       {inner}
@@ -121,13 +121,13 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
         aria-expanded={open}
         className={cn(
-          "relative grid place-items-center border border-line bg-white/[0.03] text-dim transition-colors hover:text-foreground",
-          compact ? "h-8 w-8" : "h-9 w-9",
+          "pixel-press relative grid cursor-pointer place-items-center border-2 border-line-strong bg-ink-raised text-dim transition-colors hover:border-rose-light hover:text-foreground",
+          compact ? "h-10 w-10" : "h-11 w-11",
         )}
       >
-        <Bell weight={unread > 0 ? "fill" : "regular"} className="h-[17px] w-[17px]" />
+        <Bell weight={unread > 0 ? "fill" : "regular"} className="h-6 w-6" />
         {unread > 0 && (
-          <span className="num absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center bg-rose-accent px-1 text-[11px] font-medium text-white">
+          <span className="num absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center border-2 border-ink bg-rose-accent px-1 text-[12px] font-medium leading-none text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -143,16 +143,16 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
           // (max-w only caps width — it never re-anchors), and a 420px list did
           // not fit the viewport. `sm:` keeps the popover, which fits beside the
           // bell once there is room for it.
-          className="fixed inset-x-2 top-16 z-50 flex max-h-[calc(100dvh-4.5rem)] flex-col overflow-hidden border border-line bg-ink/95 shadow-2xl sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] sm:max-h-none"
+          className="glass-raised pixel-pop fixed inset-x-2 top-16 z-50 flex max-h-[calc(100dvh-4.5rem)] flex-col overflow-hidden sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] sm:max-h-none"
         >
-          <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <span className="text-[13px] font-semibold">Notifications</span>
+          <div className="flex items-center justify-between border-b-2 border-line-strong px-4 py-3">
+            <span className="font-display text-[12px]">Notifications</span>
             <Link
               href="/settings/notifications"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-1.5 text-[11px] text-faint transition-colors hover:text-dim"
+              className="flex min-h-9 cursor-pointer items-center gap-1.5 text-[14px] text-faint transition-colors hover:text-foreground"
             >
-              <GearSix className="h-3.5 w-3.5" />
+              <GearSix className="h-5 w-5" />
               Settings
             </Link>
           </div>
@@ -172,7 +172,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
             ) : isLoading ? (
               // Without this the panel flashed "All clear" through every first
               // fetch — telling a user with unread mail that they have none.
-              <p className="px-4 py-10 text-center text-sm text-faint">Loading your inbox…</p>
+              <p className="px-4 py-10 text-center text-[15px] text-faint">Loading your inbox…<span className="cursor-blink">_</span></p>
             ) : items.length === 0 ? (
               <EmptyState
                 icon={<CheckCircle />}
@@ -192,7 +192,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
             <Link
               href="/settings/notifications"
               onClick={() => setOpen(false)}
-              className="block border-t border-line px-4 py-2.5 text-center text-[12px] text-dim transition-colors hover:bg-white/[0.04] hover:text-foreground"
+              className="block min-h-11 cursor-pointer border-t-2 border-line-strong px-4 py-3 text-center text-[14px] text-dim transition-colors hover:bg-ink-hover hover:text-foreground"
             >
               View all & manage webhooks
             </Link>
