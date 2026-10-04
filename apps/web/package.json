@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev -p 12321",
     "build": "next build && node scripts/finalize-standalone.mjs",
+    "build:vercel": "next build",
     "start": "next start -p 12321",
     "serve": "node .next/standalone/apps/web/server.js",
     "lint": "eslint .",
