@@ -266,7 +266,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <div className="flex items-center gap-2">
           {role && (
-            <span className="border-2 border-line-strong bg-ink-raised px-2 py-0.5 text-[13px] font-semibold uppercase tracking-wide text-dim">
+            <span className="hidden border-2 border-line-strong bg-ink-raised px-2 py-0.5 text-[13px] font-semibold uppercase tracking-wide text-dim sm:inline-block">
               {role}
             </span>
           )}

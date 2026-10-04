@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
  * words. `ghost` and `link` are flat on purpose — they are not the action.
  */
 const buttonVariants = cva(
-  "inline-flex shrink-0 cursor-pointer select-none items-center justify-center gap-2.5 whitespace-nowrap font-display uppercase leading-none outline-none disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-offset-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 cursor-pointer select-none items-center justify-center gap-2.5 text-center font-display uppercase leading-snug outline-none disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-offset-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {

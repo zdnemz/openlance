@@ -42,7 +42,7 @@ export function Chip({ children, className, ...rest }: ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border-2 border-line bg-white/[0.03] px-2 py-0.5 text-[13px] leading-5 text-dim",
+        "inline-flex items-center gap-1.5 border-2 border-line bg-ink-raised px-2 py-0.5 text-[13px] leading-5 text-dim",
         className,
       )}
       {...rest}
@@ -60,11 +60,11 @@ export function Chip({ children, className, ...rest }: ComponentProps<"span">) {
  * print all 18 decimals. Omit it and the amount stays exact, which is what a
  * figure the user signs, sends or adds up has to be.
  */
-export function EthAmount({ wei, className, suffix = true, decimals }: { wei: string | bigint | null | undefined; className?: string; suffix?: boolean; decimals?: number }) {
+export function EthAmount({ wei, className, suffix = true, decimals, pixel = false }: { wei: string | bigint | null | undefined; className?: string; suffix?: boolean; decimals?: number; pixel?: boolean }) {
   return (
-    <span className={cn("num", className)}>
+    <span className={cn(pixel ? "display" : "num", className)}>
       {decimals === undefined ? formatEth(wei) : formatEthSummary(wei, decimals)}
-      {suffix && <span className="ml-1 text-[max(0.72em,12px)] text-faint">ETH</span>}
+      {suffix && <span className={cn("ml-1.5 text-faint", pixel ? "text-[0.5em]" : "text-[max(0.72em,12px)]")}>ETH</span>}
     </span>
   );
 }
@@ -74,7 +74,7 @@ export function EthAmount({ wei, className, suffix = true, decimals }: { wei: st
  * bits (see SpriteAvatar). Kept under this name so call sites read as before.
  */
 export function AddressAvatar({ address, size = 36, className }: { address: string | null | undefined; size?: number; className?: string }) {
-  if (!address) return <span className={cn("inline-block border-2 border-line bg-white/5", className)} style={{ width: size, height: size }} />;
+  if (!address) return <span className={cn("inline-block border-2 border-line bg-ink-hover", className)} style={{ width: size, height: size }} />;
   return <SpriteAvatar address={address} size={size} className={className} />;
 }
 

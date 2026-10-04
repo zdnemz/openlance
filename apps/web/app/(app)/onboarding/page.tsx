@@ -67,27 +67,34 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto max-w-2xl py-10">
-      <h1 className="font-display text-3xl tracking-tight">Join OpenLance</h1>
-      <p className="mt-2 text-sm text-dim">Testnet only — no real funds. Simulated KYC, real wallet signatures.</p>
+      <h1 className="display text-[20px] leading-snug md:text-[24px]">Join OpenLance</h1>
+      <p className="mt-4 text-[15px] text-dim">Testnet only — no real funds. Simulated KYC, real wallet signatures.</p>
 
-      <ol className="mt-8 flex items-center gap-2 text-[12px]">
+      <ol className="mt-8 grid grid-cols-4 gap-2" aria-label="Progress">
         {["Connect", "Role", "Verify", "Done"].map((label, i) => (
-          <li key={label} className="flex flex-1 items-center gap-2">
-            {step > i + 1 ? <CheckCircle weight="fill" className="h-4 w-4 text-state-released" /> : <Circle className="h-4 w-4 text-faint" />}
-            <span className={step === i + 1 ? "text-foreground" : "text-faint"}>{label}</span>
+          <li key={label} aria-current={step === i + 1 ? "step" : undefined}>
+            <span
+              className={`block h-3 border-2 ${
+                step > i + 1 ? "border-state-released bg-state-released" : step === i + 1 ? "border-rose-accent bg-rose-accent" : "border-line-strong"
+              }`}
+            />
+            <span className={`mt-2 flex items-center gap-1.5 text-[14px] ${step === i + 1 ? "font-semibold text-foreground" : "text-faint"}`}>
+              {step > i + 1 && <Check weight="bold" className="h-4 w-4 text-state-released" />}
+              {label}
+            </span>
           </li>
         ))}
       </ol>
 
-      <div className="mt-6 border border-line bg-white/[0.012] p-6">
+      <div className="mt-6 border-2 border-line bg-ink-raised p-6">
         {step === 1 && (
           <div>
-            <h2 className="text-lg font-medium">1 — Connect a real wallet</h2>
+            <h2 className="font-display text-[13px] leading-snug">1 — Connect a real wallet</h2>
             <p className="mt-1 text-sm text-dim">MetaMask, Coinbase, or Rabby. One SIWE signature proves ownership.</p>
             <button
               type="button"
               onClick={() => setPanelOpen(true)}
-              className="mt-4 bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright"
+              className="pixel-btn inline-flex min-h-11 cursor-pointer items-center justify-center gap-2.5 px-5 py-3 font-display text-[12px] uppercase leading-none text-white focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:opacity-60 mt-4"
             >
               {walletAddress ? "Sign in" : "Connect wallet"}
             </button>
@@ -189,7 +196,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
   const selected = ROLES.find((r) => r.id === seatRole);
   return (
     <div>
-      <h2 className="text-lg font-medium">{claimed ? "2 — Your seat" : "2 — Pick your seat (permanent)"}</h2>
+      <h2 className="font-display text-[13px] leading-snug">{claimed ? "2 — Your seat" : "2 — Pick your seat (permanent)"}</h2>
       <p className="mt-1 text-sm text-dim">
         {claimed
           ? "This wallet already claimed a seat on-chain — it outlives our database, so the choice is already made."
@@ -197,10 +204,10 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
       </p>
 
       {claimed ? (
-        <div className="mt-4 border border-rose-accent/50 bg-rose-soft px-4 py-3.5">
+        <div className="mt-4 border-2 border-rose-accent/50 bg-rose-soft px-4 py-3.5">
           <div className="text-sm font-medium">{selected?.title} · claimed on-chain</div>
           <div className="text-xs text-dim">{selected?.blurb}</div>
-          <div className="mt-0.5 text-[11px] text-faint">{selected?.kyc}</div>
+          <div className="mt-0.5 text-[13px] text-faint">{selected?.kyc}</div>
         </div>
       ) : (
         <div className="mt-4 grid gap-2" role="radiogroup" aria-label="Role">
@@ -214,15 +221,15 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
                 aria-checked={active}
                 disabled={busy}
                 onClick={() => setSelectedRole(r.id)}
-                className={`border px-4 py-3.5 text-left transition-colors ${press} ${
+                className={`border-2 px-4 py-3.5 text-left transition-colors ${press} ${
                   active
-                    ? "border-rose-accent/50 bg-rose-soft"
-                    : "border-transparent hover:border-line hover:bg-white/[0.04]"
+                    ? "border-rose-accent bg-rose-soft"
+                    : "border-line-strong hover:border-rose-light hover:bg-ink-hover"
                 } disabled:opacity-60`}
               >
                 <div className="text-sm font-medium">{r.title} {user.role === r.id && "· current"}</div>
                 <div className="text-xs text-dim">{r.blurb}</div>
-                <div className="mt-0.5 text-[11px] text-faint">{r.kyc}</div>
+                <div className="mt-0.5 text-[13px] text-faint">{r.kyc}</div>
               </button>
             );
           })}
@@ -230,7 +237,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
       )}
 
       {seat.state === "unreadable" && (
-        <p role="status" className="mt-3 text-[12.5px] text-amber-300">
+        <p role="status" className="mt-3 text-[14px] text-state-funded">
           Couldn&apos;t read your on-chain seat. Confirm is disabled until the registry answers — a seat we cannot verify is not one we will hand out.
         </p>
       )}
@@ -239,7 +246,7 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
         type="button"
         disabled={busy || seat.state === "loading" || seat.state === "unreadable"}
         onClick={() => void confirm()}
-        className={`mt-4 inline-flex items-center gap-2 bg-rose-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
+        className="pixel-btn inline-flex min-h-11 cursor-pointer items-center justify-center gap-2.5 px-5 py-3 font-display text-[12px] uppercase leading-none text-white focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:opacity-60 mt-4"
       >
         {busy ? <Spinner className="h-4 w-4 animate-spin" /> : null}
         {busy ? "Saving…" : seat.state === "loading" ? "Checking your seat…" : `Continue with ${selected?.title ?? seatRole}`}
@@ -336,29 +343,29 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
         <ol className="mt-5 flex items-center gap-1.5" aria-label="Verification progress">
           {["Submitted", "In review", "Verified"].map((label, i) => (
             <li key={label} className="flex flex-1 items-center gap-2 last:flex-none">
-              <span className={`grid h-6 w-6 shrink-0 place-items-center text-[11px] font-medium ${
-                i < 2 ? "bg-state-released/15 text-state-released ring-1 ring-state-released/30" : "bg-white/[0.04] text-faint ring-1 ring-line"
+              <span className={`grid h-6 w-6 shrink-0 place-items-center text-[13px] font-medium ${
+                i < 2 ? "bg-state-released/15 text-state-released ring-1 ring-state-released/30" : "bg-ink-raised text-faint ring-1 ring-line"
               }`}>
                 {i < 2 ? "✓" : i + 1}
               </span>
-              <span className={`text-[12px] ${i === 1 ? "text-foreground" : "text-faint"}`}>{label}</span>
+              <span className={`text-[13px] ${i === 1 ? "text-foreground" : "text-faint"}`}>{label}</span>
               {i < 2 && <span className="mx-1 h-px flex-1 bg-line" aria-hidden />}
             </li>
           ))}
         </ol>
         {submitted && (
-          <dl className="num mt-4 space-y-1.5 border border-line bg-white/[0.02] px-4 py-3 text-[12.5px]">
+          <dl className="num mt-4 space-y-1.5 border-2 border-line bg-ink-raised px-4 py-3 text-[14px]">
             <div className="flex justify-between gap-4"><dt className="text-faint">Name</dt><dd className="text-dim">{submitted.fullName}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-faint">Country</dt><dd className="text-dim">{submitted.country}</dd></div>
             {submitted.idType && <div className="flex justify-between gap-4"><dt className="text-faint">Document</dt><dd className="text-dim">{ID_TYPES.find((t) => t.id === submitted.idType)?.label} {submitted.idNumber && maskId(submitted.idNumber)}</dd></div>}
           </dl>
         )}
-        <p className="mt-4 text-[12.5px] leading-relaxed text-dim">
+        <p className="mt-4 text-[14px] leading-relaxed text-dim">
           A demo reviewer approves {user.role} KYC — nothing leaves your browser in this mock.
         </p>
         <button
           type="button" disabled={busy} onClick={() => void approve()}
-          className={`mt-3 inline-flex items-center gap-2 bg-rose-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-60 ${press}`}
+          className="pixel-btn inline-flex min-h-11 cursor-pointer items-center justify-center gap-2.5 px-5 py-3 font-display text-[12px] uppercase leading-none text-white focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:opacity-60 mt-3"
         >
           {busy ? <Spinner className="h-4 w-4 animate-spin" /> : <SealCheck weight="bold" className="h-4 w-4" />}
           Simulate reviewer approval
@@ -372,7 +379,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
   if (user.kycStatus === "verified") {
     return (
       <div className="glass px-6 py-10 text-center">
-        <p className="text-[15px] font-medium">You are verified.</p>
+        <p className="text-[16px] font-medium">You are verified.</p>
         <p className="mx-auto mt-2 max-w-[52ch] text-sm leading-relaxed text-faint">
           Your seat is locked and identity is on file. Use the app to work — or disconnect from the header wallet menu
           to start again with a different wallet.
@@ -395,7 +402,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
         <button
           type="button"
           onClick={onBack}
-          className="mb-3 inline-flex items-center gap-1.5 text-[12.5px] text-faint transition-colors hover:text-dim"
+          className="mb-3 inline-flex items-center gap-1.5 text-[14px] text-faint transition-colors hover:text-dim"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Previous
         </button>
@@ -405,7 +412,7 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
       {/* what this level inspects */}
       <ul className="mt-4 flex flex-wrap gap-1.5" aria-label={`Checks for ${level.name} verification`}>
         {level.checks.map((c) => (
-          <li key={c} className="num inline-flex items-center gap-1.5 border border-line bg-white/[0.03] px-2.5 py-1 text-[11.5px] text-dim">
+          <li key={c} className="num inline-flex items-center gap-1.5 border-2 border-line bg-ink-raised px-2.5 py-1 text-[13px] text-dim">
             <CheckCircle weight="fill" className="h-3 w-3 text-state-released" />{c}
           </li>
         ))}
@@ -414,23 +421,23 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
       <div className="mt-5 grid gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium text-dim"><UserIcon className="h-3.5 w-3.5 text-faint" />Full name</span>
+            <span className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-dim"><UserIcon className="h-3.5 w-3.5 text-faint" />Full name</span>
             <input
               aria-invalid={!!fullName && !nameOk} aria-describedby={fullName && !nameOk ? "kyc-name-hint" : undefined}
               value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ada Okafor" autoComplete="name"
-              className="h-11 w-full border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
+              className="h-11 w-full border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
             />
-            {fullName && !nameOk && <span id="kyc-name-hint" className="mt-1 block text-[11.5px] text-amber-300">Use at least 2 characters.</span>}
+            {fullName && !nameOk && <span id="kyc-name-hint" className="mt-1 block text-[13px] text-state-funded">Use at least 2 characters.</span>}
           </label>
           <label className="block">
-            <span className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium text-dim"><Globe className="h-3.5 w-3.5 text-faint" />Country of residence</span>
+            <span className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-dim"><Globe className="h-3.5 w-3.5 text-faint" />Country of residence</span>
             <CountryPicker value={country} onChange={setCountry} disabled={busy} />
           </label>
         </div>
 
         {user.role !== "client" && (
           <fieldset>
-            <legend className="mb-1.5 text-[12px] font-medium text-dim">Identity document</legend>
+            <legend className="mb-1.5 text-[13px] font-medium text-dim">Identity document</legend>
             <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Document type">
               {ID_TYPES.map(({ id, label, Icon }) => {
                 const active = idType === id;
@@ -438,12 +445,12 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
                   <button
                     key={id} type="button" role="radio" aria-checked={active} disabled={busy}
                     onClick={() => setIdType(id)}
-                    className={`flex flex-col items-center gap-1.5 border px-2 py-3.5 text-center transition-colors ${press} ${
-                      active ? "border-rose-accent/50 bg-rose-soft" : "border-line bg-white/[0.02] hover:border-line-strong"
+                    className={`flex flex-col items-center gap-1.5 border-2 px-2 py-3.5 text-center transition-colors ${press} ${
+                      active ? "border-rose-accent/50 bg-rose-soft" : "border-line bg-ink-raised hover:border-line-strong"
                     } disabled:opacity-60`}
                   >
                     <Icon weight={active ? "fill" : "regular"} className={`h-5 w-5 ${active ? "text-rose-bright" : "text-faint"}`} />
-                    <span className={`text-[11.5px] leading-tight ${active ? "text-foreground" : "text-dim"}`}>{label}</span>
+                    <span className={`text-[13px] leading-tight ${active ? "text-foreground" : "text-dim"}`}>{label}</span>
                   </button>
                 );
               })}
@@ -452,25 +459,25 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
               aria-label="Document number"
               aria-invalid={!!idNumber && !idOk} aria-describedby={idNumber && !idOk ? "kyc-id-hint" : undefined}
               value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="e.g. A1234567" inputMode="text" autoComplete="off"
-              className="mt-2 h-11 w-full border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
+              className="mt-2 h-11 w-full border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors placeholder:text-faint/60 focus:border-rose-accent/50"
             />
-            {idNumber && !idOk && <span id="kyc-id-hint" className="mt-1 block text-[11.5px] text-amber-300">Document number needs 4+ characters.</span>}
+            {idNumber && !idOk && <span id="kyc-id-hint" className="mt-1 block text-[13px] text-state-funded">Document number needs 4+ characters.</span>}
           </fieldset>
         )}
 
         {user.role === "arbiter" && (
-          <div className={`flex items-center justify-between gap-3 border px-4 py-3.5 ${
-            livePhase === "done" ? "border-state-released/30 bg-state-released/[0.05]" : "border-line bg-white/[0.02]"
+          <div className={`flex items-center justify-between gap-3 border-2 px-4 py-3.5 ${
+            livePhase === "done" ? "border-state-released/30 bg-state-released/[0.05]" : "border-line bg-ink-raised"
           }`}>
-            <span className="flex items-center gap-2.5 text-[13px]">
+            <span className="flex items-center gap-2.5 text-[14px]">
               <Scan className={`h-5 w-5 ${livePhase === "done" ? "text-state-released" : "text-faint"}`} />
               <span>
                 <span className="block font-medium">{livePhase === "done" ? "Liveness confirmed" : livePhase === "scanning" ? "Scanning…" : "Liveness check"}</span>
-                <span className="block text-[11.5px] text-faint">{livePhase === "idle" ? "Mock camera scan, ~2 seconds" : livePhase === "scanning" ? "Hold still (simulated)" : "Required for the arbiter seat"}</span>
+                <span className="block text-[13px] text-faint">{livePhase === "idle" ? "Mock camera scan, ~2 seconds" : livePhase === "scanning" ? "Hold still (simulated)" : "Required for the arbiter seat"}</span>
               </span>
             </span>
             {livePhase === "idle" ? (
-              <button type="button" disabled={busy} onClick={startLiveness} className={`shrink-0 border border-line px-4 py-2 text-[12.5px] text-dim hover:text-foreground ${press}`}>
+              <button type="button" disabled={busy} onClick={startLiveness} className={`shrink-0 border-2 border-line px-4 py-2 text-[14px] text-dim hover:text-foreground ${press}`}>
                 Start scan
               </button>
             ) : livePhase === "scanning" ? (
@@ -485,14 +492,14 @@ function KycStep({ user, busy, setBusy, onDone, onBack }: { user: PublicUser; bu
           {/* role="status": a screen reader needs to hear the count change as
               fields are filled. A `title` on a DISABLED button is never
               focusable and never announced, so the reason went unstated. */}
-          <span role="status" className="num text-[11.5px] text-faint">
+          <span role="status" className="num text-[13px] text-faint">
             {complete} of {parts.length} details ready
             {!canSubmit && !busy && " — fill the rest to continue"}
           </span>
           <button
             type="button" disabled={!canSubmit} onClick={() => void submit()}
             title={canSubmit ? undefined : "Fill every detail above to continue"}
-            className={`inline-flex items-center gap-2 bg-rose-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-rose-bright disabled:opacity-50 ${press}`}
+            className="pixel-btn inline-flex min-h-11 cursor-pointer items-center justify-center gap-2.5 px-5 py-3 font-display text-[12px] uppercase leading-none text-white focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? <Spinner className="h-4 w-4 animate-spin" /> : <ShieldCheck weight="bold" className="h-4 w-4" />}
             {busy ? "Submitting…" : user.role === "client" ? "Verify instantly" : "Submit for review"}
@@ -530,32 +537,32 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
         ref={triggerRef}
         type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open}
         onClick={() => { setQuery(""); setOpen((o) => !o); }}
-        className="flex h-11 w-full items-center gap-2 border border-line bg-white/[0.03] px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50 disabled:opacity-60"
+        className="flex h-11 w-full items-center gap-2 border-2 border-line bg-ink-raised px-3.5 text-sm outline-none transition-colors focus:border-rose-accent/50 disabled:opacity-60"
       >
         <Globe className="h-3.5 w-3.5 shrink-0 text-faint" />
         <span className={`flex-1 truncate text-left ${value ? "" : "text-faint/60"}`}>{value || "Select country"}</span>
         <CaretDown className={`h-3.5 w-3.5 shrink-0 text-faint transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute inset-x-0 top-full z-50 mt-1.5 overflow-hidden border border-line bg-ink shadow-xl">
+        <div className="absolute inset-x-0 top-full z-50 mt-1.5 overflow-hidden border-2 border-line bg-ink shadow-xl">
           <input
             value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search countries…" autoFocus
             aria-label="Search countries"
-            className="w-full border-b border-line bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-faint/60"
+            className="w-full border-b-2 border-line bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-faint/60"
           />
           {/* `role="option"` sat on the inner <button> while the <li> carried no
               role, so the listbox reported ZERO options and this step was
               unusable without a mouse. The role belongs on the <li>. */}
           <ul id="country-listbox" role="listbox" aria-label="Country" className="max-h-56 overflow-y-auto p-1.5">
-            {matches.length === 0 && <li className="px-3 py-2.5 text-[12.5px] text-faint">No matches — try another spelling.</li>}
+            {matches.length === 0 && <li className="px-3 py-2.5 text-[14px] text-faint">No matches — try another spelling.</li>}
             {matches.map((c) => (
               <li
                 key={c}
                 role="option"
                 aria-selected={c === value}
                 onClick={() => { onChange(c); close(); }}
-                className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-[13px] transition-colors ${
-                  c === value ? "bg-rose-soft text-foreground" : "text-dim hover:bg-white/[0.04] hover:text-foreground"
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-[14px] transition-colors ${
+                  c === value ? "bg-rose-soft text-foreground" : "text-dim hover:bg-ink-hover hover:text-foreground"
                 }`}
               >
                 {c}
@@ -572,15 +579,15 @@ function CountryPicker({ value, onChange, disabled }: { value: string; onChange:
 function KycHeader({ level, role }: { level: { name: string; eta: string }; role: UserRole }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h3 className="flex items-center gap-2 text-[15px] font-medium">
+      <h3 className="flex items-center gap-2 text-[16px] font-medium">
         <ShieldCheck weight="fill" className="h-4.5 w-4.5 text-rose-bright" />
         Verify identity
       </h3>
       <span className="flex items-center gap-1.5">
-        <span className="num border border-line bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-dim">{role} · {level.name}</span>
-        <span className="num bg-amber-400/10 px-2.5 py-0.5 text-[11px] text-amber-300 ring-1 ring-amber-400/20">SIMULATED</span>
+        <span className="num border-2 border-line bg-ink-raised px-2.5 py-0.5 text-[13px] text-dim">{role} · {level.name}</span>
+        <span className="num bg-state-funded/10 px-2.5 py-0.5 text-[13px] text-state-funded">SIMULATED</span>
       </span>
-      <p className="mt-0.5 w-full text-[12px] text-faint">{level.eta} — no documents leave your browser in this mock.</p>
+      <p className="mt-0.5 w-full text-[13px] text-faint">{level.eta} — no documents leave your browser in this mock.</p>
     </div>
   );
 }

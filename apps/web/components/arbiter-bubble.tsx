@@ -44,10 +44,10 @@ export function ArbiterBubble({
       type="button"
       onClick={onClick}
       title={address}
-      className={`group flex items-center gap-2 border py-1 pl-1 pr-3 text-[12.5px] transition-colors ${
+      className={`group flex items-center gap-2 border-2 py-1 pl-1 pr-3 text-[14px] transition-colors ${
         tone === "locked"
           ? "border-state-released/30 bg-state-released/[0.06] hover:border-state-released/60"
-          : "border-line bg-white/[0.03] hover:border-rose-accent/50"
+          : "border-line bg-ink-raised hover:border-rose-accent/50"
       }`}
     >
       <AddressAvatar address={address} size={22} />
@@ -103,7 +103,7 @@ export function ArbiterDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="glass-raised max-w-md gap-0 border-line p-0">
         <DialogHeader className="space-y-1.5 px-7 pb-4 pt-7">
-          <DialogTitle className="flex items-center gap-2 text-xl tracking-tight">
+          <DialogTitle className="flex items-center gap-2">
             <Scales className="h-5 w-5 text-dim" /> Arbiter
           </DialogTitle>
         </DialogHeader>
@@ -126,7 +126,7 @@ export function ArbiterDetailDialog({
                 </div>
                 <Link
                   href={`/profile/${address}`}
-                  className="num mt-0.5 inline-flex items-center gap-1 text-[11.5px] text-faint transition-colors hover:text-rose-bright"
+                  className="num mt-0.5 inline-flex items-center gap-1 text-[13px] text-faint transition-colors hover:text-rose-bright"
                 >
                   full profile <ArrowSquareOut className="h-3 w-3" />
                 </Link>
@@ -146,25 +146,25 @@ export function ArbiterDetailDialog({
                   <Stat label="standing" value={standingLabel(arbiter, minStakeWei)} />
                 </div>
                 {arbiter.kycStatus && arbiter.kycStatus !== "verified" && (
-                  <p className="mt-3 text-[12px] text-amber-300">KYC {arbiter.kycStatus}</p>
+                  <p className="mt-3 text-[13px] text-state-funded">KYC {arbiter.kycStatus}</p>
                 )}
               </>
             ) : (
-              <p className="mt-5 text-[12.5px] text-faint">
+              <p className="mt-5 text-[14px] text-faint">
                 Not in the current registry roster — this address may have deregistered since it was proposed. It will
                 fall back to random selection if it is no longer eligible.
               </p>
             )}
 
             {arbiter && (
-              <p className="mt-4 text-[12px] leading-relaxed text-faint">
+              <p className="mt-4 text-[13px] leading-relaxed text-faint">
                 Seats first if a milestone ever disputes; an ineligible entry silently falls back to the random draw.
               </p>
             )}
           </div>
         )}
 
-        <DialogFooter className="flex-col items-stretch gap-2.5 border-t border-line px-7 py-5 sm:flex-col sm:items-stretch">
+        <DialogFooter className="flex-col items-stretch gap-2.5 border-t-2 border-line px-7 py-5 sm:flex-col sm:items-stretch">
           {(actions.onApprove || actions.onReject) ? (
             <div className="flex gap-2.5">
               {actions.onReject && (
@@ -172,7 +172,7 @@ export function ArbiterDetailDialog({
                   type="button"
                   disabled={actions.busy}
                   onClick={actions.onReject}
-                  className="flex-1 border border-line bg-transparent py-3 text-[13px] font-medium text-dim hover:border-destructive/50 hover:text-destructive"
+                  className="flex-1 border-2 border-line bg-transparent py-3 text-[14px] font-medium text-dim hover:border-destructive/50 hover:text-destructive"
                 >
                   {actions.busy ? "Rejecting…" : "Reject"}
                 </Button>
@@ -182,17 +182,17 @@ export function ArbiterDetailDialog({
                   type="button"
                   disabled={actions.busy}
                   onClick={actions.onApprove}
-                  className="flex-1 bg-state-released py-3 text-[13px] font-medium text-ink hover:brightness-110"
+                  className="flex-1 bg-state-released py-3 text-[14px] font-medium text-ink hover:brightness-110"
                 >
                   {actions.busy ? "Locking…" : "Approve & lock"}
                 </Button>
               )}
             </div>
           ) : (
-            <Button
+            <Button variant="outline"
               type="button"
               onClick={() => onOpenChange(false)}
-              className="w-full bg-white/10 py-3 text-[13px] font-medium hover:bg-white/20"
+              className="w-full"
             >
               Close
             </Button>
@@ -205,9 +205,9 @@ export function ArbiterDetailDialog({
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="border border-line bg-white/[0.02] px-4 py-3">
+    <div className="border-2 border-line bg-ink-raised px-4 py-3">
       <div className={`num text-lg font-medium leading-none ${accent ? "text-state-released" : "text-foreground"}`}>{value}</div>
-      <div className="mt-1.5 text-[11px] uppercase tracking-[0.14em] text-faint">{label}</div>
+      <div className="mt-1.5 text-[13px] uppercase tracking-[0.14em] text-faint">{label}</div>
     </div>
   );
 }

@@ -13,9 +13,10 @@ import { useRouter } from "next/navigation";
 import { useProjects, useJobs, useDisputes, useProject, useJob, useLedger, useArbiters } from "@/lib/queries";
 import { useSession, useSessionHydrated } from "@/lib/session";
 import { EthAmount, Skeleton, EmptyState, ListHead, StatusBadge, AddressText, InlineLoading, press } from "@/components/design";
+import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { ArbiterStakeSummary } from "@/components/arbiter-stake-panel";
-import { SpotCard } from "@/components/motion";
+import { LiftCard } from "@/components/motion";
 import { STATE_COLORS, timeAgo, toWei, formatEth, ledgerDotColor } from "@/lib/format";
 import type { DisputeView, JobView } from "@/lib/types";
 import { ArrowRight, Briefcase, Gavel, TrendDown, TrendUp } from "@/components/icons";
@@ -76,7 +77,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-10" aria-busy="true">
         <Skeleton className="h-14 w-2/3" />
-        <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-8 border-y-2 border-dashed border-line-strong py-8 md:grid-cols-4">
           <Skeleton className="h-12 w-24" />
           <Skeleton className="h-12 w-24" />
           <Skeleton className="h-12 w-24" />
@@ -124,11 +125,11 @@ export default function DashboardPage() {
   return (
     <div className="space-y-10">
       {me.kycStatus !== "verified" && (
-        <div className="flex flex-wrap items-center justify-between gap-4 border border-line bg-white/[0.012] px-6 py-4">
-          <p className="text-[13px] text-dim">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-2 border-line bg-ink-raised px-6 py-4">
+          <p className="text-[14px] text-dim">
             {me.kycStatus === "pending" ? "KYC pending — approve it to unlock posting and proposing." : "Finish onboarding — pick your seat and verify identity to unlock posting and proposing."}
           </p>
-          <Link href="/onboarding" className="bg-rose-accent px-4 py-2 text-[12.5px] font-medium text-white hover:bg-rose-bright">
+          <Link href="/onboarding" className={buttonVariants({ size: "sm" })}>
             {me.kycStatus === "pending" ? "Review KYC" : "Finish onboarding"}
           </Link>
         </div>
@@ -139,8 +140,8 @@ export default function DashboardPage() {
         desc={me.displayName ? `${greet(me.displayName, role)} ${head.desc}` : head.desc}
         meta={meta}
         actions={
-          <Link href={head.cta.href} className={`inline-flex items-center gap-1.5 bg-rose-accent px-5 py-2.5 text-[13px] font-medium text-white hover:bg-rose-bright ${press}`}>
-            {head.cta.label} <ArrowRight className="h-3.5 w-3.5" />
+          <Link href={head.cta.href} className={buttonVariants()}>
+            {head.cta.label} <ArrowRight className="h-5 w-5" />
           </Link>
         }
       />
@@ -148,18 +149,18 @@ export default function DashboardPage() {
       {role === "arbiter" ? (
         <ArbiterStats open={openDisputes.length} settled={settledDisputes.length} serving={active.length} />
       ) : role === "freelancer" ? (
-        <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
-          <Stat label="earned on-chain" value={<EthAmount wei={me.stats.totalEarnedWei} decimals={4} className="text-rose-bright" />} icon={<TrendUp className="h-4 w-4 text-rose-bright" />} />
-          <Stat label="projects in flight" value={<span className="num">{active.length}</span>} sub={`${done.length} completed`} />
-          <Stat label="open disputes" value={<span className="num">{openDisputes.length}</span>} icon={openDisputes.length ? <Gavel className="h-4 w-4 text-state-disputed" /> : undefined} />
-          <Stat label="open jobs" value={<span className="num">{openJobs.length}</span>} sub="to propose on" />
+        <div className="grid grid-cols-2 gap-x-8 gap-y-8 border-y-2 border-dashed border-line-strong py-8 md:grid-cols-4">
+          <Stat label="earned on-chain" value={<EthAmount pixel wei={me.stats.totalEarnedWei} decimals={4} className="text-rose-light" />} icon={<TrendUp className="h-5 w-5 text-rose-light" />} />
+          <Stat label="projects in flight" value={<span>{active.length}</span>} sub={`${done.length} completed`} />
+          <Stat label="open disputes" value={<span>{openDisputes.length}</span>} icon={openDisputes.length ? <Gavel className="h-5 w-5 text-state-disputed" /> : undefined} />
+          <Stat label="open jobs" value={<span>{openJobs.length}</span>} sub="to propose on" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
-          <Stat label="paid through escrow" value={<EthAmount wei={me.stats.totalPaidWei} decimals={4} className="text-rose-bright" />} icon={<TrendDown className="h-4 w-4 text-rose-bright" />} />
-          <Stat label="projects in flight" value={<span className="num">{active.length}</span>} sub={`${done.length} completed`} />
-          <Stat label="your open jobs" value={<span className="num">{myJobs.length}</span>} sub={`${openJobs.length} open market-wide`} />
-          <Stat label="open disputes" value={<span className="num">{openDisputes.length}</span>} icon={openDisputes.length ? <Gavel className="h-4 w-4 text-state-disputed" /> : undefined} />
+        <div className="grid grid-cols-2 gap-x-8 gap-y-8 border-y-2 border-dashed border-line-strong py-8 md:grid-cols-4">
+          <Stat label="paid through escrow" value={<EthAmount pixel wei={me.stats.totalPaidWei} decimals={4} className="text-rose-light" />} icon={<TrendDown className="h-5 w-5 text-rose-light" />} />
+          <Stat label="projects in flight" value={<span>{active.length}</span>} sub={`${done.length} completed`} />
+          <Stat label="your open jobs" value={<span>{myJobs.length}</span>} sub={`${openJobs.length} open market-wide`} />
+          <Stat label="open disputes" value={<span>{openDisputes.length}</span>} icon={openDisputes.length ? <Gavel className="h-5 w-5 text-state-disputed" /> : undefined} />
         </div>
       )}
 
@@ -169,24 +170,24 @@ export default function DashboardPage() {
           budget lock to go live — so it leads, above everything else. */}
       {role === "client" && drafts.length > 0 && (
         <section>
-          <div className="flex items-baseline justify-between">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <ListHead>Drafts</ListHead>
-            <span className="num text-[11px] text-faint">
+            <span className="num text-[13px] text-faint">
               {drafts.length} unpublished · lock the budget to publish
             </span>
           </div>
-          <div className="mt-5 divide-y divide-white/[0.05] overflow-hidden border border-amber-400/25 bg-amber-400/[0.04]">
+          <div className="mt-5 divide-y-2 divide-line overflow-hidden border-2 border-state-funded/60 bg-state-funded/[0.05]">
             {drafts.map((j) => (
               <Link
                 key={j.id}
                 href={`/jobs/${j.id}`}
-                className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 transition-colors hover:bg-white/[0.035]"
+                className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 transition-colors hover:bg-ink-hover"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-[14px] font-medium">{j.title}</span>
-                  <span className="num mt-0.5 block text-[11px] text-faint">saved {timeAgo(j.createdAt)}</span>
+                  <span className="block truncate text-[15px] font-medium">{j.title}</span>
+                  <span className="num mt-0.5 block text-[13px] text-faint">saved {timeAgo(j.createdAt)}</span>
                 </span>
-                <span className="num shrink-0 text-[12px] text-amber-300">
+                <span className="num shrink-0 text-[13px] text-state-funded">
                   {formatEth(j.budget.maxWei)} ETH to publish →
                 </span>
               </Link>
@@ -197,11 +198,11 @@ export default function DashboardPage() {
 
       {/* active projects */}
       <section>
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <ListHead>{role === "arbiter" ? "Projects under dispute" : "Active projects"}</ListHead>
           {/* Counts the list it renders, not every project: a finished project
               is history, and "N total" over an active-only list read as a lie. */}
-          <span className="num text-[11px] text-faint">
+          <span className="num text-[13px] text-faint">
             {active.length}{done.length > 0 ? ` · ${done.length} completed` : ""}
           </span>
         </div>
@@ -215,7 +216,7 @@ export default function DashboardPage() {
           // with none — say which, instead of nudging them to post more work.
           <EmptyState
             className="mt-5"
-            icon={<Briefcase className="h-5 w-5" />}
+            sprite="chest"
             title={
               done.length > 0
                 ? `${done.length} project${done.length === 1 ? "" : "s"} completed`
@@ -248,36 +249,36 @@ export default function DashboardPage() {
           <section>
             <ListHead>Your open jobs</ListHead>
             {!myJobs.length ? (
-              <p className="mt-4 max-w-[60ch] text-sm text-faint">Nothing posted. <Link href="/jobs/new" className="text-rose-bright hover:underline">Post one</Link> with a brief and your max budget.</p>
+              <p className="mt-4 max-w-[60ch] text-[15px] text-faint">Nothing posted. <Link href="/jobs/new" className="text-rose-bright hover:underline">Post one</Link> with a brief and your max budget.</p>
             ) : (
               <JobRows jobs={myJobs} />
             )}
-            <Link href="/jobs" className={`mt-3 inline-flex items-center gap-1.5 text-[12px] text-faint hover:text-dim ${press}`}>
-              browse the marketplace <ArrowRight className="h-3 w-3" />
+            <Link href="/jobs" className={`mt-3 inline-flex items-center gap-1.5 text-[13px] text-faint hover:text-dim ${press}`}>
+              browse the marketplace <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
         ) : role === "freelancer" ? (
           <section>
             <ListHead>Open jobs to propose on</ListHead>
             {!openJobs.length ? (
-              <p className="mt-4 max-w-[60ch] text-sm text-faint">Nothing open right now. Check back — new jobs land once their poster locks the budget.</p>
+              <p className="mt-4 max-w-[60ch] text-[15px] text-faint">Nothing open right now. Check back — new jobs land once their poster locks the budget.</p>
             ) : (
               <JobRows jobs={openJobs.slice(0, 5)} />
             )}
-            <Link href="/jobs" className={`mt-3 inline-flex items-center gap-1.5 text-[12px] text-faint hover:text-dim ${press}`}>
-              all open jobs <ArrowRight className="h-3 w-3" />
+            <Link href="/jobs" className={`mt-3 inline-flex items-center gap-1.5 text-[13px] text-faint hover:text-dim ${press}`}>
+              all open jobs <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
         ) : (
           <section>
-            <div className="flex items-baseline justify-between">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <ListHead>Dispute queue</ListHead>
-              <Link href="/disputes" className="text-[12px] text-rose-bright hover:underline">open queue</Link>
+              <Link href="/disputes" className="text-[13px] text-rose-bright hover:underline">open queue</Link>
             </div>
             {!openDisputes.length ? (
-              <p className="mt-4 max-w-[60ch] text-sm text-faint">No open disputes. Selection is random among eligible stakes — stay eligible.</p>
+              <p className="mt-4 max-w-[60ch] text-[15px] text-faint">No open disputes. Selection is random among eligible stakes — stay eligible.</p>
             ) : (
-              <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
+              <div className="mt-4 divide-y-2 divide-line overflow-hidden border-2 border-line">
                 {openDisputes.slice(0, 5).map((d) => <DisputeRow key={d.id} dispute={d} />)}
               </div>
             )}
@@ -287,20 +288,20 @@ export default function DashboardPage() {
         {/* chain pulse */}
         <section>
           <ListHead>Chain pulse</ListHead>
-          <div className="mt-4 divide-y divide-white/[0.04] overflow-hidden border border-line">
+          <div className="mt-4 divide-y-2 divide-line overflow-hidden border-2 border-line">
             {(ledger?.items ?? []).slice(0, 6).map((e) => (
-              <div key={e.id} className="flex items-center gap-3 bg-white/[0.012] px-5 py-3.5">
-                <span className="h-1.5 w-1.5 shrink-0" style={{ background: ledgerDotColor(e.eventType) }} />
-                <span className="num min-w-0 flex-1 truncate text-[12px] text-dim">
+              <div key={e.id} className="flex items-center gap-3 bg-ink-raised px-5 py-3.5">
+                <span className="h-2 w-2 shrink-0" style={{ background: ledgerDotColor(e.eventType) }} />
+                <span className="num min-w-0 flex-1 truncate text-[13px] text-dim">
                   {e.eventType} {e.milestoneOnchainId !== null ? `· m${e.milestoneOnchainId}` : ""}
                 </span>
-                <span className="num text-[11px] text-faint">{timeAgo(e.blockTime)}</span>
+                <span className="num text-[13px] text-faint">{timeAgo(e.blockTime)}</span>
               </div>
             ))}
-            {!ledger?.items.length && <div className="px-5 py-4 text-sm text-faint">Waiting for chain events…</div>}
+            {!ledger?.items.length && <div className="px-5 py-4 text-[15px] text-faint">Waiting for chain events<span className="cursor-blink">_</span></div>}
           </div>
-          <Link href="/console" className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-faint hover:text-dim">
-            full ledger in the backend console <ArrowRight className="h-3 w-3" />
+          <Link href="/console" className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-faint hover:text-dim">
+            full ledger in the backend console <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
       </div>
@@ -317,23 +318,23 @@ function greet(name: string, role: string): string {
 
 function ArbiterStats({ open, settled, serving }: { open: number; settled: number; serving: number }) {
   return (
-    <div className="grid grid-cols-2 gap-x-8 gap-y-7 border-y border-line py-7 md:grid-cols-4">
-      <Stat label="open disputes" value={<span className="num text-rose-bright">{open}</span>} icon={open ? <Gavel className="h-4 w-4 text-rose-bright" /> : undefined} />
-      <Stat label="settled" value={<span className="num">{settled}</span>} sub="majority decided" />
-      <Stat label="serving" value={<span className="num">{serving}</span>} sub="projects in flight" />
-      <Stat label="appeals" value={<span className="num">2 of 3</span>} sub="majority rules an appeal" />
+    <div className="grid grid-cols-2 gap-x-8 gap-y-8 border-y-2 border-dashed border-line-strong py-8 md:grid-cols-4">
+      <Stat label="open disputes" value={<span className="text-rose-light">{open}</span>} icon={open ? <Gavel className="h-5 w-5 text-rose-light" /> : undefined} />
+      <Stat label="settled" value={<span>{settled}</span>} sub="majority decided" />
+      <Stat label="serving" value={<span>{serving}</span>} sub="projects in flight" />
+      <Stat label="appeals" value={<span>2 of 3</span>} sub="majority rules an appeal" />
     </div>
   );
 }
 
 function JobRows({ jobs }: { jobs: JobView[] }) {
   return (
-    <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
+    <div className="mt-4 divide-y-2 divide-line overflow-hidden border-2 border-line">
       {jobs.map((j) => (
-        <Link key={j.id} href={`/jobs/${j.id}`} className="flex items-center justify-between bg-white/[0.012] px-5 py-4 transition-colors hover:bg-white/[0.035]">
+        <Link key={j.id} href={`/jobs/${j.id}`} className="flex items-center justify-between bg-ink-raised px-5 py-4 transition-colors hover:bg-ink-hover">
           <div className="min-w-0">
-            <div className="truncate text-[14px] font-medium">{j.title}</div>
-            <div className="num mt-0.5 text-[11px] text-faint">{j.status.replace(/_/g, " ")} · {timeAgo(j.createdAt)}</div>
+            <div className="truncate text-[15px] font-medium">{j.title}</div>
+            <div className="num mt-0.5 text-[13px] text-faint">{j.status.replace(/_/g, " ")} · {timeAgo(j.createdAt)}</div>
           </div>
           <StatusBadge status={j.status} />
         </Link>
@@ -344,10 +345,10 @@ function JobRows({ jobs }: { jobs: JobView[] }) {
 
 function DisputeRow({ dispute }: { dispute: DisputeView }) {
   return (
-    <Link href="/disputes" className="flex items-center gap-3 bg-white/[0.012] px-5 py-4 transition-colors hover:bg-white/[0.035]">
+    <Link href="/disputes" className="flex items-center gap-3 bg-ink-raised px-5 py-4 transition-colors hover:bg-ink-hover">
       <StatusBadge status="disputed" />
-      <span className="min-w-0 flex-1 truncate text-[13px] text-dim">{dispute.reason || `round ${(dispute.round ?? 0) + 1} · ${dispute.phase}`}</span>
-      <span className="num shrink-0 text-[11px] text-faint">{timeAgo(dispute.createdAt)}</span>
+      <span className="min-w-0 flex-1 truncate text-[14px] text-dim">{dispute.reason || `round ${(dispute.round ?? 0) + 1} · ${dispute.phase}`}</span>
+      <span className="num shrink-0 text-[13px] text-faint">{timeAgo(dispute.createdAt)}</span>
     </Link>
   );
 }
@@ -355,12 +356,12 @@ function DisputeRow({ dispute }: { dispute: DisputeView }) {
 function Stat({ label, value, sub, icon }: { label: string; value: React.ReactNode; sub?: string; icon?: React.ReactNode }) {
   return (
     <div>
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-faint">
+      <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-faint">
         {icon}
         {label}
       </div>
-      <div className="mt-2 text-2xl font-medium tracking-tight">{value}</div>
-      {sub && <div className="num mt-1 text-[11px] text-faint">{sub}</div>}
+      <div className="display mt-3 text-[20px] leading-none">{value}</div>
+      {sub && <div className="num mt-2.5 text-[13px] text-faint">{sub}</div>}
     </div>
   );
 }
@@ -377,13 +378,13 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
 
   return (
     <Link href={`/projects/${id}?fromJob=${jobId}`} className="group block min-w-0">
-      <SpotCard className="glass h-full min-w-0 p-6 transition-colors hover:border-line-strong">
+      <LiftCard className="glass h-full min-w-0 p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="num text-[11px] uppercase tracking-[0.16em] text-faint">
+          <div className="text-[13px] font-semibold uppercase tracking-wide text-faint">
             {role} · vs {counterpart.displayName || <AddressText value={counterpart.walletAddress} size={3} />}
           </div>
-          <div className="mt-2 line-clamp-2 text-[15.5px] font-medium leading-snug tracking-tight transition-colors group-hover:text-rose-bright">
+          <div className="mt-2.5 line-clamp-2 text-[18px] font-semibold leading-snug transition-colors group-hover:text-rose-light">
             {job?.title ?? (jobLoading ? <Skeleton className="inline-block h-5 w-40 align-middle" /> : (p.milestones[0]?.title ?? "Project room"))}
           </div>
         </div>
@@ -393,9 +394,9 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
       {/* milestone rail */}
       <div className="mt-5 flex gap-1.5">
         {p.milestones.map((m) => (
-          <div key={m.id} className="group/ms relative h-1.5 flex-1 overflow-hidden bg-white/[0.06]" title={`${m.title} — ${m.chainStatus}`}>
+          <div key={m.id} className="group/ms relative h-3 flex-1 overflow-hidden border-2 border-line bg-ink-hover" title={`${m.title} — ${m.chainStatus}`}>
             <div
-              className="absolute inset-0 transition-transform duration-700"
+              className="absolute inset-0"
               style={{ background: STATE_COLORS[m.chainStatus] ?? "var(--color-state-pending)", opacity: 0.85 }}
             />
           </div>
@@ -405,15 +406,15 @@ function ProjectCard({ id, jobId }: { id: string; jobId: string }) {
       <div className="mt-4 flex items-center justify-between">
         <div className="flex flex-wrap gap-2">
           {p.milestones.map((m) => (
-            <span key={m.id} className="num flex items-center gap-1.5 text-[11px] text-faint">
-              <span className="h-1 w-1" style={{ background: STATE_COLORS[m.chainStatus] ?? "var(--color-state-pending)" }} aria-hidden />
+            <span key={m.id} className="num flex items-center gap-1.5 text-[13px] text-faint">
+              <span className="h-2 w-2" style={{ background: STATE_COLORS[m.chainStatus] ?? "var(--color-state-pending)" }} aria-hidden />
               m{m.position}
             </span>
           ))}
         </div>
-        <EthAmount wei={p.milestones.reduce((a, m) => a + toWei(m.amountWei), 0n)} className="text-sm text-dim" />
+        <EthAmount pixel wei={p.milestones.reduce((a, m) => a + toWei(m.amountWei), 0n)} className="text-[13px] text-foreground" />
       </div>
-      </SpotCard>
+      </LiftCard>
     </Link>
   );
 }

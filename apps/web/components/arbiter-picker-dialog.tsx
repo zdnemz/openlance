@@ -83,17 +83,17 @@ function ArbiterPickerBody({
   return (
     <>
       <DialogHeader className="space-y-1.5 px-7 pb-4 pt-7">
-        <DialogTitle className="flex items-center gap-2 text-xl tracking-tight">
+        <DialogTitle className="flex items-center gap-2">
           <Scales className="h-5 w-5 text-dim" /> Pick arbiters
         </DialogTitle>
-        <DialogDescription className="text-[13px] leading-relaxed text-dim">
+        <DialogDescription className="text-[14px] leading-relaxed text-dim">
           Pick {MIN_ARBITERS}–{MAX_ARBITERS} eligible arbiters — whoever you lock is the panel that decides any dispute
           on this project, and nobody outside it is ever asked. One is enough; three keeps the 2-of-3 quorum. Click a
           row to read their public record first.
         </DialogDescription>
       </DialogHeader>
 
-      <div className="max-h-[52vh] overflow-y-auto border-y border-line">
+      <div className="max-h-[52vh] overflow-y-auto border-y-2 border-line">
         {isLoading ? (
           <div className="p-5"><ArbiterRegistrySkeleton /></div>
         ) : !ranked.length ? (
@@ -104,7 +104,7 @@ function ArbiterPickerBody({
             body="Arbiters must stake collateral on-chain before they can be picked. Check back once the roster fills."
           />
         ) : (
-          <ul className="divide-y divide-white/[0.05]">
+          <ul className="divide-y-2 divide-line">
             {ranked.map((a) => (
               <ArbiterRow
                 key={a.address}
@@ -120,23 +120,23 @@ function ArbiterPickerBody({
 
       <DialogFooter className="flex-col items-stretch gap-3 px-7 py-5 sm:flex-col sm:items-stretch">
         {selectable === 0 && (
-          <p className="text-[12.5px] leading-relaxed text-amber-300">
+          <p className="text-[14px] leading-relaxed text-state-funded">
             No eligible arbiter is available. Until one stakes, any dispute on this project draws its panel at random.
           </p>
         )}
         <div className="flex items-center justify-between">
-          <span className="num text-[11px] uppercase tracking-wider text-faint">selected {selected.length}/{MAX_ARBITERS}</span>
+          <span className="num text-[13px] uppercase tracking-wider text-faint">selected {selected.length}/{MAX_ARBITERS}</span>
           {selected.length > 0 && (
-            <button type="button" onClick={() => setSelected([])} className="text-[12px] text-faint hover:text-foreground">
+            <button type="button" onClick={() => setSelected([])} className="text-[13px] text-faint hover:text-foreground">
               clear
             </button>
           )}
         </div>
         <div className="flex gap-2.5">
-          <Button
+          <Button variant="outline"
             type="button"
             onClick={onCancel}
-            className="flex-1 bg-white/10 py-3 text-[13px] font-medium hover:bg-white/20"
+            className="flex-1"
           >
             Cancel
           </Button>
@@ -144,7 +144,7 @@ function ArbiterPickerBody({
             type="button"
             disabled={busy || selected.length < MIN_ARBITERS}
             onClick={() => onConfirm(selected)}
-            className="flex-1 bg-rose-accent py-3 text-[13px] font-medium hover:bg-rose-bright"
+            className="flex-1"
           >
             {busy ? "Proposing…" : `Propose ${selected.length || ""}`}
           </Button>
@@ -189,7 +189,7 @@ function ArbiterRow({
           aria-pressed={picked}
           disabled={disabled}
           onClick={onToggle}
-          className={`grid size-9 shrink-0 place-items-center border transition-colors ${
+          className={`grid size-9 shrink-0 place-items-center border-2 transition-colors ${
             picked
               ? "border-rose-accent bg-rose-accent text-white"
               : disabled
@@ -208,12 +208,12 @@ function ArbiterRow({
           <AddressAvatar address={a.address} size={38} />
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
-              <span className="truncate text-[14px] font-medium transition-colors group-hover:text-rose-bright">
+              <span className="truncate text-[15px] font-medium transition-colors group-hover:text-rose-bright">
                 {label}
               </span>
               <SealCheck weight="fill" className="h-3.5 w-3.5 shrink-0 text-rose-bright" />
             </span>
-            <span className="num mt-0.5 block text-[11.5px] text-faint">
+            <span className="num mt-0.5 block text-[13px] text-faint">
               trust {a.trustScore} · {a.resolutions} resolved · {tierName}
               {disabled ? " · not eligible" : ""}
             </span>
@@ -221,10 +221,10 @@ function ArbiterRow({
         </Link>
 
         <span className="flex shrink-0 flex-col items-end">
-          <span className={`num text-[13.5px] font-medium ${belowMinStake ? "text-state-disputed" : "text-dim"}`}>
+          <span className={`num text-[15px] font-medium ${belowMinStake ? "text-state-disputed" : "text-dim"}`}>
             {formatEth(a.stakeWei)}
           </span>
-          <span className="num text-[11px] uppercase tracking-[0.16em] text-faint">ETH staked</span>
+          <span className="num text-[13px] uppercase tracking-[0.16em] text-faint">ETH staked</span>
         </span>
       </div>
     </li>

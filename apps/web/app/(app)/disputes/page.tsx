@@ -58,14 +58,14 @@ export default function DisputesPage() {
       {resolved.length > 0 && (
         <section>
           <ListHead>Settled</ListHead>
-          <div className="mt-4 divide-y divide-white/[0.05] overflow-hidden border border-line">
+          <div className="mt-4 divide-y-2 divide-line overflow-hidden border-2 border-line">
             {resolved.map((d) => (
-              <div key={d.id} className="flex flex-wrap items-center gap-x-5 gap-y-1.5 bg-white/[0.012] px-6 py-4">
+              <div key={d.id} className="flex flex-wrap items-center gap-x-5 gap-y-1.5 bg-ink-raised px-6 py-4">
                 <StatusBadge status={d.outcome ? `resolved_${d.outcome}` : "resolved_split"} pulse={false} />
-                <Link href={`/projects/${d.projectId}?fromDisputes=1`} className="num text-[12.5px] text-dim hover:text-foreground">
+                <Link href={`/projects/${d.projectId}?fromDisputes=1`} className="num text-[14px] text-dim hover:text-foreground">
                   <ProjectName disputeName={d.projectName} />
                 </Link>
-                <span className="num ml-auto text-[12px] text-faint">closed {timeAgo(d.finalizedAt ?? d.resolvedAt ?? d.createdAt)}</span>
+                <span className="num ml-auto text-[13px] text-faint">closed {timeAgo(d.finalizedAt ?? d.resolvedAt ?? d.createdAt)}</span>
               </div>
             ))}
           </div>
@@ -92,17 +92,17 @@ function DisputeCard({ dispute }: { dispute: DisputeView }) {
     <div className="glass p-6">
       <div className="flex flex-wrap items-center gap-3">
         <StatusBadge status={dispute.finalized && dispute.status !== "resolved" ? "submitted" : "disputed"} />
-        <Link href={`/projects/${dispute.projectId}?fromDisputes=1`} className="text-[14px] font-medium hover:text-rose-bright">
+        <Link href={`/projects/${dispute.projectId}?fromDisputes=1`} className="text-[15px] font-medium hover:text-rose-bright">
           <ProjectName disputeName={dispute.projectName} />
         </Link>
-        <span className="num ml-auto text-[12px] text-faint">
+        <span className="num ml-auto text-[13px] text-faint">
           round {(dispute.round ?? 0) + 1} · {phaseLabel}
           {dispute.appealCount > 0 && ` · ${dispute.appealCount} appeal(s)`}
         </span>
       </div>
-      <p className="mt-3.5 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{dispute.reason}</p>
+      <p className="mt-3.5 max-w-[62ch] text-[15px] leading-relaxed text-dim">{dispute.reason}</p>
 
-      <div className="mt-5 border-t border-line pt-4">
+      <div className="mt-5 border-t-2 border-line pt-4">
         <DisputePanel dispute={dispute} compact />
       </div>
     </div>

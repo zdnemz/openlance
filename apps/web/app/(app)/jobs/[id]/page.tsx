@@ -23,7 +23,8 @@ import { SurplusPanel } from "@/components/surplus-panel";
 import { ESCROW_ABI } from "@/lib/contracts";
 import { toast } from "sonner";
 import { ArrowRight, Check, Lock, PaperPlaneTilt, Warning, X } from "@/components/icons";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 
@@ -160,17 +161,17 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       {/* header */}
       <div>
         <div className="flex items-center gap-3">
-          <span className="num bg-white/[0.05] px-2 py-0.5 text-[11px] uppercase tracking-wider text-dim">{job.category}</span>
+          <span className="num bg-ink-hover px-2 py-0.5 text-[13px] uppercase tracking-wider text-dim">{job.category}</span>
           <StatusBadge status={job.status} pulse={job.status === "open"} />
-          <span className="num text-[11px] text-faint">posted {timeAgo(job.createdAt)}</span>
+          <span className="num text-[13px] text-faint">posted {timeAgo(job.createdAt)}</span>
         </div>
-        <h1 className="display mt-4 max-w-[34ch] text-[30px] leading-[1.08] md:text-[36px]">{job.title}</h1>
+        <h1 className="display mt-5 max-w-[34ch] text-[16px] leading-[1.6] sm:text-[20px] md:text-[24px]">{job.title}</h1>
         <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
           {job.poster && (
             <Link href={`/profile/${job.poster.walletAddress}`} className="flex items-center gap-2.5 text-sm text-dim hover:text-foreground">
               <AddressAvatar address={job.poster.walletAddress} size={30} />
               {job.poster.displayName ?? <AddressText value={job.poster.walletAddress} />}
-              <span className="num text-[11px] text-faint">
+              <span className="num text-[13px] text-faint">
                 · {job.poster.stats.completedProjectsAsClient} completed as client
               </span>
             </Link>
@@ -182,9 +183,9 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
       </div>
 
       {job.projectId && stay && (
-        <div className="glass flex flex-wrap items-center gap-3 px-5 py-4 text-[13px] text-dim">
+        <div className="glass flex flex-wrap items-center gap-3 px-5 py-4 text-[14px] text-dim">
           <span>This job was awarded — work continues in the project room.</span>
-          <Link href={`/projects/${job.projectId}`} className="ml-auto bg-white/10 px-4 py-2 text-[12.5px] font-medium hover:bg-white/20">
+          <Link href={`/projects/${job.projectId}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto")}>
             Open project room
           </Link>
         </div>
@@ -202,7 +203,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
           {isPoster && job.status === "draft" && (
             <section>
               <ListHead>Edit draft</ListHead>
-              <p className="mt-2.5 max-w-[58ch] text-[13px] text-faint">
+              <p className="mt-2.5 max-w-[58ch] text-[14px] text-faint">
                 Everything is editable while it's a draft.
               </p>
               <div className="mt-5">
@@ -213,7 +214,7 @@ export default function JobDetailPage({ params, searchParams }: { params: Promis
 
           <section>
             <ListHead>The brief</ListHead>
-            <div className="mt-4 max-w-[60ch] space-y-4 text-[14.5px] leading-relaxed text-dim">
+            <div className="mt-4 max-w-[60ch] space-y-4 text-[16px] leading-relaxed text-dim">
               {job.description.split("\n\n").map((para, i) => (
                 <p key={i} className="whitespace-pre-wrap">{para}</p>
               ))}
@@ -345,7 +346,7 @@ function DeleteJob({ jobId, jobRef }: { jobId: string; jobRef: string }) {
       <Button
         variant="ghost"
         onClick={() => setOpen(true)}
-        className="px-4 py-2 text-[12.5px] text-faint hover:text-destructive"
+        className="px-4 py-2 text-[14px] text-faint hover:text-destructive"
       >
         Delete job
       </Button>
@@ -353,23 +354,23 @@ function DeleteJob({ jobId, jobRef }: { jobId: string; jobRef: string }) {
   }
 
   return (
-    <div className="glass flex flex-wrap items-center gap-3 border-destructive/30 px-5 py-4 text-[13px]">
+    <div className="glass flex flex-wrap items-center gap-3 border-destructive/30 px-5 py-4 text-[14px]">
       <span className="text-dim">
         Any budget still locked in escrow goes back to your wallet before the job is deleted.
       </span>
       <div className="ml-auto flex items-center gap-2">
-        <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy} className="px-4 py-2 text-[12.5px]">
+        <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy} className="px-4 py-2 text-[14px]">
           Keep it
         </Button>
         <Button
           onClick={remove}
           disabled={busy}
-          className="bg-destructive px-4 py-2 text-[12.5px] font-medium text-white hover:bg-destructive/90"
+          className="bg-destructive px-4 py-2 text-[14px] font-medium text-white hover:bg-destructive/90"
         >
           {busy ? "Working…" : "Delete"}
         </Button>
       </div>
-      {error && <p className="w-full text-[12px] text-destructive">{error}</p>}
+      {error && <p className="w-full text-[13px] text-destructive">{error}</p>}
     </div>
   );
 }
@@ -430,20 +431,20 @@ function DepositPanel({ jobId, jobRef, budgetWei }: { jobId: string; jobRef: str
   return (
     <section className="glass-raised p-6">
       <ListHead>Publish — lock the budget first</ListHead>
-      <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
+      <p className="mt-2.5 text-[14px] leading-relaxed text-dim">
         This draft is private. Publishing locks <EthAmount wei={budgetWei} className="text-foreground" /> (your max
         budget) in the escrow contract, so every live job is funded and freelancers know the money is there. The winning
         bid is drawn from it; the rest is withdrawable.
       </p>
       {escrow ? (
-        <p className="num mt-3 break-all text-[11px] text-faint">escrow {escrow}</p>
+        <p className="num mt-3 break-all text-[13px] text-faint">escrow {escrow}</p>
       ) : (
-        <p className="mt-3 text-[11px] text-faint">Dev mode: no escrow configured, publishing records a simulated deposit.</p>
+        <p className="mt-3 text-[13px] text-faint">Dev mode: no escrow configured, publishing records a simulated deposit.</p>
       )}
       <Button
         disabled={phase !== "idle"}
         onClick={depositAndPublish}
-        className="mt-4 w-full bg-amber-500 py-3 text-[13px] font-medium text-ink hover:bg-amber-400"
+        className="mt-4 w-full text-ink [--pb:#f59e0b] [--pf:#fde68a] [--ps:#78350f]"
       >
         {phase === "idle" ? `Lock ${formatEth(budgetWei)} ETH + publish` : phase === "depositing" ? "Waiting for lock…" : "Publishing…"}
       </Button>
@@ -469,18 +470,18 @@ function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/li
     <article className="glass p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="num text-[11px] uppercase tracking-wider text-faint">{proposal.deliveryDays} days</div>
-          <div className="mt-1 flex items-center gap-2 text-[15px] font-medium">
+          <div className="num text-[13px] uppercase tracking-wider text-faint">{proposal.deliveryDays} days</div>
+          <div className="mt-1 flex items-center gap-2 text-[16px] font-medium">
             <EthAmount wei={proposal.bidTotalWei} className="text-rose-bright" />
             <span className="text-xs text-faint">bid total</span>
           </div>
         </div>
         <StatusBadge status={proposal.status} pulse={false} />
       </div>
-      <p className="mt-4 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{proposal.coverNote}</p>
+      <p className="mt-4 max-w-[62ch] text-[15px] leading-relaxed text-dim">{proposal.coverNote}</p>
       <div className="mt-4 space-y-1.5">
         {proposal.milestones.map((m) => (
-          <div key={m.position} className="flex items-center justify-between border border-line bg-white/[0.02] px-3.5 py-2 text-[12.5px]">
+          <div key={m.position} className="flex items-center justify-between border-2 border-line bg-ink-raised px-3.5 py-2 text-[14px]">
             <span className="truncate text-dim">{m.title}</span>
             <EthAmount wei={m.amountWei} className="shrink-0 text-xs" />
           </div>
@@ -494,7 +495,7 @@ function ProposalCard({ proposal, onAccept, awarding }: { proposal: import("@/li
         </div>
       )}
       {proposal.status === "submitted" && (
-        <Button onClick={onAccept} disabled={awarding} className="mt-5 w-full bg-rose-accent hover:bg-rose-bright">
+        <Button onClick={onAccept} disabled={awarding} className="mt-5 w-full">
           {awarding ? "Awarding…" : `Accept ${formatEth(proposal.bidTotalWei)} ETH bid`}
         </Button>
       )}
@@ -596,7 +597,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
             <EthAmount wei={mine.bidTotalWei} className="text-lg font-medium text-rose-bright" />
             <StatusBadge status={mine.status} pulse={false} />
           </div>
-          <p className="mt-3 max-w-[62ch] text-[13.5px] leading-relaxed text-dim">{mine.coverNote}</p>
+          <p className="mt-3 max-w-[62ch] text-[15px] leading-relaxed text-dim">{mine.coverNote}</p>
           {mine.attachments.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
               {mine.attachments.map((a) => <AttachmentChip key={a.id} attachment={a} />)}
@@ -613,11 +614,11 @@ function ProposeForm({ jobId }: { jobId: string }) {
   if (myWithdrawn && !mine) {
     return (
       <section className="space-y-4">
-        <div className="border border-line bg-white/[0.012] px-6 py-5">
+        <div className="border-2 border-line bg-ink-raised px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <ListHead>Your withdrawn proposal</ListHead>
-              <p className="mt-1.5 max-w-[58ch] text-[12.5px] leading-relaxed text-faint">
+              <p className="mt-1.5 max-w-[58ch] text-[14px] leading-relaxed text-faint">
                 You pulled this bid, so it is no longer with the client. Your slot on this job is open again — you can
                 submit a new proposal while the job is still open.
               </p>
@@ -633,7 +634,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
         <Button
           variant="ghost"
           onClick={() => setDismissedMine(false)}
-          className="w-full border border-line py-2.5 text-[12.5px] text-dim hover:text-foreground"
+          className="w-full border-2 border-line py-2.5 text-[14px] text-dim hover:text-foreground"
         >
           Submit a new proposal
         </Button>
@@ -648,7 +649,7 @@ function ProposeForm({ jobId }: { jobId: string }) {
       <ListHead>Propose</ListHead>
       <div className="glass mt-4 space-y-5 p-6">
         <div className="space-y-2">
-          <label htmlFor="proposal-cover" className="text-[13px] font-medium">Cover note</label>
+          <label htmlFor="proposal-cover" className="text-[14px] font-medium">Cover note</label>
           <Textarea
             id="proposal-cover"
             value={coverNote}
@@ -656,27 +657,27 @@ function ProposeForm({ jobId }: { jobId: string }) {
             rows={5}
             placeholder="How you'd approach it, what you've shipped before, and why the milestones should look the way you've shaped them."
           />
-          <p className="text-[11px] text-faint">Minimum 20 characters. One proposal per freelancer per job — make it count.</p>
+          <p className="text-[13px] text-faint">Minimum 20 characters. One proposal per freelancer per job — make it count.</p>
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="proposal-days" className="text-[13px] font-medium">Delivery window</label>
+          <label htmlFor="proposal-days" className="text-[14px] font-medium">Delivery window</label>
           <div className="flex items-center gap-3">
             <Input
               id="proposal-days"
               type="number" min={1} max={365} value={deliveryDays}
               onChange={(e) => setDeliveryDays(e.target.value)}
-              className="num h-10 w-28 border-line bg-white/[0.03]"
+              className="num h-10 w-28 border-line bg-ink-raised"
             />
-            <span className="text-[13px] text-faint">days from award to final milestone</span>
+            <span className="text-[14px] text-faint">days from award to final milestone</span>
           </div>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-[13px] font-medium">Your milestone breakdown</span>
-              <p className="mt-1 text-[11px] text-faint">You shape the work. The client reviews this and pays the total if they accept. Up to {MAX_PROPOSAL_MILESTONES}.</p>
+              <span className="text-[14px] font-medium">Your milestone breakdown</span>
+              <p className="mt-1 text-[13px] text-faint">You shape the work. The client reviews this and pays the total if they accept. Up to {MAX_PROPOSAL_MILESTONES}.</p>
             </div>
             <button
               type="button"
@@ -684,23 +685,23 @@ function ProposeForm({ jobId }: { jobId: string }) {
               // row submitted fine and came back as a raw schema error.
               disabled={milestones.length >= MAX_PROPOSAL_MILESTONES}
               onClick={() => setMilestones([...milestones, { ...EMPTY_MILESTONE }])}
-              className="shrink-0 text-[12px] text-rose-bright hover:underline disabled:cursor-not-allowed disabled:text-faint disabled:no-underline"
+              className="shrink-0 text-[13px] text-rose-bright hover:underline disabled:cursor-not-allowed disabled:text-faint disabled:no-underline"
             >
               + add milestone
             </button>
           </div>
           {milestones.map((m, i) => (
-            <div key={i} className="space-y-2 border border-line bg-white/[0.02] p-4">
+            <div key={i} className="space-y-2 border-2 border-line bg-ink-raised p-4">
               <div className="flex gap-3">
                 <Input
                   aria-label={`Milestone ${i + 1} title`}
                   value={m.title} onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-                  placeholder={`Milestone ${i + 1} title`} className="h-9 border-line bg-white/[0.03] text-[13px]"
+                  placeholder={`Milestone ${i + 1} title`} className="h-9 border-line bg-ink-raised text-[14px]"
                 />
                 <Input
                   aria-label={`Milestone ${i + 1} amount in ETH`} inputMode="decimal"
                   value={m.amount} onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
-                  placeholder="0.00" className="num h-9 w-28 shrink-0 border-line bg-white/[0.03] text-[13px]"
+                  placeholder="0.00" className="num h-9 w-28 shrink-0 border-line bg-ink-raised text-[14px]"
                 />
                 {milestones.length > 1 && (
                   <button
@@ -717,12 +718,12 @@ function ProposeForm({ jobId }: { jobId: string }) {
                 value={m.description} rows={2}
                 onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
                 placeholder="What gets delivered, and what the reviewer checks"
-                className="text-[13px]"
+                className="text-[14px]"
               />
             </div>
           ))}
-          <div className={`flex items-center justify-between px-4 py-3 ${overCeiling ? "bg-destructive/10" : "bg-white/[0.04]"}`}>
-            <span className="num text-[11px] uppercase tracking-wider text-faint">
+          <div className={`flex items-center justify-between px-4 py-3 ${overCeiling ? "bg-destructive/10" : "bg-ink-raised"}`}>
+            <span className="num text-[13px] uppercase tracking-wider text-faint">
               your bid{ceilingWei > 0n ? ` · ceiling ${formatEth(ceilingWei)} ETH` : ""}
             </span>
             <span className={`num text-lg font-medium ${overCeiling ? "text-destructive" : "text-rose-bright"}`}>
@@ -741,17 +742,17 @@ function ProposeForm({ jobId }: { jobId: string }) {
         />
 
         {error && (
-          <p role="alert" className="flex items-start gap-2 border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12.5px] text-destructive">
+          <p role="alert" className="flex items-start gap-2 border-2 border-destructive/30 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
             <Warning weight="bold" className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
           </p>
         )}
 
-        <Button onClick={submit} disabled={submitting || uploading} className="w-full bg-rose-accent hover:bg-rose-bright">
+        <Button onClick={submit} disabled={submitting || uploading} className="w-full">
           {submitting
             ? uploading ? "Uploading files…" : "Submitting…"
             : <span className="flex items-center gap-2"><PaperPlaneTilt className="h-4 w-4" /> Submit proposal</span>}
         </Button>
-        <p className="flex items-center gap-1.5 text-[11px] text-faint">
+        <p className="flex items-center gap-1.5 text-[13px] text-faint">
           <Check className="h-3 w-3 text-state-released" />
           {job ? `Client's ceiling ${formatEth(job.budget.maxWei)} ETH — your bid can be any amount at or under it` : ""}
         </p>

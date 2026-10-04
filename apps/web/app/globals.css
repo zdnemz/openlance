@@ -131,6 +131,14 @@
     background-position: 0 0, 4px 4px;
     background-attachment: fixed;
   }
+  /*
+    Grid items default to min-width:auto, so one long nowrap line (a truncated
+    title, a hash) stretches the whole track and the page scrolls sideways. The
+    pixel faces run wider than the old type, which surfaced it everywhere.
+  */
+  .grid > * {
+    min-width: 0;
+  }
   /* pixel art must never be smoothed */
   img,
   svg,

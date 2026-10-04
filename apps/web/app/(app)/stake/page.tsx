@@ -21,7 +21,7 @@ export default function ArbiterStakePage() {
     <div className="space-y-7">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-[12.5px] text-faint transition-colors hover:text-dim"
+        className="inline-flex items-center gap-1.5 text-[14px] text-faint transition-colors hover:text-dim"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         Dashboard
