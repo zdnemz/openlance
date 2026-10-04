@@ -25,6 +25,8 @@ interface RuntimeState {
   registry: string | null;
   /** RoleRegistry proxy — where the wallet's seat lives. Null when none. */
   roleRegistry: string | null;
+  /** The ERC-2771 forwarder a relayed request must be signed for. */
+  sponsorshipForwarder: string | null;
   timelock: string | null;
   chainMode: string;
   /** Resolved storage system config (bucket, driver, limits). */
@@ -50,6 +52,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
   escrow: null,
   registry: null,
   roleRegistry: null,
+  sponsorshipForwarder: null,
   timelock: null,
   chainMode: "…",
   storage: null,
@@ -77,6 +80,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
         escrow: cfg.contracts?.escrow ?? null,
         registry: cfg.contracts?.arbiterRegistry ?? null,
         roleRegistry: cfg.contracts?.roleRegistry ?? null,
+        sponsorshipForwarder: cfg.contracts?.sponsorshipForwarder ?? null,
         timelock: cfg.contracts?.timelock ?? null,
         chainMode: cfg.chainMode ?? "…",
         storage: cfg.storage ?? null,

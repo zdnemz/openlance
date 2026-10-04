@@ -161,7 +161,10 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
   const [selectedRole, setSelectedRole] = useState<UserRole>(user.role);
   // A claimed seat is the wallet's own — there is nothing left to choose, and
   // the API refuses any other answer, so the picker would only offer a lie.
-  const claimed = seat.state === "claimed" ? seat.role : null;
+  // A claim that landed in THIS session: the seat read above is not refreshed,
+  // and re-claiming on a retry reverts AlreadyClaimed with no way forward.
+  const [claimedNow, setClaimedNow] = useState<UserRole | null>(null);
+  const claimed = seat.state === "claimed" ? seat.role : claimedNow;
   const seatRole = claimed ?? selectedRole;
 
   async function confirm() {
@@ -171,9 +174,10 @@ function RoleStep({ user, busy, setBusy, onConfirm }: { user: PublicUser; busy: 
       // claim that never lands must leave nothing to write. `off` means this
       // deployment has no wallet-owned seat, so there is nothing to claim; a
       // claimed seat is already on-chain and is mirrored as-is.
-      if (seat.state === "none") {
+      if (seat.state === "none" && !claimedNow) {
         const claim = await claimSeatAction(chain.run)(seatRole);
         if (!claim.ok) return;
+        setClaimedNow(seatRole);
       }
       const updated = await post<PublicUser>("/users/me/role", { role: seatRole });
       session.setUser(updated);

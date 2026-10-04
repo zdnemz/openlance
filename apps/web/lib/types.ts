@@ -318,7 +318,7 @@ export interface RuntimeConfig {
   /** Full storage system config (bucket, limits, signed-URL TTL, …). */
   storage?: StorageRuntimeConfig;
   /** `roleRegistry` is null on a deployment with no wallet-owned seat. */
-  contracts: { escrow: string | null; arbiterRegistry: string | null; roleRegistry: string | null; timelock: string | null };
+  contracts: { escrow: string | null; arbiterRegistry: string | null; roleRegistry: string | null; timelock: string | null; sponsorshipForwarder?: string | null };
 }
 
 export interface Overview {

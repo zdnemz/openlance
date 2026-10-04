@@ -17,6 +17,7 @@
 import { post } from "@/lib/api";
 import { signTypedData, useWallet } from "@/lib/wallet";
 import { useSponsorship } from "@/lib/sponsorship-store";
+import { useRuntime } from "@/lib/runtime";
 import { encodeFunctionData, type Abi } from "viem";
 
 /**
@@ -46,6 +47,20 @@ export async function relayForwardRequest(opts: {
     "/relay/prepare",
     { to: opts.to, value: (opts.value ?? 0n).toString(), gas: (opts.gas ?? 1_000_000n).toString(), data },
   );
+
+  // Sign only what we asked for. The server echoes the request back with its
+  // nonce and deadline; signing that echo unchecked let a compromised API get a
+  // valid signature for ANY call (e.g. fundFromCredit to its own wallet).
+  const forwarder = useRuntime.getState().sponsorshipForwarder;
+  const r = prepared.request;
+  const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
+  if (
+    !same(r.from, wallet.address) || !same(r.to, opts.to) || !same(r.data, data)
+    || BigInt(r.value) !== (opts.value ?? 0n) || BigInt(r.gas) > (opts.gas ?? 1_000_000n)
+    || (forwarder && !same((prepared.domain as { verifyingContract?: string }).verifyingContract, forwarder))
+  ) {
+    throw new Error("Relay request does not match the action — refusing to sign");
+  }
 
   // EIP-712 uint fields must be bigint/number in the signed message (wallets
   // reject string-encoded integers against uint types).
