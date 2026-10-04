@@ -22,7 +22,7 @@ import {
   freelancerReceivedValue, isTerminal, nextMilestoneStatus,
 } from '../domain/state-machine.ts'
 import type { NotificationType } from '../domain/notifications.ts'
-import { bytes32ToUuid } from './events.ts'
+import { bytes32ToUuid, fundingMatches } from './events.ts'
 import type { RawChainLog, EvMilestoneFunded } from './events.ts'
 import { outcomeFromUint8 } from './abi.ts'
 import {
@@ -31,6 +31,7 @@ import {
 } from '../db/schema.ts'
 import { writeOutbox } from '../modules/notify.ts'
 import { UNPUBLISHED } from '../modules/jobs.ts'
+import { projectWallets } from '../modules/helpers.ts'
 
 const log = logger.child({ component: 'indexer' })
 
@@ -222,8 +223,15 @@ async function applyFunded(tx: Tx, evt: RawChainLog, ledgerId: number): Promise<
     log.warn('DRIFT: funding a milestone that is already ' + m.chainStatus, { ref, txHash: evt.txHash })
     return null
   }
-  if (m.amountWei !== str(args.amount)) {
-    log.warn('DRIFT: funded amount differs from mirror', { ref, mirror: m.amountWei, chain: str(args.amount) })
+  // A ref match proves nothing — `fund(ref, …)` is permissionless. Only a
+  // funding that pays the agreed amount, from this project's client, to its
+  // freelancer marks the milestone funded; anything else stays on the ledger
+  // as drift and the row keeps waiting for the real one.
+  const wallets = await projectWallets(tx, m.projectId)
+  const funded = { client: str(args.client), freelancer: str(args.freelancer), amount: str(args.amount) }
+  if (!wallets || !fundingMatches(funded, { ...wallets, amountWei: m.amountWei })) {
+    log.warn('DRIFT: funding does not match the project — not linked', { ref, chain: funded, mirror: { ...wallets, amountWei: m.amountWei }, txHash: evt.txHash })
+    return null
   }
   // Two rows must never claim one onchain id: `onchain_id` is UNIQUE, and the id
   // is only unique WITHIN a chain — after a redeploy both ids restart at 1. The

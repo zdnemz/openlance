@@ -57,11 +57,12 @@ export interface ChainAdapter {
   getJobBudget(jobRef: string): Promise<{ lockedWei: string; reservedWei: string; paidOutWei: string; freeWei: string } | null>
   getLatestBlock(): Promise<number>
   /**
-   * Real mode only: locate the MilestoneFunded log for a milestone ref
-   * (indexer-miss backfill — `ref` is an indexed topic, so one getLogs).
-   * Null when never funded on-chain (or mock mode, where the mirror IS the chain).
+   * Real mode only: every MilestoneFunded log for a milestone ref, oldest first
+   * (indexer-miss backfill — `ref` is an indexed topic). Callers pick the first
+   * one that `fundingMatches` the project. Empty when never funded on-chain, or
+   * in mock mode, where the mirror IS the chain.
    */
-  findFundingByRef(ref: string): Promise<{ milestoneId: number; txHash: string; blockTime: Date } | null>
+  findFundingsByRef(ref: string): Promise<FundingLog[]>
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -83,6 +84,15 @@ function normalizeArgs(args: Record<string, unknown>): Record<string, unknown> {
     else out[k] = v
   }
   return out
+}
+
+export interface FundingLog {
+  milestoneId: number
+  txHash: string
+  blockTime: Date
+  client: string
+  freelancer: string
+  amount: string
 }
 
 export class RealChainAdapter implements ChainAdapter {
@@ -121,6 +131,7 @@ export class RealChainAdapter implements ChainAdapter {
     const { ESCROW_ABI } = await import('./abi.ts')
     const sources = [this.escrowAddress, this.registryAddress]
     const out: RawChainLog[] = []
+    const blockTimes = new Map<bigint, Date>()
     for (const source of sources) {
       const logs = await client.getContractEvents({
         address: source as `0x${string}`,
@@ -130,11 +141,17 @@ export class RealChainAdapter implements ChainAdapter {
       })
       for (const log of logs) {
         if (!log.blockNumber) continue
-        const block = await client.getBlock({ blockNumber: log.blockNumber })
+        // One block read per block, not per log.
+        let blockTime = blockTimes.get(log.blockNumber)
+        if (!blockTime) {
+          const block = await client.getBlock({ blockNumber: log.blockNumber })
+          blockTime = new Date(Number(block.timestamp) * 1000)
+          blockTimes.set(log.blockNumber, blockTime)
+        }
         out.push({
           address: source,
           blockNumber: Number(log.blockNumber),
-          blockTime: new Date(Number(block.timestamp) * 1000),
+          blockTime,
           txHash: log.transactionHash ?? '0xunknown',
           logIndex: log.logIndex ?? 0,
           name: log.eventName as ChainEventName,
@@ -145,29 +162,39 @@ export class RealChainAdapter implements ChainAdapter {
     return out.sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex)
   }
 
-  async findFundingByRef(ref: string): Promise<{ milestoneId: number; txHash: string; blockTime: Date } | null> {
+  async findFundingsByRef(ref: string): Promise<FundingLog[]> {
     const { client } = await this.viem()
     const { ESCROW_ABI } = await import('./abi.ts')
-    const logs = await client.getContractEvents({
-      address: this.escrowAddress as `0x${string}`,
-      abi: ESCROW_ABI,
-      eventName: 'MilestoneFunded',
-      args: { ref: ref as `0x${string}` },
-      fromBlock: 0n,
-      toBlock: 'latest',
-    }).catch((err) => {
-      logger.warn('findFundingByRef failed', { err: String(err) })
-      return []
-    })
-    const first = [...logs].sort((a, b) => Number(a.blockNumber ?? 0n) - Number(b.blockNumber ?? 0n))[0]
-    const id = first?.args?.milestoneId
-    if (!first?.blockNumber || id === undefined) return null
-    const block = await client.getBlock({ blockNumber: first.blockNumber }).catch(() => null)
-    return {
-      milestoneId: Number(id),
-      txHash: first.transactionHash ?? '0xunknown',
-      blockTime: block ? new Date(Number(block.timestamp) * 1000) : new Date(),
+    const latest = await client.getBlockNumber()
+    const step = BigInt(env.INDEXER_CHUNK_BLOCKS)
+    const out: FundingLog[] = []
+    // Chunked from the deploy block: hosted RPCs refuse `0 → latest` outright,
+    // and the old `.catch(() => [])` turned that refusal into "never funded".
+    for (let from = BigInt(env.INDEXER_START_BLOCK); from <= latest; from += step) {
+      const to = from + step - 1n < latest ? from + step - 1n : latest
+      const logs = await client.getContractEvents({
+        address: this.escrowAddress as `0x${string}`,
+        abi: ESCROW_ABI,
+        eventName: 'MilestoneFunded',
+        args: { ref: ref as `0x${string}` },
+        fromBlock: from,
+        toBlock: to,
+      })
+      for (const log of logs) {
+        const a = log.args as { milestoneId?: bigint; client?: string; freelancer?: string; amount?: bigint }
+        if (!log.blockNumber || a.milestoneId === undefined) continue
+        const block = await client.getBlock({ blockNumber: log.blockNumber })
+        out.push({
+          milestoneId: Number(a.milestoneId),
+          txHash: log.transactionHash ?? '0xunknown',
+          blockTime: new Date(Number(block.timestamp) * 1000),
+          client: String(a.client ?? ''),
+          freelancer: String(a.freelancer ?? ''),
+          amount: String(a.amount ?? ''),
+        })
+      }
     }
+    return out
   }
 
   async getMilestoneStatus(onchainId: number): Promise<MilestoneStatus | null> {
@@ -471,8 +498,8 @@ export class MockChainAdapter implements ChainAdapter {
     return (await this.state()).block
   }
 
-  async findFundingByRef(): Promise<null> {
-    return null // mock mirror IS the mock chain — a null onchainId means never funded
+  async findFundingsByRef(): Promise<FundingLog[]> {
+    return [] // mock mirror IS the mock chain — a null onchainId means never funded
   }
 
   async snapshot(): Promise<MockState> {

@@ -144,6 +144,21 @@ export interface EvTrustScoreUpdated {
   withinSla: boolean
 }
 
+/**
+ * A `MilestoneFunded` log funds THIS milestone only if it pays the agreed
+ * amount, from the project's client, to the project's freelancer. `fund(ref,…)`
+ * is permissionless, so a ref match alone proves nothing: anyone can emit one,
+ * and a client can fund a 1-wei milestone or name its own wallet as payee.
+ */
+export function fundingMatches(
+  log: { client: string; freelancer: string; amount: string },
+  want: { client: string; freelancer: string; amountWei: string },
+): boolean {
+  return log.client.toLowerCase() === want.client.toLowerCase()
+    && log.freelancer.toLowerCase() === want.freelancer.toLowerCase()
+    && log.amount === want.amountWei
+}
+
 // ── uuid ↔ bytes32 (left-padded) ───────────────────────────────────────────
 export function uuidToBytes32(uuid: string): `0x${string}` {
   return `0x${uuid.replace(/-/g, '').toLowerCase().padStart(64, '0')}` as `0x${string}`

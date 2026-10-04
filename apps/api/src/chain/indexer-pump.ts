@@ -59,11 +59,11 @@ export interface PumpResult {
  */
 let lastHeightWedge: string | null = null
 
-/** Read the last indexed block (0 when the checkpoint row is absent). */
+/** Read the last indexed block — never below the block before the deploy. */
 async function readCheckpoint(): Promise<number> {
   const db = getDb()
   const [row] = await db.select().from(indexerState).where(eq(indexerState.id, CHECKPOINT_ID)).limit(1)
-  return row?.lastBlock ?? 0
+  return Math.max(row?.lastBlock ?? 0, env.INDEXER_START_BLOCK - 1)
 }
 
 /** Upsert the checkpoint to `block` (never moves backwards). */

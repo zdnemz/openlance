@@ -3,9 +3,9 @@ import { and, eq, or } from 'drizzle-orm'
 import { getDb } from '../db/index.ts'
 import { Errors } from '../lib/errors.ts'
 import { getChainAdapter } from '../chain/adapter.ts'
-import { uuidToBytes32 } from '../chain/events.ts'
+import { fundingMatches, uuidToBytes32 } from '../chain/events.ts'
 import { logger } from '../lib/logger.ts'
-import { disputes, jobs, projectMilestones, projects, proposals } from '../db/schema.ts'
+import { disputes, jobs, projectMilestones, projects, proposals, users } from '../db/schema.ts'
 import type { Job, Project, ProjectMilestone, User } from '../db/schema.ts'
 
 export async function loadProject(projectId: string): Promise<Project> {
@@ -77,6 +77,16 @@ export async function requireProposalReader(proposalId: string, user: User): Pro
   }
 }
 
+/** The two wallets a project's funding must name: client pays, freelancer is paid. */
+export async function projectWallets(q: Pick<ReturnType<typeof getDb>, 'select'>, projectId: string): Promise<{ client: string; freelancer: string } | null> {
+  const [p] = await q.select({ clientId: projects.clientId, freelancerId: projects.freelancerId }).from(projects).where(eq(projects.id, projectId)).limit(1)
+  if (!p) return null
+  const rows = await q.select({ id: users.id, wallet: users.walletAddress }).from(users).where(or(eq(users.id, p.clientId), eq(users.id, p.freelancerId)))
+  const client = rows.find((r) => r.id === p.clientId)?.wallet
+  const freelancer = rows.find((r) => r.id === p.freelancerId)?.wallet
+  return client && freelancer ? { client, freelancer } : null
+}
+
 export async function isParticipant(projectId: string, userId: string): Promise<boolean> {
   const rows = await getDb().select({ id: projects.id })
     .from(projects)
@@ -96,7 +106,12 @@ export async function ensureMilestoneOnchain(milestone: ProjectMilestone): Promi
   if (milestone.onchainId !== null) return { milestone, backfilled: false }
   const adapter = getChainAdapter()
   if (adapter.mode !== 'real') return { milestone, backfilled: false }
-  const found = await adapter.findFundingByRef(uuidToBytes32(milestone.id)).catch(() => null)
+  const wallets = await projectWallets(getDb(), milestone.projectId)
+  if (!wallets) return { milestone, backfilled: false }
+  // First funding that actually pays THIS milestone — a ref match alone is
+  // permissionless (see fundingMatches).
+  const found = (await adapter.findFundingsByRef(uuidToBytes32(milestone.id)).catch(() => []))
+    .find((f) => fundingMatches(f, { ...wallets, amountWei: milestone.amountWei }))
   if (!found) return { milestone, backfilled: false }
 
   // `onchain_id` is UNIQUE, and the id is only unique WITHIN a chain: a redeploy

@@ -230,6 +230,11 @@ if (chainMode === 'real' && (!raw.ESCROW_ADDRESS || !raw.ARBITER_REGISTRY_ADDRES
   chainMode = 'mock'
 }
 
+// A public chain without a start block would be scanned from genesis.
+if (chainMode === 'real' && raw.CHAIN_ID !== 31337 && raw.INDEXER_START_BLOCK === 0) {
+  throw new Error('[config] INDEXER_START_BLOCK is required on a public chain — use the block deploy.ts printed')
+}
+
 // Sponsorship is live only when the relayer key AND the forwarder are set. The
 // session TTL tracks the session TTL so the on-chain voucher and the JWT expire
 // together (bound-to-session, per the feature spec).
