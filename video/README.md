@@ -73,9 +73,11 @@ predictable levels. The bed is ducked under the voice and crossfades at the
 boss-fight handovers. Generated sounds that swell or end at full level are
 trimmed in place with `<Sfx cut fade>`.
 
-`pnpm render` finishes with `scripts/master.mjs`, a two-pass EBU R128
-loudnorm of both films to −14 LUFS / −1.5 dBTP with the video copied
-untouched. Every step that touches audio needs `ffmpeg` on the PATH.
+`pnpm render` finishes with `scripts/master.mjs`. It applies one static gain
+to −14 LUFS integrated plus a −2.5 dBFS limiter, so the AAC stays under
+−1.5 dBTP, and copies the video untouched. A static gain keeps the mix's
+balance as built; dynamic loudness normalisation would ride it. Every step
+that touches audio needs `ffmpeg` on the PATH.
 
 ## Layout
 
