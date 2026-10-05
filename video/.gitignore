@@ -1,0 +1,4 @@
+node_modules/
+out/
+# ElevenLabs key lives in .env (also covered by the root .env* rule)
+.env

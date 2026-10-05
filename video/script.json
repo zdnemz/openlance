@@ -1,0 +1,138 @@
+{
+  "$comment": "The promo's spine. scripts/audio.mjs turns `lines` into voiceover, `sfx` into effects and `beds` into the chiptune bed, then writes src/audio-manifest.json, which times the video. `text` is what the voice says (eleven_v3 audio tags in [brackets] are stripped for other models); `caption` is what the dialog box shows, with *emphasis* in rose. Keep the two word-for-word aligned so captions land on the spoken word. voice.shape tightens the raw read locally (tempo, capped pauses, clipped lead-in) without new API calls.",
+  "voice": {
+    "voiceId": "TX3LPaxmHKxFdv7VOQHJ",
+    "name": "Liam",
+    "modelId": "eleven_v3",
+    "settings": {
+      "stability": 0.5,
+      "similarity_boost": 0.8,
+      "style": 0.6,
+      "use_speaker_boost": true
+    },
+    "shape": {
+      "tempo": 1.1,
+      "maxPause": 0.4,
+      "lead": 0.15
+    }
+  },
+  "lines": [
+    {
+      "id": "attract",
+      "text": "[excited] Player one: the client. Player two: the freelancer. One question... who do you trust?",
+      "caption": "Player one: the *client*. Player two: the *freelancer*. One question... who do you *trust*?"
+    },
+    {
+      "id": "fund",
+      "text": "[shouting] Stage one! [excited] Insert coin. The money locks in escrow before the work even starts.",
+      "caption": "Stage one! *Insert coin.* The money locks in escrow *before* the work even starts."
+    },
+    {
+      "id": "submit",
+      "text": "[shouting] Stage two! [excited] Ship the work. Submit the proof, on-chain.",
+      "caption": "Stage two! Ship the work. Submit the *proof*, on-chain."
+    },
+    {
+      "id": "release",
+      "text": "[excited] Approved? [shouting] Payout! [excited] No invoices. No chasing.",
+      "caption": "Approved? *Payout!* No invoices. No chasing."
+    },
+    {
+      "id": "boss",
+      "text": "[dramatic] Disagreement? [shouting] Boss fight! [excited] Three staked arbiters vote: release, refund, or split. Inside seventy-two hours.",
+      "caption": "Disagreement? *Boss fight!* Three staked arbiters vote: release, refund, or split. Inside *seventy-two hours*."
+    },
+    {
+      "id": "power",
+      "text": "[shouting] Power-up! [excited] Submit, approve, vote. Gas is on us.",
+      "caption": "*Power-up!* Submit, approve, vote. Gas is *on us*."
+    },
+    {
+      "id": "finale",
+      "text": "[excited] OpenLance. Freelance work, paid by proof. [shouting] Press start!",
+      "caption": "*OpenLance.* Freelance work, paid by *proof*. Press start!"
+    }
+  ],
+  "sfx": {
+    "boot": {
+      "prompt": "Retro arcade cabinet powering on, short bright 8-bit start-up chime",
+      "duration": 1.5
+    },
+    "select": {
+      "prompt": "Short 8-bit menu select blip, retro video game",
+      "duration": 0.5
+    },
+    "pop": {
+      "prompt": "Short 8-bit pop, retro game item appearing",
+      "duration": 0.5
+    },
+    "coin": {
+      "prompt": "Classic arcade coin insert sound, 8-bit, bright",
+      "duration": 1.0
+    },
+    "lock": {
+      "prompt": "Heavy metal padlock snapping shut, chunky click",
+      "duration": 0.8
+    },
+    "type": {
+      "prompt": "Fast retro 8-bit text typing blips, video game dialogue",
+      "duration": 1.5
+    },
+    "confirm": {
+      "prompt": "Positive 8-bit confirm chime, retro game success",
+      "duration": 1.0
+    },
+    "stamp": {
+      "prompt": "Heavy rubber stamp thud on a wooden desk",
+      "duration": 0.6
+    },
+    "payout": {
+      "prompt": "8-bit coins cascading, retro arcade jackpot payout",
+      "duration": 2.0
+    },
+    "buzz": {
+      "prompt": "Short 8-bit wrong answer buzzer, retro game",
+      "duration": 0.5
+    },
+    "alarm": {
+      "prompt": "8-bit boss warning siren, retro arcade alert, urgent, two pulses",
+      "duration": 2.0
+    },
+    "clang": {
+      "prompt": "8-bit sword clash, retro game metal hit",
+      "duration": 0.7
+    },
+    "tick": {
+      "prompt": "Fast 8-bit clock ticking countdown, retro game timer",
+      "duration": 2.0
+    },
+    "powerup": {
+      "prompt": "Classic 8-bit power-up sound, rising arpeggio",
+      "duration": 1.2
+    },
+    "click": {
+      "prompt": "Retro arcade button press click, chunky plastic",
+      "duration": 0.5
+    },
+    "whoosh": {
+      "prompt": "Short 8-bit transition swoosh, retro game screen wipe",
+      "duration": 0.5
+    },
+    "fanfare": {
+      "prompt": "Short 8-bit victory fanfare jingle, retro game start, triumphant",
+      "duration": 3.0
+    }
+  },
+  "beds": {
+    "main": {
+      "prompt": "Upbeat 8-bit chiptune music loop, 128 BPM, retro arcade stage theme, square wave lead, punchy bass, no vocals",
+      "duration": 30,
+      "loop": true
+    },
+    "boss": {
+      "prompt": "Tense 8-bit chiptune boss battle loop, 128 BPM, minor key, driving bass, retro arcade, no vocals",
+      "duration": 12,
+      "loop": true
+    }
+  }
+}

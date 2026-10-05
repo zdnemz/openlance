@@ -1,0 +1,30 @@
+{
+  "name": "openlance-promo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "description": "OpenLance promo video (Remotion) - pixel-arcade cut, 16:9 and 9:16",
+  "scripts": {
+    "studio": "remotion studio",
+    "audio": "node scripts/audio.mjs",
+    "render": "remotion render Promo out/openlance-promo.mp4 && remotion render PromoVertical out/openlance-promo-vertical.mp4 && node scripts/master.mjs",
+    "render:wide": "remotion render Promo out/openlance-promo.mp4 && node scripts/master.mjs out/openlance-promo.mp4",
+    "render:vertical": "remotion render PromoVertical out/openlance-promo-vertical.mp4 && node scripts/master.mjs out/openlance-promo-vertical.mp4",
+    "still": "remotion still Promo out/still.png",
+    "typecheck": "tsc --noEmit",
+    "master": "node scripts/master.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.532",
+    "@remotion/fonts": "4.0.532",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.532"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "4.0.532",
+    "@remotion/renderer": "4.0.532",
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}
