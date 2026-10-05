@@ -7,7 +7,7 @@
 import { bundle } from "@remotion/bundler";
 import { renderStill, selectComposition } from "@remotion/renderer";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,10 +31,15 @@ for (const id of ["Promo", "PromoVertical"].filter((c) => !only || c === only)) 
     await renderStill({ serveUrl, composition, frame, output, browserExecutable, scale: 0.5 });
     files.push(output);
   }
-  if (files.length < 2) {
+  if (files.length === 0) {
+    rmSync(join(OUT, `sheet-${id}.png`), { force: true });
+    console.warn(`${id}: no requested frame is inside 0-${composition.durationInFrames - 1}`);
+    continue;
+  }
+  if (files.length === 1) {
     // xstack needs two inputs; one frame is its own sheet
-    if (files.length) copyFileSync(files[0], join(OUT, `sheet-${id}.png`));
-    console.log(`${id}: ${files.length} frame(s) → out/stills/sheet-${id}.png`);
+    copyFileSync(files[0], join(OUT, `sheet-${id}.png`));
+    console.log(`${id}: 1 frame → out/stills/sheet-${id}.png`);
     continue;
   }
   const cols = id === "Promo" ? 3 : 5;

@@ -43,7 +43,7 @@ function Boot() {
       <Display size={32} color={C.roseLight} style={{ opacity: f < 12 ? 0 : flash(f, 16) }}>
         Press start
       </Display>
-      <Display size={20} color={C.faint} style={{ position: "absolute", bottom: L.tall ? 400 : 232, right: L.tall ? undefined : 64 }}>
+      <Display size={20} color={C.faint} style={{ position: "absolute", bottom: L.tall ? 640 : 232, right: L.tall ? undefined : 64 }}>
         Credit 00
       </Display>
     </AbsoluteFill>

@@ -141,8 +141,9 @@ export function Boss() {
       {outcomeAt.map((at, i) => (
         <Sfx key={i} name="pop" at={at} volume={0.4} />
       ))}
-      <Sfx name="tick" at={sevAt} volume={0.25} />
-      <Sfx name="confirm" at={ruleAt} volume={0.25} />
+      {/* the ticking stops with the clock, so "hours." isn't buried */}
+      <Sfx name="tick" at={sevAt} volume={0.25} cut={ruleAt - sevAt} fade={2} />
+      <Sfx name="confirm" at={ruleAt} volume={0.15} />
     </AbsoluteFill>
   );
 }

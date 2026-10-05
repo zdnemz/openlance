@@ -26,13 +26,17 @@ export function Hud() {
   const payAt = abs("release", cue("release", "payout"));
   const bossAt = scene("boss").from;
   const ruleAt = abs("boss", cue("boss", "hours"));
+  // milestone 2 is only disputed once the fight starts, not under the WARNING banner
+  const fightAt = abs("boss", cue("boss", "boss"));
 
   const m2 = f >= bossAt;
   const value = m2 ? (f >= ruleAt ? countTo(f, ruleAt, 0.18, 0) : 0.18) : f >= payAt ? countTo(f, payAt, 0.24, 0) : countTo(f, coinAt, 0, 0.24);
   const state = m2
     ? f >= ruleAt
       ? { label: "split", color: C.split }
-      : { label: "disputed", color: C.disputed }
+      : f >= fightAt
+        ? { label: "disputed", color: C.disputed }
+        : { label: "funded", color: C.funded }
     : f >= payAt
       ? { label: "released", color: C.released }
       : f >= chainAt
@@ -74,7 +78,12 @@ export function Hud() {
             <span style={{ fontSize: L.tall ? 20 : 16, color: C.faint }}> ETH</span>
           </div>
         </div>
-        {!L.tall && <Badge label={state.label} color={state.color} size={16} />}
+        {/* a fixed slot, so the centre group doesn't re-centre when the label changes length */}
+        {!L.tall && (
+          <div style={{ width: 200, display: "flex" }}>
+            <Badge label={state.label} color={state.color} size={16} />
+          </div>
+        )}
       </div>
       <Player tag="2UP" name="DARIO" role={`+${earned.toFixed(3)}`} address={DARIO} color={C.fg} size={av} scale={s} flip />
     </div>

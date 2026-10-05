@@ -7,7 +7,7 @@ import { cue } from "../timeline";
 import { C, F, FRAME } from "../theme";
 
 // the submit's own tx (the fund tx is 0x7f3a…c21e), truncated the way the app's HashText shows it
-const HASH = "0x9b2e4c71…1a41d7";
+const HASH = "0x9b2e…41d7";
 
 /** Stage 2: the delivery goes on-chain through the app's three honest phases. */
 export function Submit() {
@@ -71,7 +71,8 @@ export function Submit() {
       </StageLayout>
       <Sfx name="pop" at={0} volume={0.4} />
       <Sfx name="whoosh" at={shipAt} volume={0.5} />
-      <Sfx name="type" at={submitAt} volume={0.3} cut={40} fade={5} />
+      {/* the clatter stops with the type-on (14 frames), not 30 frames later under "the proof" */}
+      <Sfx name="type" at={submitAt} volume={0.2} cut={16} fade={4} />
       <Sfx name="select" at={phases[0]!.done} volume={0.35} />
       <Sfx name="select" at={phases[1]!.done} volume={0.35} />
       <Sfx name="confirm" at={chainAt} volume={0.35} />

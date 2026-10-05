@@ -14,13 +14,13 @@
         {
           "text": "Player",
           "emphasis": false,
-          "start": 0,
-          "end": 0.255
+          "start": 0.073,
+          "end": 0.299
         },
         {
           "text": "one:",
           "emphasis": false,
-          "start": 0.382,
+          "start": 0.412,
           "end": 0.637
         },
         {
@@ -75,43 +75,43 @@
           "text": "who",
           "emphasis": false,
           "start": 4.734,
-          "end": 4.849
+          "end": 4.838
         },
         {
           "text": "do",
           "emphasis": false,
-          "start": 4.917,
-          "end": 4.986
+          "start": 4.901,
+          "end": 4.964
         },
         {
           "text": "you",
           "emphasis": false,
-          "start": 5.032,
-          "end": 5.147
+          "start": 5.006,
+          "end": 5.11
         },
         {
           "text": "trust?",
           "emphasis": true,
-          "start": 5.216,
-          "end": 5.767
+          "start": 5.173,
+          "end": 5.675
         }
       ]
     },
     "fund": {
       "file": "audio/vo/fund.mp3",
-      "duration": 5.825,
+      "duration": 5.721,
       "caption": "Stage one! *Insert coin.* The money locks in escrow *before* the work even starts.",
       "words": [
         {
           "text": "Stage",
           "emphasis": false,
-          "start": 0,
-          "end": 0.35
+          "start": 0.145,
+          "end": 0.44
         },
         {
           "text": "one!",
           "emphasis": false,
-          "start": 0.466,
+          "start": 0.539,
           "end": 0.932
         },
         {
@@ -129,62 +129,62 @@
         {
           "text": "The",
           "emphasis": false,
-          "start": 2.452,
-          "end": 2.509
+          "start": 2.545,
+          "end": 2.616
         },
         {
           "text": "money",
           "emphasis": false,
-          "start": 2.653,
-          "end": 2.845
+          "start": 2.651,
+          "end": 2.829
         },
         {
           "text": "locks",
           "emphasis": false,
-          "start": 2.96,
-          "end": 3.229
+          "start": 2.935,
+          "end": 3.184
         },
         {
           "text": "in",
           "emphasis": false,
-          "start": 3.267,
-          "end": 3.42
+          "start": 3.22,
+          "end": 3.362
         },
         {
           "text": "escrow",
           "emphasis": false,
-          "start": 3.497,
-          "end": 4.092
+          "start": 3.433,
+          "end": 3.984
         },
         {
           "text": "before",
           "emphasis": true,
-          "start": 4.191,
-          "end": 4.459
+          "start": 4.083,
+          "end": 4.317
         },
         {
           "text": "the",
           "emphasis": false,
-          "start": 4.497,
-          "end": 4.611
+          "start": 4.351,
+          "end": 4.451
         },
         {
           "text": "work",
           "emphasis": false,
-          "start": 4.649,
-          "end": 4.879
+          "start": 4.484,
+          "end": 4.685
         },
         {
           "text": "even",
           "emphasis": false,
-          "start": 5.031,
-          "end": 5.203
+          "start": 4.819,
+          "end": 4.97
         },
         {
           "text": "starts.",
           "emphasis": false,
-          "start": 5.356,
-          "end": 5.699
+          "start": 5.103,
+          "end": 5.405
         }
       ]
     },
@@ -209,18 +209,18 @@
           "text": "Ship",
           "emphasis": false,
           "start": 1.499,
-          "end": 1.809
+          "end": 1.805
         },
         {
           "text": "the",
           "emphasis": false,
-          "start": 2.075,
-          "end": 2.186
+          "start": 2.027,
+          "end": 2.146
         },
         {
           "text": "work.",
           "emphasis": false,
-          "start": 2.296,
+          "start": 2.266,
           "end": 2.673
         },
         {
@@ -385,56 +385,56 @@
     },
     "power": {
       "file": "audio/vo/power.mp3",
-      "duration": 4.232,
+      "duration": 4.101,
       "caption": "*Power-up!* Submit, approve, vote. Gas is *on us*.",
       "words": [
         {
           "text": "Power-up!",
           "emphasis": true,
           "start": 0.094,
-          "end": 0.716
+          "end": 0.558
         },
         {
           "text": "Submit,",
           "emphasis": false,
-          "start": 1.08,
-          "end": 1.474
+          "start": 0.922,
+          "end": 1.317
         },
         {
           "text": "approve,",
           "emphasis": false,
-          "start": 1.589,
-          "end": 2.091
+          "start": 1.432,
+          "end": 1.933
         },
         {
           "text": "vote.",
           "emphasis": false,
-          "start": 2.265,
-          "end": 2.573
+          "start": 2.107,
+          "end": 2.416
         },
         {
           "text": "Gas",
           "emphasis": false,
-          "start": 2.937,
-          "end": 3.233
+          "start": 2.78,
+          "end": 3.076
         },
         {
           "text": "is",
           "emphasis": false,
-          "start": 3.293,
-          "end": 3.471
+          "start": 3.135,
+          "end": 3.313
         },
         {
           "text": "on",
           "emphasis": true,
-          "start": 3.569,
-          "end": 3.767
+          "start": 3.412,
+          "end": 3.609
         },
         {
           "text": "us.",
           "emphasis": true,
-          "start": 3.886,
-          "end": 4.123
+          "start": 3.728,
+          "end": 3.965
         }
       ]
     },
@@ -483,13 +483,13 @@
           "text": "Press",
           "emphasis": false,
           "start": 3.528,
-          "end": 3.772
+          "end": 3.721
         },
         {
           "text": "start!",
           "emphasis": false,
-          "start": 3.894,
-          "end": 4.322
+          "start": 3.817,
+          "end": 4.156
         }
       ]
     }

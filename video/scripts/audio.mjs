@@ -116,6 +116,8 @@ async function genVoiceover() {
     const r = await tts(line.text, script.voice.voiceId);
     save(rel, Buffer.from(r.audio_base64, "base64"));
     save(`audio/vo/${line.id}.raw.json`, JSON.stringify(r.alignment ?? r.normalized_alignment));
+    // a new take invalidates the old take's forced alignment
+    rmSync(join(PUBLIC, `audio/vo/${line.id}.fa.json`), { force: true });
     console.log("ok");
   }
 }
@@ -123,49 +125,69 @@ async function genVoiceover() {
 /** Silent stretches in a file, from ffmpeg silencedetect: [[start, end], …] in seconds. */
 function silences(file, { noise = -40, min = 0.05 } = {}) {
   const r = spawnSync("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-af", `silencedetect=noise=${noise}dB:d=${min}`, "-f", "null", "-"], { encoding: "utf8" });
-  const starts = [...r.stderr.matchAll(/silence_start: ([\d.]+)/g)].map((m) => +m[1]);
-  const ends = [...r.stderr.matchAll(/silence_end: ([\d.]+)/g)].map((m) => +m[1]);
-  return starts.map((a, i) => [a, ends[i] ?? Infinity]);
+  // %.6g timestamps: "4.53515e-05" and "-0.0001" both occur; pair starts and ends in stream order
+  const num = "(-?[\\d.]+(?:e[-+]?\\d+)?)";
+  const out = [];
+  for (const m of r.stderr.matchAll(new RegExp(`silence_(start|end): ${num}`, "g"))) {
+    const t = Math.max(0, +m[2]);
+    if (m[1] === "start") out.push([t, Infinity]);
+    else if (out.length && out.at(-1)[1] === Infinity) out.at(-1)[1] = t;
+  }
+  return out;
 }
 
-/** Merge silences closer than 20ms (a stop closure splitting one pause in two). */
-function merged(sil) {
+/** RMS level (dBFS) of a stretch of a file. */
+function rmsDb(file, a, b) {
+  const r = spawnSync("ffmpeg", ["-hide_banner", "-nostats", "-ss", String(a), "-to", String(b), "-i", file, "-af", "astats=measure_overall=RMS_level:measure_perchannel=none", "-f", "null", "-"], { encoding: "utf8" });
+  const m = r.stderr.match(/RMS level dB: (-?[\d.]+|-inf)/);
+  return !m || m[1] === "-inf" ? -Infinity : +m[1];
+}
+
+/**
+ * Merge silences that are really one pause: closer than 20ms (a stop closure),
+ * or split by an island of sound under 0.1s that stays below -40 dBFS RMS (a
+ * breath or a lip noise, never a word).
+ */
+function merged(sil, file) {
   const out = [];
   for (const [a, b] of sil) {
     const last = out.at(-1);
-    if (last && a - last[1] < 0.02) last[1] = b;
+    const gap = last ? a - last[1] : Infinity;
+    if (last && (gap < 0.02 || (gap < 0.1 && file && rmsDb(file, last[1], a) < -40))) last[1] = b;
     else out.push([a, b]);
   }
   return out;
 }
 
 /**
- * Pin word timings to the audio. Alignments (eleven_v3's own, or forced
- * alignment) are good on word order and timing inside a phrase but drift at
- * pauses and [audio tags]. Every measured pause of 0.1s or more anchors the
- * word boundary it belongs to (the nearest one within 0.45s): the word before
- * ends where the pause starts, the word after starts where it ends. The first
- * word starts at the speech onset. Times between anchors are warped
+ * Pin word timings to the audio. Alignments (forced alignment, or eleven_v3's
+ * own) are good on word order and on timing inside a phrase, but drift at
+ * pauses and [audio tags]. Each measured pause of 0.1s or more anchors the word
+ * boundary whose aligned gap it overlaps (gaps widened by 0.15s, since the
+ * aligner runs late on soft onsets): the word before ends where the pause
+ * starts, the word after starts where it ends. The first word starts at the
+ * end of the lead-in silence. Times between anchors are warped
  * piecewise-linearly, which keeps word order.
  */
-function warpToPauses(words, sil, duration) {
-  const pauses = merged(sil);
-  const lead = pauses.find(([a]) => a <= 0.01);
-  const anchors = [[words[0].start, lead && lead[1] !== Infinity ? lead[1] : 0]];
-  const used = new Set();
+function warpToPauses(words, pauses, duration) {
+  const isTail = ([a, b]) => b === Infinity || b >= duration - 0.06 || a >= words.at(-1).start;
+  const lead = pauses.find(([a, b]) => a <= 0.01 && !isTail([a, b]));
+  const tail = pauses.find((p) => p[0] > 0.01 && isTail(p));
+  const anchors = [[words[0].start, lead ? lead[1] : words[0].start]];
+  const byBoundary = new Map();
   for (const [a, b] of pauses) {
-    if (a <= 0.01 || b === Infinity || b - a < 0.1) continue;
+    if (a <= 0.01 || isTail([a, b]) || b - a < 0.1) continue;
     let best = -1;
-    let bestD = 0.45;
+    let bestOverlap = 0;
     for (let k = 0; k < words.length - 1; k++) {
-      const d = Math.abs((words[k].end + words[k + 1].start) / 2 - (a + b) / 2);
-      if (!used.has(k) && d < bestD) [best, bestD] = [k, d];
+      const overlap = Math.min(b, words[k + 1].start + 0.15) - Math.max(a, words[k].end - 0.15);
+      if (overlap > bestOverlap) [best, bestOverlap] = [k, overlap];
     }
     if (best < 0) continue;
-    used.add(best);
-    anchors.push([words[best].end, a], [words[best + 1].start, b]);
+    const g = byBoundary.get(best);
+    byBoundary.set(best, g ? [Math.min(g[0], a), Math.max(g[1], b)] : [a, b]);
   }
-  const tail = pauses.find(([a, b]) => a > 0.01 && (b === Infinity || b >= duration - 0.01));
+  for (const [k, [a, b]] of byBoundary) anchors.push([words[k].end, a], [words[k + 1].start, b]);
   anchors.push([words.at(-1).end, tail ? tail[0] : duration]);
   anchors.sort((p, q) => p[0] - q[0]);
   const mono = [];
@@ -238,10 +260,10 @@ function shapeVoiceover() {
       continue;
     }
     const duration = probeDuration(raw);
-    const sil = silences(raw);
-    words = warpToPauses(words, sil, duration);
+    const pauses = merged(silences(raw), raw);
+    words = warpToPauses(words, pauses, duration);
     const cuts = [];
-    for (const [a, b] of merged(sil)) {
+    for (const [a, b] of pauses) {
       if (a <= 0.01) {
         if (b > lead && b !== Infinity) cuts.push([0, b - lead]);
       } else if (b !== Infinity && b - a > maxPause) {
