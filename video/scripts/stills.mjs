@@ -7,7 +7,7 @@
 import { bundle } from "@remotion/bundler";
 import { renderStill, selectComposition } from "@remotion/renderer";
 import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,6 +17,10 @@ mkdirSync(OUT, { recursive: true });
 const frames = process.argv.slice(2).filter((a) => /^\d+$/.test(a)).map(Number);
 const only = process.argv.find((a) => a.startsWith("--comp="))?.slice(7);
 const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE ?? null;
+if (!frames.length) {
+  console.error("usage: node scripts/stills.mjs <frame> [frame …] [--comp=Promo|PromoVertical]");
+  process.exit(1);
+}
 
 const serveUrl = await bundle({ entryPoint: join(ROOT, "src", "index.ts") });
 for (const id of ["Promo", "PromoVertical"].filter((c) => !only || c === only)) {
@@ -26,6 +30,12 @@ for (const id of ["Promo", "PromoVertical"].filter((c) => !only || c === only)) 
     const output = join(OUT, `${id}-${String(frame).padStart(4, "0")}.png`);
     await renderStill({ serveUrl, composition, frame, output, browserExecutable, scale: 0.5 });
     files.push(output);
+  }
+  if (files.length < 2) {
+    // xstack needs two inputs; one frame is its own sheet
+    if (files.length) copyFileSync(files[0], join(OUT, `sheet-${id}.png`));
+    console.log(`${id}: ${files.length} frame(s) → out/stills/sheet-${id}.png`);
+    continue;
   }
   const cols = id === "Promo" ? 3 : 5;
   const rows = Math.ceil(files.length / cols);

@@ -25,8 +25,8 @@ export function Attract() {
       <Sfx name="boot" at={2} volume={0.55} />
       <Sfx name="whoosh" at={oneAt} volume={0.4} />
       <Sfx name="whoosh" at={twoAt} volume={0.4} />
-      <Sfx name="select" at={clientAt} />
-      <Sfx name="select" at={freeAt} />
+      <Sfx name="select" at={clientAt} volume={0.35} />
+      <Sfx name="select" at={freeAt} volume={0.35} />
       <Sfx name="pop" at={qAt} />
       <Sfx name="buzz" at={trustAt} volume={0.4} />
     </AbsoluteFill>
@@ -43,7 +43,7 @@ function Boot() {
       <Display size={32} color={C.roseLight} style={{ opacity: f < 12 ? 0 : flash(f, 16) }}>
         Press start
       </Display>
-      <Display size={20} color={C.faint} style={{ position: "absolute", bottom: L.tall ? 400 : 64, right: L.tall ? undefined : 64 }}>
+      <Display size={20} color={C.faint} style={{ position: "absolute", bottom: L.tall ? 400 : 232, right: L.tall ? undefined : 64 }}>
         Credit 00
       </Display>
     </AbsoluteFill>
@@ -136,7 +136,7 @@ function PlayerCard({
           {tag}
         </Display>
         <Avatar address={address} size={200} frame={selected ? color : C.lineStrong} />
-        <Display size={role.length > 6 && width < 500 ? 32 : 40} style={pop(f, 0)}>
+        <Display size={width < 500 ? 32 : 40} style={pop(f, 0)}>
           {role}
         </Display>
         <div style={{ fontFamily: F.body, fontSize: 36, color: C.dim, marginTop: -8 }}>{name}</div>

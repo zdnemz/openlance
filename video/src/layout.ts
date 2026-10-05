@@ -16,7 +16,8 @@ export function useLayout() {
         H,
         hud: { top: 96, h: 120, pad: 48 },
         stage: { top: 256, bottom: 1296 },
-        caption: { top: 1336, h: 232, x: 48, size: 48 },
+        // right edge stops short of the Reels/TikTok/Shorts action buttons
+        caption: { top: 1336, h: 232, x: 48, right: 156, size: 48 },
         title: { top: 280, h: 320 },
         instrument: { top: 616, h: 664 },
         /** the block-dissolve grid */
@@ -28,7 +29,7 @@ export function useLayout() {
         H,
         hud: { top: 0, h: 112, pad: 64 },
         stage: { top: 136, bottom: 848 },
-        caption: { top: 872, h: 168, x: 96, size: 44 },
+        caption: { top: 872, h: 168, x: 96, right: 96, size: 44 },
         title: { top: 136, h: 712 },
         instrument: { top: 168, h: 664 },
         cell: 120,

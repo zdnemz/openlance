@@ -7,11 +7,12 @@
   "scripts": {
     "studio": "remotion studio",
     "audio": "node scripts/audio.mjs",
-    "render": "remotion render Promo out/openlance-promo.mp4 && remotion render PromoVertical out/openlance-promo-vertical.mp4",
-    "render:wide": "remotion render Promo out/openlance-promo.mp4",
-    "render:vertical": "remotion render PromoVertical out/openlance-promo-vertical.mp4",
+    "render": "remotion render Promo out/openlance-promo.mp4 && remotion render PromoVertical out/openlance-promo-vertical.mp4 && node scripts/master.mjs",
+    "render:wide": "remotion render Promo out/openlance-promo.mp4 && node scripts/master.mjs out/openlance-promo.mp4",
+    "render:vertical": "remotion render PromoVertical out/openlance-promo-vertical.mp4 && node scripts/master.mjs out/openlance-promo-vertical.mp4",
     "still": "remotion still Promo out/still.png",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "master": "node scripts/master.mjs"
   },
   "dependencies": {
     "@remotion/cli": "4.0.532",

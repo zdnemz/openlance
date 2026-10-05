@@ -40,12 +40,21 @@ const bedGain = (frame: number, base: number) => {
   return base * (1 - 0.5 * duck(frame)) * Math.max(0, tail);
 };
 
+const XFADE = 3;
+
+/** A bed segment with 3-frame ramps at both ends, so handovers crossfade instead of clicking. */
 function Bed({ name, from, to, base = 0.55 }: { name: string; from: number; to: number; base?: number }) {
   const bed = BEDS[name];
   if (!bed?.file) return null;
   return (
     <Sequence from={from} durationInFrames={to - from} layout="none">
-      <Audio src={staticFile(bed.file)} loop volume={(f) => bedGain(from + f, base)} />
+      {/* "extend": the volume callback keeps counting film frames across loop restarts */}
+      <Audio
+        src={staticFile(bed.file)}
+        loop
+        loopVolumeCurveBehavior="extend"
+        volume={(f) => bedGain(from + f, base) * Math.min(1, (f + 1) / XFADE, (to - from - f) / XFADE)}
+      />
     </Sequence>
   );
 }
@@ -54,7 +63,7 @@ function Bed({ name, from, to, base = 0.55 }: { name: string; from: number; to: 
 export function Promo() {
   const boss = scene("boss");
   return (
-    <AbsoluteFill style={{ background: "#000" }}>
+    <AbsoluteFill style={{ background: "#000", fontVariantLigatures: "none", fontFeatureSettings: '"liga" 0, "clig" 0' }}>
       <Backdrop />
       {SCENES.map((s) => {
         const Scene = SCENE_COMPONENTS[s.id];
@@ -76,8 +85,8 @@ export function Promo() {
         <Sfx key={s.id} name="whoosh" at={s.from - 6} volume={0.3} />
       ))}
       {/* stage theme until the boss arrives, the boss loop for the fight, then the stage theme again */}
-      <Bed name="main" from={6} to={boss.from} />
-      <Bed name="boss" from={boss.from} to={boss.from + boss.durationInFrames} />
+      <Bed name="main" from={6} to={boss.from + XFADE} />
+      <Bed name="boss" from={boss.from} to={boss.from + boss.durationInFrames + XFADE} />
       <Bed name="main" from={boss.from + boss.durationInFrames} to={TOTAL_FRAMES} />
     </AbsoluteFill>
   );

@@ -4,7 +4,7 @@ import { Sfx } from "../components/Sfx";
 import { useLayout } from "../layout";
 import { blink, flash, pop, popScale } from "../motion";
 import { Display, PixelButton, Sprite } from "../pixel";
-import { cue, scene } from "../timeline";
+import { cue, scene, voEnd } from "../timeline";
 import { C, F } from "../theme";
 
 /** The lockup: mark, wordmark, the landing's headline, and PRESS START. Then the CRT switches off. */
@@ -44,8 +44,8 @@ export function Finale() {
       <Crt mode="off" at={durationInFrames - 12} />
       <Sfx name="pop" at={2} volume={0.4} />
       <Sfx name="select" at={olAt} volume={0.4} />
-      <Sfx name="click" at={pressAt + 2} volume={0.6} />
-      <Sfx name="fanfare" at={pressAt + 6} volume={0.6} />
+      <Sfx name="click" at={pressAt + 2} volume={0.4} />
+      <Sfx name="fanfare" at={voEnd("finale") - 4} volume={0.5} />
     </AbsoluteFill>
   );
 }

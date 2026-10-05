@@ -8,15 +8,17 @@
  *   node scripts/audio.mjs voices [query]      your voices + library matches
  *   node scripts/audio.mjs samples <id,id,...> one test read per voice → out/samples
  *   node scripts/audio.mjs tts | sfx | beds    generate one group (skips existing files)
+ *   node scripts/audio.mjs align               forced-align the raw reads (word timings)
  *   node scripts/audio.mjs all                 tts + sfx + beds + manifest
  *   node scripts/audio.mjs manifest            re-shape the reads + rebuild the manifest (no API calls)
  *
- * --force regenerates files that already exist. Requests run one at a time:
+ * --force regenerates files that already exist. A failed sound is reported at
+ * the end with a non-zero exit, and the manifest marks it file:null. Requests run one at a time:
  * lower plans reject concurrent generations. The key comes from
  * ELEVENLABS_API_KEY or video/.env and never leaves this process.
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -92,6 +94,9 @@ const spoken = (text) => (isV3() ? text : text.replace(/\[[^\]]*\]\s*/g, "")).tr
 
 /* ── generation ─────────────────────────────────────────────────────── */
 
+/** Sounds that failed this run; reported at the end with a non-zero exit. */
+const failures = [];
+
 async function tts(text, voiceId) {
   const settings = { ...script.voice.settings };
   // eleven_v3 takes stability as one of three presets: 0 creative, 0.5 natural, 1 robust.
@@ -115,11 +120,107 @@ async function genVoiceover() {
   }
 }
 
+/** Silent stretches in a file, from ffmpeg silencedetect: [[start, end], …] in seconds. */
+function silences(file, { noise = -40, min = 0.05 } = {}) {
+  const r = spawnSync("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-af", `silencedetect=noise=${noise}dB:d=${min}`, "-f", "null", "-"], { encoding: "utf8" });
+  const starts = [...r.stderr.matchAll(/silence_start: ([\d.]+)/g)].map((m) => +m[1]);
+  const ends = [...r.stderr.matchAll(/silence_end: ([\d.]+)/g)].map((m) => +m[1]);
+  return starts.map((a, i) => [a, ends[i] ?? Infinity]);
+}
+
+/** Merge silences closer than 20ms (a stop closure splitting one pause in two). */
+function merged(sil) {
+  const out = [];
+  for (const [a, b] of sil) {
+    const last = out.at(-1);
+    if (last && a - last[1] < 0.02) last[1] = b;
+    else out.push([a, b]);
+  }
+  return out;
+}
+
 /**
- * Tighten each raw read without another API call: clip the lead-in, cap the
- * pauses between words at voice.maxPause, then speed up by voice.tempo (pitch
- * kept). The character alignment goes through the same cuts and tempo, so
- * captions and cues stay on the word. Writes vo/<id>.mp3 + <id>.alignment.json.
+ * Pin word timings to the audio. Alignments (eleven_v3's own, or forced
+ * alignment) are good on word order and timing inside a phrase but drift at
+ * pauses and [audio tags]. Every measured pause of 0.1s or more anchors the
+ * word boundary it belongs to (the nearest one within 0.45s): the word before
+ * ends where the pause starts, the word after starts where it ends. The first
+ * word starts at the speech onset. Times between anchors are warped
+ * piecewise-linearly, which keeps word order.
+ */
+function warpToPauses(words, sil, duration) {
+  const pauses = merged(sil);
+  const lead = pauses.find(([a]) => a <= 0.01);
+  const anchors = [[words[0].start, lead && lead[1] !== Infinity ? lead[1] : 0]];
+  const used = new Set();
+  for (const [a, b] of pauses) {
+    if (a <= 0.01 || b === Infinity || b - a < 0.1) continue;
+    let best = -1;
+    let bestD = 0.45;
+    for (let k = 0; k < words.length - 1; k++) {
+      const d = Math.abs((words[k].end + words[k + 1].start) / 2 - (a + b) / 2);
+      if (!used.has(k) && d < bestD) [best, bestD] = [k, d];
+    }
+    if (best < 0) continue;
+    used.add(best);
+    anchors.push([words[best].end, a], [words[best + 1].start, b]);
+  }
+  const tail = pauses.find(([a, b]) => a > 0.01 && (b === Infinity || b >= duration - 0.01));
+  anchors.push([words.at(-1).end, tail ? tail[0] : duration]);
+  anchors.sort((p, q) => p[0] - q[0]);
+  const mono = [];
+  for (const p of anchors) {
+    const l = mono.at(-1);
+    if (!l || (p[0] > l[0] && p[1] > l[1])) mono.push(p);
+  }
+  const warp = (x) => {
+    if (x <= mono[0][0]) return Math.max(0, mono[0][1] - (mono[0][0] - x));
+    for (let i = 1; i < mono.length; i++) {
+      const [x0, y0] = mono[i - 1];
+      const [x1, y1] = mono[i];
+      if (x <= x1) return y0 + ((x - x0) * (y1 - y0)) / (x1 - x0);
+    }
+    const [xl, yl] = mono.at(-1);
+    return Math.min(duration, yl + (x - xl));
+  };
+  return words.map((w) => ({ text: w.text, start: warp(w.start), end: warp(w.end) }));
+}
+
+/**
+ * Word timings for each raw read from ElevenLabs forced alignment (the known
+ * text aligned to the audio), cached as vo/<id>.fa.json. One call per line;
+ * skipped when cached unless --force.
+ */
+async function alignVoiceover() {
+  for (const line of script.lines) {
+    const raw = join(PUBLIC, `audio/vo/${line.id}.raw.mp3`);
+    const out = join(PUBLIC, `audio/vo/${line.id}.fa.json`);
+    if (!existsSync(raw) || (!force && existsSync(out))) continue;
+    process.stdout.write(`align ${line.id} … `);
+    try {
+      const form = new FormData();
+      form.append("file", new Blob([readFileSync(raw)], { type: "audio/mpeg" }), `${line.id}.mp3`);
+      form.append("text", line.text.replace(/\[[^\]]*\]\s*/g, "").trim());
+      const res = await fetch(`${API}/v1/forced-alignment`, { method: "POST", headers: { "xi-api-key": apiKey() }, body: form });
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      const { words } = await res.json();
+      writeFileSync(out, JSON.stringify(words.filter((w) => w.text.trim()).map(({ text, start, end }) => ({ text, start, end }))));
+      console.log("ok");
+    } catch (e) {
+      failures.push(`audio/vo/${line.id}.fa.json`);
+      console.log(`failed: ${e.message.slice(0, 200)}`);
+    }
+  }
+}
+
+/**
+ * Tighten each raw read without another API call. Cuts are made only inside
+ * measured silence: the silent lead-in is clipped to voice.shape.lead and any
+ * pause longer than maxPause is capped at maxPause. Then the read is sped up
+ * by tempo (pitch kept), given 5ms/40ms edge fades and 100ms of tail so no line
+ * ends on a click. Word timings (forced alignment pinned to the measured
+ * pauses) go through the same cuts and tempo into vo/<id>.words.json, so
+ * captions and cues stay on the word.
  */
 function shapeVoiceover() {
   const { tempo = 1, maxPause = Infinity, lead = 0.15 } = script.voice.shape ?? {};
@@ -127,47 +228,41 @@ function shapeVoiceover() {
     const raw = join(PUBLIC, `audio/vo/${line.id}.raw.mp3`);
     const rawAl = join(PUBLIC, `audio/vo/${line.id}.raw.json`);
     if (!existsSync(raw) || !existsSync(rawAl)) continue;
-    const al = JSON.parse(readFileSync(rawAl, "utf8"));
     const out = join(PUBLIC, `audio/vo/${line.id}.mp3`);
+    const wordsOut = join(PUBLIC, `audio/vo/${line.id}.words.json`);
+    const fa = join(PUBLIC, `audio/vo/${line.id}.fa.json`);
+    let words = existsSync(fa) ? JSON.parse(readFileSync(fa, "utf8")) : alignedWords(JSON.parse(readFileSync(rawAl, "utf8")));
     if (!hasFfmpeg) {
       writeFileSync(out, readFileSync(raw));
-      writeFileSync(join(PUBLIC, `audio/vo/${line.id}.alignment.json`), JSON.stringify(al));
+      writeFileSync(wordsOut, JSON.stringify(words));
       continue;
     }
-    const words = alignedWords(al);
-    const end = Math.min(probeDuration(raw) ?? Infinity, words.at(-1).end + lead);
+    const duration = probeDuration(raw);
+    const sil = silences(raw);
+    words = warpToPauses(words, sil, duration);
     const cuts = [];
-    if (words[0].start > lead) cuts.push([0, words[0].start - lead]);
-    for (let i = 1; i < words.length; i++) {
-      const gap = words[i].start - words[i - 1].end;
-      if (gap > maxPause) cuts.push([words[i - 1].end + maxPause / 2, words[i].start - maxPause / 2]);
+    for (const [a, b] of merged(sil)) {
+      if (a <= 0.01) {
+        if (b > lead && b !== Infinity) cuts.push([0, b - lead]);
+      } else if (b !== Infinity && b - a > maxPause) {
+        cuts.push([a + maxPause / 2, b - maxPause / 2]);
+      }
     }
-    // keep = [0, end] minus the cuts
     const keep = [];
     let t = 0;
     for (const [a, b] of cuts) {
       if (a > t) keep.push([t, a]);
       t = b;
     }
-    if (end > t) keep.push([t, end]);
-    const map = (x) => {
-      const removed = cuts.reduce((acc, [a, b]) => acc + Math.min(Math.max(x - a, 0), b - a), 0);
-      return round((Math.min(x, end) - removed) / tempo);
-    };
+    keep.push([t, duration]);
+    const map = (x) => round((x - cuts.reduce((acc, [a, b]) => acc + Math.min(Math.max(x - a, 0), b - a), 0)) / tempo);
     const graph =
       keep.map(([a, b], i) => `[0:a]atrim=start=${a.toFixed(4)}:end=${b.toFixed(4)},asetpts=PTS-STARTPTS[k${i}]`).join(";") +
-      `;${keep.map((_, i) => `[k${i}]`).join("")}concat=n=${keep.length}:v=0:a=1,atempo=${tempo},loudnorm=I=-16:TP=-1.5:LRA=11[out]`;
+      `;${keep.map((_, i) => `[k${i}]`).join("")}concat=n=${keep.length}:v=0:a=1,atempo=${tempo},` +
+      `afade=t=in:d=0.005,areverse,afade=t=in:d=0.04,areverse,apad=pad_dur=0.1,loudnorm=I=-16:TP=-1.5:LRA=11[out]`;
     execFileSync("ffmpeg", ["-y", "-v", "error", "-i", raw, "-filter_complex", graph, "-map", "[out]", "-ar", "44100", "-b:a", "160k", out]);
-    writeFileSync(
-      join(PUBLIC, `audio/vo/${line.id}.alignment.json`),
-      JSON.stringify({
-        characters: al.characters,
-        character_start_times_seconds: al.character_start_times_seconds.map(map),
-        character_end_times_seconds: al.character_end_times_seconds.map(map),
-      }),
-    );
-    const before = probeDuration(raw);
-    console.log(`shape ${line.id.padEnd(8)} ${before?.toFixed(2)}s → ${probeDuration(out)?.toFixed(2)}s (${cuts.length} cuts, ×${tempo})`);
+    writeFileSync(wordsOut, JSON.stringify(words.map((w) => ({ text: w.text, start: map(w.start), end: map(w.end) }))));
+    console.log(`shape ${line.id.padEnd(8)} ${duration?.toFixed(2)}s → ${probeDuration(out)?.toFixed(2)}s (${cuts.length} silence cuts, ×${tempo})`);
   }
 }
 
@@ -181,10 +276,15 @@ async function genSound(rel, { prompt, duration, loop }, lufs) {
       // the API takes 0.5–30s
       body: { text: prompt, duration_seconds: Math.min(30, Math.max(0.5, duration)), prompt_influence: 0.6, model_id: "eleven_text_to_sound_v2", ...(loop ? { loop: true } : {}) },
     });
-    normalise(save(rel, buf), lufs);
+    // land the file only once it is normalised, so a failed run is retried next time
+    const tmp = save(rel.replace(/\.mp3$/, ".tmp.mp3"), buf);
+    normalise(tmp, lufs);
+    renameSync(tmp, join(PUBLIC, rel));
     console.log("ok");
   } catch (e) {
     // one bad prompt shouldn't cost the rest of the batch; re-run to retry the gaps
+    rmSync(join(PUBLIC, rel.replace(/\.mp3$/, ".tmp.mp3")), { force: true });
+    failures.push(rel);
     console.log(`failed: ${e.message.slice(0, 200)}`);
   }
 }
@@ -267,9 +367,9 @@ function writeManifest() {
   for (const line of script.lines) {
     const rel = `audio/vo/${line.id}.mp3`;
     const abs = join(PUBLIC, rel);
-    const alPath = join(PUBLIC, `audio/vo/${line.id}.alignment.json`);
+    const wordsPath = join(PUBLIC, `audio/vo/${line.id}.words.json`);
     const have = existsSync(abs);
-    const spokenWords = existsSync(alPath) ? alignedWords(JSON.parse(readFileSync(alPath, "utf8"))) : null;
+    const spokenWords = existsSync(wordsPath) ? JSON.parse(readFileSync(wordsPath, "utf8")) : null;
     // No audio yet: ~0.36s a word for a fast announcer read.
     const estimate = captionWords(line.caption).length * 0.36 + 0.6;
     const duration = round((have && probeDuration(abs)) || spokenWords?.at(-1)?.end + 0.15 || estimate);
@@ -339,10 +439,11 @@ const run = {
   status,
   voices: () => voices(args[0]),
   samples: () => samples((args[0] ?? "").split(",").filter(Boolean)),
-  tts: async () => (await genVoiceover(), shapeVoiceover(), writeManifest()),
+  tts: async () => (await genVoiceover(), await alignVoiceover(), shapeVoiceover(), writeManifest()),
+  align: async () => (await alignVoiceover(), shapeVoiceover(), writeManifest()),
   sfx: async () => (await genSfx(), writeManifest()),
   beds: async () => (await genBeds(), writeManifest()),
-  all: async () => (await genVoiceover(), await genSfx(), await genBeds(), shapeVoiceover(), writeManifest()),
+  all: async () => (await genVoiceover(), await alignVoiceover(), await genSfx(), await genBeds(), shapeVoiceover(), writeManifest()),
   // local only: re-shape the raw reads (tempo, pauses) and rebuild the manifest
   manifest: () => (shapeVoiceover(), writeManifest()),
 }[cmd];
@@ -352,3 +453,7 @@ if (!run) {
   process.exit(1);
 }
 await run();
+if (failures.length) {
+  console.error(`\n${failures.length} failed (re-run to retry): ${failures.join(", ")}`);
+  process.exitCode = 1;
+}

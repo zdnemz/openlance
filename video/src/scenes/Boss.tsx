@@ -45,8 +45,8 @@ export function Boss() {
   const swordY = snap(-(1 - swordIn) * 480);
   const hit = shake(f, bossAt + 6, 8);
 
-  // the SLA clock runs fast once it is named
-  const left = 72 * 3600 - Math.max(0, f - sevAt) * 97;
+  // the SLA clock runs fast once it is named and stops at the ruling
+  const left = 72 * 3600 - Math.max(0, Math.min(f, ruleAt) - sevAt) * 97;
   const clock = [Math.floor(left / 3600), Math.floor((left % 3600) / 60), left % 60].map((n) => String(n).padStart(2, "0")).join(":");
 
   return (
@@ -78,7 +78,7 @@ export function Boss() {
             <Badge label="dispute" color={C.disputed} size={24} />
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <Sprite name="hourglass" size={64} />
-              <span style={{ fontFamily: F.display, fontSize: 32, color: f >= sevAt ? C.disputed : C.fg }}>{clock}</span>
+              <span style={{ fontFamily: F.display, fontSize: 32, color: f >= ruleAt ? C.split : f >= sevAt ? C.disputed : C.fg }}>{clock}</span>
             </div>
           </div>
         </div>
@@ -133,15 +133,16 @@ export function Boss() {
           })}
         </div>
       </div>
-      <Sfx name="clang" at={bossAt + 6} volume={0.7} />
+      {/* the generated clang swells back up after its strike: keep the strike only */}
+      <Sfx name="clang" at={bossAt + 6} volume={0.7} cut={5} fade={8} />
       {ARBITERS.map((_, i) => (
-        <Sfx key={i} name="select" at={threeAt + i * 4} volume={0.35} />
+        <Sfx key={i} name="select" at={threeAt + i * 4} volume={0.2} />
       ))}
       {outcomeAt.map((at, i) => (
         <Sfx key={i} name="pop" at={at} volume={0.4} />
       ))}
-      <Sfx name="tick" at={sevAt} volume={0.4} />
-      <Sfx name="confirm" at={ruleAt} volume={0.6} />
+      <Sfx name="tick" at={sevAt} volume={0.25} />
+      <Sfx name="confirm" at={ruleAt} volume={0.25} />
     </AbsoluteFill>
   );
 }
@@ -166,7 +167,7 @@ function Warning() {
         </div>
         <div style={{ height: 48, backgroundImage: HAZARD }} />
       </div>
-      <Sfx name="alarm" at={0} volume={0.55} />
+      <Sfx name="alarm" at={0} volume={0.35} />
     </AbsoluteFill>
   );
 }

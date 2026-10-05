@@ -9,7 +9,8 @@ function phrases(words: Word[]) {
   const out: Word[][] = [[]];
   words.forEach((w) => {
     out.at(-1)!.push(w);
-    if (/[.!?]$/.test(w.text)) out.push([]);
+    // "question..." runs on into "who do you trust?": an ellipsis is not a sentence end
+    if (/[.!?]$/.test(w.text) && !/\.\.\.$/.test(w.text)) out.push([]);
   });
   return out.filter((p) => p.length);
 }
@@ -38,7 +39,7 @@ export function DialogBox() {
       style={{
         position: "absolute",
         left: L.caption.x,
-        right: L.caption.x,
+        right: L.caption.right,
         top: L.caption.top,
         height: L.caption.h,
         background: C.raised,

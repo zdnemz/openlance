@@ -6,7 +6,8 @@ import { Badge, Panel, Sprite } from "../pixel";
 import { cue } from "../timeline";
 import { C, F, FRAME } from "../theme";
 
-const HASH = "0x7f3a9c04e1b2d8f6c21e";
+// the submit's own tx (the fund tx is 0x7f3a…c21e), truncated the way the app's HashText shows it
+const HASH = "0x9b2e4c71…1a41d7";
 
 /** Stage 2: the delivery goes on-chain through the app's three honest phases. */
 export function Submit() {
@@ -47,7 +48,7 @@ export function Submit() {
                 return (
                   <div
                     key={p.label}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 0", borderBottom: `${FRAME}px dashed ${C.line}` }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 68, borderBottom: `${FRAME}px dashed ${C.line}` }}
                   >
                     <span style={{ fontFamily: F.display, fontSize: 24, color: state === "idle" ? C.faint : C.fg, textTransform: "uppercase" }}>{p.label}</span>
                     {state === "done" ? (
@@ -70,10 +71,10 @@ export function Submit() {
       </StageLayout>
       <Sfx name="pop" at={0} volume={0.4} />
       <Sfx name="whoosh" at={shipAt} volume={0.5} />
-      <Sfx name="type" at={submitAt} volume={0.45} />
+      <Sfx name="type" at={submitAt} volume={0.3} cut={40} fade={5} />
       <Sfx name="select" at={phases[0]!.done} volume={0.35} />
       <Sfx name="select" at={phases[1]!.done} volume={0.35} />
-      <Sfx name="confirm" at={chainAt} volume={0.6} />
+      <Sfx name="confirm" at={chainAt} volume={0.35} />
     </AbsoluteFill>
   );
 }

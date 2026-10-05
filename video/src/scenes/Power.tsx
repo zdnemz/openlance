@@ -21,7 +21,8 @@ export function Power() {
     { label: "Approve", at: cue("power", "approve") },
     { label: "Vote", at: cue("power", "vote") },
   ];
-  const starAt = Math.max(0, powerAt - 4);
+  // the star is on stage as the wipe clears; its sting stays on the voice
+  const starAt = 2;
 
   return (
     <AbsoluteFill>
@@ -64,16 +65,16 @@ export function Power() {
               <Display size={40}>
                 Gas is <span style={{ color: C.roseLight }}>on us</span>
               </Display>
-              <div style={{ fontFamily: F.mono, fontSize: 22, color: C.faint, marginTop: 14 }}>state is sponsored · value stays user-signed</div>
+              <div style={{ fontFamily: F.mono, fontSize: 22, color: C.faint, marginTop: 14 }}>state is sponsored · funding pays its own gas</div>
             </div>
           </div>
         </div>
       </StageLayout>
-      <Sfx name="powerup" at={starAt} volume={0.6} />
+      <Sfx name="powerup" at={Math.max(0, powerAt - 4)} volume={0.5} />
       {actions.map((a) => (
-        <Sfx key={a.label} name="click" at={a.at} volume={0.6} />
+        <Sfx key={a.label} name="click" at={a.at} volume={0.4} />
       ))}
-      <Sfx name="coin" at={gasAt} volume={0.4} />
+      <Sfx name="coin" at={gasAt} volume={0.25} />
     </AbsoluteFill>
   );
 }

@@ -58,8 +58,8 @@ export function Fund() {
         </div>
       </StageLayout>
       <Sfx name="pop" at={0} volume={0.4} />
-      <Sfx name="coin" at={landAt - 3} volume={0.7} />
-      <Sfx name="lock" at={lockAt} volume={0.7} />
+      <Sfx name="coin" at={landAt - 3} volume={0.3} />
+      <Sfx name="lock" at={lockAt} volume={0.3} />
     </AbsoluteFill>
   );
 }

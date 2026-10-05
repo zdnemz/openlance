@@ -8,488 +8,488 @@
   "lines": {
     "attract": {
       "file": "audio/vo/attract.mp3",
-      "duration": 6.269,
+      "duration": 5.878,
       "caption": "Player one: the *client*. Player two: the *freelancer*. One question... who do you *trust*?",
       "words": [
         {
           "text": "Player",
           "emphasis": false,
-          "start": 0.136,
-          "end": 0.174
+          "start": 0,
+          "end": 0.255
         },
         {
           "text": "one:",
           "emphasis": false,
-          "start": 0.246,
-          "end": 0.683
+          "start": 0.382,
+          "end": 0.637
         },
         {
           "text": "the",
           "emphasis": false,
-          "start": 0.701,
-          "end": 0.755
+          "start": 0.792,
+          "end": 0.854
         },
         {
           "text": "client.",
           "emphasis": true,
-          "start": 0.818,
-          "end": 1.265
+          "start": 0.916,
+          "end": 1.351
         },
         {
           "text": "Player",
           "emphasis": false,
-          "start": 1.358,
-          "end": 1.919
+          "start": 1.715,
+          "end": 1.926
         },
         {
           "text": "two:",
           "emphasis": false,
-          "start": 2.01,
-          "end": 2.428
+          "start": 2.074,
+          "end": 2.327
         },
         {
           "text": "the",
           "emphasis": false,
-          "start": 2.465,
-          "end": 2.574
+          "start": 2.523,
+          "end": 2.622
         },
         {
           "text": "freelancer.",
           "emphasis": true,
-          "start": 2.626,
-          "end": 3.228
+          "start": 2.661,
+          "end": 3.216
         },
         {
           "text": "One",
           "emphasis": false,
-          "start": 3.41,
-          "end": 3.955
+          "start": 3.579,
+          "end": 3.721
         },
         {
           "text": "question...",
           "emphasis": false,
-          "start": 4.02,
-          "end": 5.192
+          "start": 3.843,
+          "end": 4.37
         },
         {
           "text": "who",
           "emphasis": false,
-          "start": 5.21,
-          "end": 5.265
+          "start": 4.734,
+          "end": 4.849
         },
         {
           "text": "do",
           "emphasis": false,
-          "start": 5.313,
-          "end": 5.41
+          "start": 4.917,
+          "end": 4.986
         },
         {
           "text": "you",
           "emphasis": false,
-          "start": 5.446,
-          "end": 5.555
+          "start": 5.032,
+          "end": 5.147
         },
         {
           "text": "trust?",
           "emphasis": true,
-          "start": 5.628,
-          "end": 6.21
+          "start": 5.216,
+          "end": 5.767
         }
       ]
     },
     "fund": {
       "file": "audio/vo/fund.mp3",
-      "duration": 5.538,
+      "duration": 5.825,
       "caption": "Stage one! *Insert coin.* The money locks in escrow *before* the work even starts.",
       "words": [
         {
           "text": "Stage",
           "emphasis": false,
-          "start": 0.136,
-          "end": 0.197
+          "start": 0,
+          "end": 0.35
         },
         {
           "text": "one!",
           "emphasis": false,
-          "start": 0.306,
-          "end": 0.815
+          "start": 0.466,
+          "end": 0.932
         },
         {
           "text": "Insert",
           "emphasis": true,
-          "start": 1.179,
-          "end": 1.335
+          "start": 1.227,
+          "end": 1.625
         },
         {
           "text": "coin.",
           "emphasis": true,
-          "start": 1.451,
-          "end": 2.171
+          "start": 1.724,
+          "end": 2.181
         },
         {
           "text": "The",
           "emphasis": false,
-          "start": 2.235,
-          "end": 2.425
+          "start": 2.452,
+          "end": 2.509
         },
         {
           "text": "money",
           "emphasis": false,
-          "start": 2.474,
-          "end": 2.716
+          "start": 2.653,
+          "end": 2.845
         },
         {
           "text": "locks",
           "emphasis": false,
-          "start": 2.777,
-          "end": 3.08
+          "start": 2.96,
+          "end": 3.229
         },
         {
           "text": "in",
           "emphasis": false,
-          "start": 3.105,
-          "end": 3.153
+          "start": 3.267,
+          "end": 3.42
         },
         {
           "text": "escrow",
           "emphasis": false,
-          "start": 3.244,
-          "end": 3.735
+          "start": 3.497,
+          "end": 4.092
         },
         {
           "text": "before",
           "emphasis": true,
-          "start": 3.797,
-          "end": 4.171
+          "start": 4.191,
+          "end": 4.459
         },
         {
           "text": "the",
           "emphasis": false,
-          "start": 4.189,
-          "end": 4.244
+          "start": 4.497,
+          "end": 4.611
         },
         {
           "text": "work",
           "emphasis": false,
-          "start": 4.316,
-          "end": 4.607
+          "start": 4.649,
+          "end": 4.879
         },
         {
           "text": "even",
           "emphasis": false,
-          "start": 4.665,
-          "end": 4.898
+          "start": 5.031,
+          "end": 5.203
         },
         {
           "text": "starts.",
           "emphasis": false,
-          "start": 4.971,
-          "end": 5.48
+          "start": 5.356,
+          "end": 5.699
         }
       ]
     },
     "submit": {
       "file": "audio/vo/submit.mp3",
-      "duration": 4.389,
+      "duration": 4.963,
       "caption": "Stage two! Ship the work. Submit the *proof*, on-chain.",
       "words": [
         {
           "text": "Stage",
           "emphasis": false,
-          "start": 0.136,
-          "end": 0.227
+          "start": 0.084,
+          "end": 0.604
         },
         {
           "text": "two!",
           "emphasis": false,
-          "start": 0.391,
-          "end": 0.955
+          "start": 0.712,
+          "end": 1.319
         },
         {
           "text": "Ship",
           "emphasis": false,
-          "start": 1.318,
-          "end": 1.362
+          "start": 1.499,
+          "end": 1.809
         },
         {
           "text": "the",
           "emphasis": false,
-          "start": 1.435,
-          "end": 1.653
+          "start": 2.075,
+          "end": 2.186
         },
         {
           "text": "work.",
           "emphasis": false,
-          "start": 1.74,
-          "end": 2.38
+          "start": 2.296,
+          "end": 2.673
         },
         {
           "text": "Submit",
           "emphasis": false,
-          "start": 2.422,
-          "end": 2.671
+          "start": 2.803,
+          "end": 3.148
         },
         {
           "text": "the",
           "emphasis": false,
-          "start": 2.689,
-          "end": 2.744
+          "start": 3.194,
+          "end": 3.308
         },
         {
           "text": "proof,",
           "emphasis": true,
-          "start": 2.816,
-          "end": 3.253
+          "start": 3.354,
+          "end": 3.789
         },
         {
           "text": "on-chain.",
           "emphasis": false,
-          "start": 3.446,
-          "end": 4.344
+          "start": 4.14,
+          "end": 4.845
         }
       ]
     },
     "release": {
       "file": "audio/vo/release.mp3",
-      "duration": 3.448,
+      "duration": 3.997,
       "caption": "Approved? *Payout!* No invoices. No chasing.",
       "words": [
         {
           "text": "Approved?",
           "emphasis": false,
-          "start": 0.136,
-          "end": 0.313
+          "start": 0.105,
+          "end": 0.7
         },
         {
           "text": "Payout!",
           "emphasis": true,
-          "start": 0.676,
-          "end": 1.267
+          "start": 1.063,
+          "end": 1.595
         },
         {
           "text": "No",
           "emphasis": false,
-          "start": 1.631,
-          "end": 1.655
+          "start": 1.959,
+          "end": 2.146
         },
         {
           "text": "invoices.",
           "emphasis": false,
-          "start": 1.736,
-          "end": 2.565
+          "start": 2.209,
+          "end": 2.895
         },
         {
           "text": "No",
           "emphasis": false,
-          "start": 2.625,
-          "end": 2.746
+          "start": 3.065,
+          "end": 3.217
         },
         {
           "text": "chasing.",
           "emphasis": false,
-          "start": 2.819,
-          "end": 3.401
+          "start": 3.326,
+          "end": 3.892
         }
       ]
     },
     "boss": {
       "file": "audio/vo/boss.mp3",
-      "duration": 8.307,
+      "duration": 8.385,
       "caption": "Disagreement? *Boss fight!* Three staked arbiters vote: release, refund, or split. Inside *seventy-two hours*.",
       "words": [
         {
           "text": "Disagreement?",
           "emphasis": false,
-          "start": 0.136,
-          "end": 0.818
+          "start": 0.11,
+          "end": 0.933
         },
         {
           "text": "Boss",
           "emphasis": true,
-          "start": 1.182,
-          "end": 1.298
+          "start": 1.297,
+          "end": 1.557
         },
         {
           "text": "fight!",
           "emphasis": true,
-          "start": 1.395,
-          "end": 2.316
+          "start": 1.657,
+          "end": 2.158
         },
         {
           "text": "Three",
           "emphasis": false,
-          "start": 2.68,
-          "end": 2.725
+          "start": 2.521,
+          "end": 2.742
         },
         {
           "text": "staked",
           "emphasis": false,
-          "start": 2.798,
+          "start": 2.902,
           "end": 3.162
         },
         {
           "text": "arbiters",
           "emphasis": false,
-          "start": 3.21,
-          "end": 3.598
+          "start": 3.302,
+          "end": 3.662
         },
         {
           "text": "vote:",
           "emphasis": false,
-          "start": 3.656,
-          "end": 3.962
+          "start": 3.742,
+          "end": 4.022
         },
         {
           "text": "release,",
           "emphasis": false,
-          "start": 4.044,
-          "end": 4.907
+          "start": 4.202,
+          "end": 4.712
         },
         {
           "text": "refund,",
           "emphasis": false,
-          "start": 4.99,
-          "end": 5.707
+          "start": 4.986,
+          "end": 5.553
         },
         {
           "text": "or",
           "emphasis": false,
-          "start": 5.732,
-          "end": 5.78
+          "start": 5.765,
+          "end": 5.849
         },
         {
           "text": "split.",
           "emphasis": false,
-          "start": 5.877,
-          "end": 6.363
+          "start": 6.079,
+          "end": 6.435
         },
         {
           "text": "Inside",
           "emphasis": false,
-          "start": 6.476,
-          "end": 7.162
+          "start": 6.799,
+          "end": 7.209
         },
         {
           "text": "seventy-two",
           "emphasis": true,
-          "start": 7.198,
-          "end": 7.671
+          "start": 7.268,
+          "end": 7.776
         },
         {
           "text": "hours.",
           "emphasis": true,
-          "start": 7.755,
-          "end": 8.253
+          "start": 7.913,
+          "end": 8.264
         }
       ]
     },
     "power": {
       "file": "audio/vo/power.mp3",
-      "duration": 3.866,
+      "duration": 4.232,
       "caption": "*Power-up!* Submit, approve, vote. Gas is *on us*.",
       "words": [
         {
           "text": "Power-up!",
           "emphasis": true,
-          "start": 0.136,
-          "end": 0.548
+          "start": 0.094,
+          "end": 0.716
         },
         {
           "text": "Submit,",
           "emphasis": false,
-          "start": 0.912,
-          "end": 1.047
+          "start": 1.08,
+          "end": 1.474
         },
         {
           "text": "approve,",
           "emphasis": false,
-          "start": 1.12,
-          "end": 1.702
+          "start": 1.589,
+          "end": 2.091
         },
         {
           "text": "vote.",
           "emphasis": false,
-          "start": 1.775,
-          "end": 2.138
+          "start": 2.265,
+          "end": 2.573
         },
         {
           "text": "Gas",
           "emphasis": false,
-          "start": 2.32,
-          "end": 2.865
+          "start": 2.937,
+          "end": 3.233
         },
         {
           "text": "is",
           "emphasis": false,
-          "start": 2.914,
-          "end": 3.011
+          "start": 3.293,
+          "end": 3.471
         },
         {
           "text": "on",
           "emphasis": true,
-          "start": 3.108,
-          "end": 3.302
+          "start": 3.569,
+          "end": 3.767
         },
         {
           "text": "us.",
           "emphasis": true,
-          "start": 3.447,
-          "end": 3.811
+          "start": 3.886,
+          "end": 4.123
         }
       ]
     },
     "finale": {
       "file": "audio/vo/finale.mp3",
-      "duration": 4.101,
+      "duration": 4.441,
       "caption": "*OpenLance.* Freelance work, paid by *proof*. Press start!",
       "words": [
         {
           "text": "OpenLance.",
           "emphasis": true,
-          "start": 0.136,
-          "end": 0.791
+          "start": 0.082,
+          "end": 1.086
         },
         {
           "text": "Freelance",
           "emphasis": false,
-          "start": 0.864,
-          "end": 1.373
+          "start": 1.213,
+          "end": 1.654
         },
         {
           "text": "work,",
           "emphasis": false,
-          "start": 1.431,
-          "end": 1.882
+          "start": 1.758,
+          "end": 2.01
         },
         {
           "text": "paid",
           "emphasis": false,
-          "start": 1.94,
-          "end": 2.173
+          "start": 2.162,
+          "end": 2.456
         },
         {
           "text": "by",
           "emphasis": false,
-          "start": 2.245,
-          "end": 2.391
+          "start": 2.495,
+          "end": 2.671
         },
         {
           "text": "proof.",
           "emphasis": true,
-          "start": 2.475,
-          "end": 3.045
+          "start": 2.828,
+          "end": 3.22
         },
         {
           "text": "Press",
           "emphasis": false,
-          "start": 3.409,
-          "end": 3.47
+          "start": 3.528,
+          "end": 3.772
         },
         {
           "text": "start!",
           "emphasis": false,
-          "start": 3.555,
-          "end": 4.052
+          "start": 3.894,
+          "end": 4.322
         }
       ]
     }

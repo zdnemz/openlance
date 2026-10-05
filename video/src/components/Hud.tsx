@@ -68,10 +68,10 @@ export function Hud() {
       <Player tag="1UP" name="MARA" role="client" address={MARA} color={C.roseLight} size={av} scale={s} />
       <div style={{ display: "flex", alignItems: "center", gap: 24 * s }}>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: F.display, fontSize: 16 * s, color: C.faint }}>{m2 ? "MILESTONE 2" : "MILESTONE 1"}</div>
+          <div style={{ fontFamily: F.display, fontSize: L.tall ? 20 : 16, color: C.faint }}>{m2 ? "MILESTONE 2" : "MILESTONE 1"}</div>
           <div style={{ fontFamily: F.display, fontSize: 40 * s, color: state.color, marginTop: 10 * s }}>
             {value.toFixed(3)}
-            <span style={{ fontSize: 16 * s, color: C.faint }}> ETH</span>
+            <span style={{ fontSize: L.tall ? 20 : 16, color: C.faint }}> ETH</span>
           </div>
         </div>
         {!L.tall && <Badge label={state.label} color={state.color} size={16} />}
@@ -104,9 +104,9 @@ function Player({
     <div style={{ display: "flex", alignItems: "center", gap: 20 * scale, flexDirection: flip ? "row-reverse" : "row" }}>
       <Avatar address={address} size={size} />
       <div style={{ textAlign: flip ? "right" : "left" }}>
-        <div style={{ fontFamily: F.display, fontSize: 24 * scale, color }}>{tag}</div>
-        <div style={{ fontFamily: F.body, fontSize: 28 * scale, color: C.dim, marginTop: 8 * scale, whiteSpace: "nowrap" }}>
-          {name} <span style={{ fontFamily: flip ? F.mono : F.body, fontSize: 24 * scale, color: C.faint }}>· {role}</span>
+        <div style={{ fontFamily: F.display, fontSize: 24, color }}>{tag}</div>
+        <div style={{ fontFamily: F.body, fontSize: 28 * scale, color: C.dim, marginTop: 8, whiteSpace: "nowrap" }}>
+          {name} <span style={{ fontFamily: flip ? F.mono : F.body, fontSize: 24, color: C.faint }}>· {role}</span>
         </div>
       </div>
     </div>

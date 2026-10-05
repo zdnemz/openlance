@@ -27,14 +27,14 @@ export function Release() {
         {open &&
           Array.from({ length: 12 }, (_, i) => {
             const t = twos(f - payAt);
-            if (t > 30) return null;
-            // low, wide arcs: the tallest peaks ~170px, under the HUD in both cuts
-            const vx = (hash(i) * 2 - 1) * 22;
+            if (t > 24) return null;
+            // low arcs that stay inside the instrument column and above the payout line
+            const vx = (hash(i) * 2 - 1) * 12;
             const vy = -(12 + hash(i + 40) * 10);
             const x = snap(vx * t);
             const y = snap(vy * t + 0.7 * t * t);
             return (
-              <div key={i} style={{ position: "absolute", left: cx - 32 + x, top: 152 + y }}>
+              <div key={i} style={{ position: "absolute", left: cx - 32 + x, top: 152 + y, opacity: t > 20 ? 0.25 : t > 16 ? 0.5 : 1 }}>
                 <Sprite name="coin" size={64} />
               </div>
             );
@@ -60,8 +60,8 @@ export function Release() {
         </div>
       </StageLayout>
       <Sfx name="pop" at={0} volume={0.4} />
-      <Sfx name="stamp" at={approvedAt} volume={0.7} />
-      <Sfx name="payout" at={payAt} volume={0.6} />
+      <Sfx name="stamp" at={approvedAt} volume={0.3} />
+      <Sfx name="payout" at={payAt} volume={0.35} cut={21} fade={8} />
       <Sfx name="buzz" at={invAt + 4} volume={0.45} />
       <Sfx name="buzz" at={chaseAt + 4} volume={0.45} />
     </AbsoluteFill>
